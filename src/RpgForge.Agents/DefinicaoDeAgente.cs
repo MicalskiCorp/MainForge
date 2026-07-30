@@ -1,4 +1,6 @@
+using Anthropic.Helpers.Beta;
 using RpgForge.Core;
+using RpgForge.Tools;
 
 namespace RpgForge.Agents;
 
@@ -21,6 +23,25 @@ public sealed record DefinicaoDeAgente(string Nome, string NomeArquivoPrompt, IR
         }
 
         return File.ReadAllText(caminho);
+    }
+
+    /// <summary>
+    /// Resolve as instâncias de ferramenta correspondentes a <see cref="FerramentasPermitidas"/>
+    /// a partir do catálogo completo em <see cref="RegistroDeFerramentas"/>. É aqui que o
+    /// allowlist de cada agente vira, de fato, a lista de ferramentas que o
+    /// <c>BetaToolRunner</c> recebe — um agente nunca vê a definição de uma ferramenta fora
+    /// da sua lista, então o modelo não pode nem tentar chamá-la.
+    /// </summary>
+    public IReadOnlyList<IBetaRunnableTool> ResolverFerramentas(CaminhosDoProjeto caminhos)
+    {
+        var catalogo = RegistroDeFerramentas.CriarTodas(caminhos);
+
+        return FerramentasPermitidas
+            .Select(nome => catalogo.TryGetValue(nome, out var ferramenta)
+                ? ferramenta
+                : throw new InvalidOperationException(
+                    $"Ferramenta '{nome}' listada em FerramentasPermitidas de '{Nome}' não está registrada em RegistroDeFerramentas."))
+            .ToList();
     }
 
     /// <summary>
