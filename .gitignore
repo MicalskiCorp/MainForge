@@ -1,0 +1,21 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+*.user
+
+# Visual Studio
+.vs/
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# User secrets / local config (never commit API keys)
+appsettings.Local.json
+*.secrets.json
+.env
+
+# Generated character sheets and ingested content stay local by default.
+# Remove these two lines if you want to version them.
+/Output/Personagens/*
+!/Output/Personagens/.gitkeep
