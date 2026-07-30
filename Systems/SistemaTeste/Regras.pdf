@@ -1,0 +1,93 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /Helv 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1418 >>
+stream
+BT
+/Helv 12 Tf
+50 780 Td
+(SISTEMA TESTE - REGRAS BASICAS DE CRIACAO DE PERSONAGEM) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(1. ATRIBUTOS) Tj
+0 -16 Td
+(Todo personagem tem tres atributos: Forca, Destreza e Constituicao.) Tj
+0 -16 Td
+(Cada atributo comeca em 10. O jogador distribui 3 pontos extras entre) Tj
+0 -16 Td
+(os tres atributos, como preferir \(pode colocar os 3 pontos em um so\).) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(2. CLASSES) Tj
+0 -16 Td
+(Escolha uma das duas classes abaixo:) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Guerreiro: recebe +2 em Forca. Equipamento inicial: Espada Longa.) Tj
+0 -16 Td
+(Pontos de Vida iniciais = 10 + Constituicao.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Batedor: recebe +2 em Destreza. Equipamento inicial: Arco Curto.) Tj
+0 -16 Td
+(Pontos de Vida iniciais = 8 + Constituicao.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(3. EQUIPAMENTO) Tj
+0 -16 Td
+(Todo personagem comeca com o item da classe escolhida, alem de uma) Tj
+0 -16 Td
+(Mochila e uma Tocha.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(4. NIVEL) Tj
+0 -16 Td
+(Todo personagem comeca no Nivel 1.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(5. RESUMO DO PROCESSO DE CRIACAO) Tj
+0 -16 Td
+(a\) Escolher a classe \(Guerreiro ou Batedor\).) Tj
+0 -16 Td
+(b\) Distribuir os 3 pontos extras entre Forca, Destreza e Constituicao.) Tj
+0 -16 Td
+(c\) Aplicar o bonus de +2 da classe escolhida.) Tj
+0 -16 Td
+(d\) Calcular Pontos de Vida conforme a formula da classe.) Tj
+0 -16 Td
+(e\) Anotar o equipamento inicial.) Tj
+ET
+
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000243 00000 n 
+0000000313 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1783
+%%EOF
