@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Harness de validação ponta a ponta. NÃO faz parte de RpgForge.sln de propósito:
+    ele faz chamadas reais (e pagas) à Claude API, então não deve entrar em
+    "dotnet build RpgForge.sln" nem em "dotnet test". Rode manualmente com
+    "dotnet run" apontando para tools/ValidacaoPontaAPonta.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RpgForge.Core\RpgForge.Core.csproj" />
+    <ProjectReference Include="..\..\src\RpgForge.Claude\RpgForge.Claude.csproj" />
+    <ProjectReference Include="..\..\src\RpgForge.Tools\RpgForge.Tools.csproj" />
+    <ProjectReference Include="..\..\src\RpgForge.Agents\RpgForge.Agents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.39.0" />
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
