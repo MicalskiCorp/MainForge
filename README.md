@@ -6,10 +6,14 @@ localmente na máquina do usuário; a única comunicação externa é com a Clau
 
 ## Decisões de arquitetura
 
-- **Autenticação**: API key da Anthropic (variável de ambiente `ANTHROPIC_API_KEY`), via o
-  SDK oficial `Anthropic` para .NET. Não existe hoje um Claude Agent SDK para C#, e não há
-  mecanismo suportado para um app de terceiros autenticar usando a assinatura Claude
-  Pro/Max de um usuário — por isso a licença aqui é billing por token com uma API key.
+- **Autenticação**: API key da Anthropic, via o SDK oficial `Anthropic` para .NET. Não existe
+  hoje um Claude Agent SDK para C#, e não há mecanismo suportado para um app de terceiros
+  autenticar usando a assinatura Claude Pro/Max de um usuário — por isso a licença aqui é
+  billing por token com uma API key.
+  A chave **não fica no código-fonte**: o usuário a informa dentro do aplicativo, e ela é
+  guardada cifrada com DPAPI (`%APPDATA%\RpgForge\chave-api.dat`), decifrável apenas pela
+  mesma conta de usuário do mesmo Windows. A variável de ambiente `ANTHROPIC_API_KEY`
+  continua funcionando e tem prioridade, para automação.
 - **Ferramentas locais** (ler PDF, escrever Markdown, preencher ficha): expostas como
   *tools* (function calling) diretamente na Messages API, executadas em processo pelo
   próprio C#. Não há um servidor MCP — como tudo roda no mesmo processo local, o protocolo
@@ -25,8 +29,10 @@ RpgForge.sln
 │   ├── RpgForge.Claude   -> wrapper fino sobre o SDK oficial Anthropic
 │   ├── RpgForge.Tools    -> implementação das tools (leitura/escrita de arquivos, PDF)
 │   ├── RpgForge.Agents   -> DefinicaoDeAgente: prompt + allowlist de tools por agente
-│   └── RpgForge.App      -> aplicativo WPF (interface gráfica)
+│   ├── RpgForge.Cli      -> interface em console (a interface em uso hoje)
+│   └── RpgForge.App      -> aplicativo WPF (interface gráfica, ainda um shell vazio)
 ├── tests/RpgForge.Tests
+├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução)
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
 ├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema
 ├── Templates/            -> fichas em PDF editável, um subdiretório por sistema
@@ -45,18 +51,40 @@ UI — é em português (pt-BR).
 ## Rodando
 
 ```
-setx ANTHROPIC_API_KEY "sk-ant-..."   # uma vez, ou defina no ambiente da sessão
 dotnet build RpgForge.sln
 dotnet test RpgForge.sln
+dotnet run --project src/RpgForge.Cli    # o aplicativo
 ```
+
+Na primeira execução, use a opção **4) Configurar a chave da Claude API** para informar sua
+API key — nada é exibido enquanto você digita, e a chave é gravada cifrada.
+
+Menu do aplicativo:
+
+1. **Ver sistemas** — o que já foi importado, o que já tem base de conhecimento e ficha.
+2. **Processar um sistema** (Agente Configurador) — lê os PDFs de `Systems/<Sistema>/` e
+   gera `Knowledge/<Sistema>/*.md`. É a operação mais cara em tokens; pede confirmação.
+3. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
+   em `Output/Personagens/`. `/sair` encerra a conversa.
+4. **Configurar a chave da Claude API** — informar, substituir ou apagar.
+
+Para adicionar um sistema de RPG novo, sem mexer em código: crie `Systems/<Sistema>/` com o
+PDF do livro e `Templates/<Sistema>/` com a ficha em PDF editável (AcroForm), e processe o
+sistema pela opção 2.
 
 > Se o build ou `dotnet sln add`/`dotnet restore` falhar de forma estranha nesta máquina,
 > verifique a variável de ambiente `MSBuildSDKsPath` — se ela estiver fixada em um SDK antigo
 > (ex.: `.../sdk/2.1.202/Sdks`), remova-a das variáveis de ambiente do Windows.
 
+> PDFs precisam estar marcados como binários no Git (`.gitattributes`): com
+> `core.autocrlf=true`, a conversão de fim de linha corrompe os offsets internos do arquivo.
+
 ## Status
 
-Scaffold inicial: solução, projetos, referências, `CaminhosDoProjeto` com proteção contra
-path traversal, carregamento dos prompts dos agentes, e o pacote `Anthropic` já
-referenciado. Ainda faltam: implementação das tools (leitura de PDF, geração da estrutura de
-Knowledge, preenchimento de PDF), o loop de tool-use com a API, e a interface WPF.
+Funcionando: as 7 ferramentas locais, o loop de tool-use (`SessaoDeAgente`), o allowlist de
+ferramentas por agente, o armazenamento cifrado da API key e a interface em console
+(`RpgForge.Cli`), com 30 testes automatizados.
+
+Falta: validar o fluxo completo contra a API de verdade (harness em
+`tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e construir a interface
+gráfica em WPF.

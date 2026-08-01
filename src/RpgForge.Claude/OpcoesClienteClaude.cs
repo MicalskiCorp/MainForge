@@ -1,4 +1,22 @@
+using System.Runtime.Versioning;
+
 namespace RpgForge.Claude;
+
+/// <summary>
+/// De onde veio a API key em uso, para o aplicativo poder dizer isso ao usuário sem nunca
+/// mostrar a chave em si.
+/// </summary>
+public enum OrigemDaChaveApi
+{
+    /// <summary>Nenhuma chave configurada — o app precisa pedir uma ao usuário.</summary>
+    Nenhuma,
+
+    /// <summary>Veio da variável de ambiente ANTHROPIC_API_KEY (tem prioridade).</summary>
+    VariavelDeAmbiente,
+
+    /// <summary>Veio do arquivo cifrado com DPAPI (<see cref="ArmazenamentoDeChaveApi"/>).</summary>
+    ArquivoProtegido,
+}
 
 /// <summary>
 /// Configuração necessária para falar com a Claude API. Este projeto só suporta uma API
@@ -37,5 +55,29 @@ public sealed class OpcoesClienteClaude
         }
 
         return new OpcoesClienteClaude { ChaveApi = chaveApi };
+    }
+
+    /// <summary>
+    /// Descobre qual chave usar sem exigir nada do usuário: primeiro a variável de ambiente
+    /// ANTHROPIC_API_KEY (útil em automação e no harness de validação), depois a chave que o
+    /// usuário informou dentro do aplicativo e ficou guardada cifrada. Devolve
+    /// <see cref="OrigemDaChaveApi.Nenhuma"/> com opções nulas quando não há nenhuma — cabe à
+    /// interface pedir a chave nesse caso, não a esta classe.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    public static (OrigemDaChaveApi Origem, OpcoesClienteClaude? Opcoes) Resolver(ArmazenamentoDeChaveApi armazenamento)
+    {
+        var doAmbiente = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+
+        if (!string.IsNullOrWhiteSpace(doAmbiente))
+        {
+            return (OrigemDaChaveApi.VariavelDeAmbiente, new OpcoesClienteClaude { ChaveApi = doAmbiente });
+        }
+
+        var guardada = armazenamento.Ler();
+
+        return string.IsNullOrWhiteSpace(guardada)
+            ? (OrigemDaChaveApi.Nenhuma, null)
+            : (OrigemDaChaveApi.ArquivoProtegido, new OpcoesClienteClaude { ChaveApi = guardada });
     }
 }

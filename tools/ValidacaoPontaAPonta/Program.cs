@@ -72,17 +72,19 @@ if (somentePdf)
 // ---------------------------------------------------------------------------
 Titulo("Etapa 2 — criando o cliente da Claude API");
 
-OpcoesClienteClaude opcoes;
-try
+// Mesma resolução que o aplicativo usa: variável de ambiente primeiro, senão a chave que o
+// usuário configurou dentro do RpgForge.Cli (cifrada com DPAPI).
+var (origemDaChave, opcoes) = OpcoesClienteClaude.Resolver(new ArmazenamentoDeChaveApi());
+
+if (opcoes is null)
 {
-    opcoes = OpcoesClienteClaude.DoAmbiente();
-}
-catch (InvalidOperationException excecao)
-{
-    Erro(excecao.Message);
-    Erro("Defina a chave com: setx ANTHROPIC_API_KEY \"sk-ant-...\" e reabra o terminal.");
+    Erro("Nenhuma chave da Claude API configurada.");
+    Erro("Configure-a no aplicativo (dotnet run --project src/RpgForge.Cli, opção 4)");
+    Erro("ou defina a variável de ambiente ANTHROPIC_API_KEY.");
     return 1;
 }
+
+Ok($"Chave obtida de: {origemDaChave}.");
 
 AnthropicClient cliente = FabricaClienteClaude.Criar(opcoes);
 var mensagens = cliente.Beta.Messages;

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Anthropic.Helpers.Beta;
 using Anthropic.Models.Beta.Messages;
 using Anthropic.Services.Beta;
@@ -5,6 +6,15 @@ using RpgForge.Claude;
 using RpgForge.Core;
 
 namespace RpgForge.Agents;
+
+/// <summary>
+/// Uma chamada de ferramenta que o agente acabou de fazer, publicada enquanto o turno ainda
+/// está em andamento. Serve para a interface mostrar progresso ("lendo o PDF...",
+/// "escrevendo Classes.md...") em vez de ficar parada até a resposta final chegar.
+/// </summary>
+/// <param name="Nome">Nome da ferramenta, ex.: "escrever_arquivo_conhecimento".</param>
+/// <param name="Entrada">Argumentos da chamada, já achatados em "campo=valor" para exibição.</param>
+public sealed record UsoDeFerramenta(string Nome, string Entrada);
 
 /// <summary>
 /// Uma conversa em andamento com um agente: liga o prompt de sistema e as ferramentas
@@ -45,7 +55,14 @@ public sealed class SessaoDeAgente
     /// agente. O histórico completo (incluindo tool_use/tool_result intermediários) fica
     /// acumulado para a próxima chamada — é assim que o agente lembra da conversa.
     /// </summary>
-    public async Task<string> EnviarAsync(string mensagemDoUsuario, CancellationToken cancelamento = default)
+    /// <param name="aoUsarFerramenta">
+    /// Chamado assim que o modelo pede cada ferramenta, antes de ela ser executada. Opcional;
+    /// existe para a interface poder mostrar progresso durante turnos longos.
+    /// </param>
+    public async Task<string> EnviarAsync(
+        string mensagemDoUsuario,
+        Action<UsoDeFerramenta>? aoUsarFerramenta = null,
+        CancellationToken cancelamento = default)
     {
         var mensagens = new List<BetaMessageParam>(_historico)
         {
@@ -61,7 +78,32 @@ public sealed class SessaoDeAgente
         };
 
         var executor = _servicoDeMensagens.ToolRunner(parametros, _ferramentas, maxIterations: 50);
-        var respostaFinal = await executor.RunUntilDoneAsync(cancelamento);
+
+        // Equivale a RunUntilDoneAsync (que é só "itera e devolve a última mensagem"), mas
+        // percorrendo o loop à mão para poder publicar cada tool_use enquanto ele acontece.
+        BetaMessage? ultimaResposta = null;
+
+        await foreach (var resposta in executor.WithCancellation(cancelamento))
+        {
+            ultimaResposta = resposta;
+
+            if (aoUsarFerramenta is null)
+            {
+                continue;
+            }
+
+            foreach (var bloco in resposta.Content)
+            {
+                if (bloco.TryPickToolUse(out var usoDeFerramenta))
+                {
+                    aoUsarFerramenta(new UsoDeFerramenta(usoDeFerramenta.Name, DescreverEntrada(usoDeFerramenta)));
+                }
+            }
+        }
+
+        var respostaFinal = ultimaResposta
+            ?? throw new InvalidOperationException(
+                $"O agente '{_agente.Nome}' não devolveu nenhuma resposta.");
 
         // O BetaToolRunner só acrescenta um turno a Params.Messages quando prepara a
         // PRÓXIMA chamada — o turno final (sem mais tool_use) nunca entra sozinho, então
@@ -75,6 +117,25 @@ public sealed class SessaoDeAgente
         _historico = [.. executor.Params.Messages, turnoFinal];
 
         return ExtrairTexto(respostaFinal);
+    }
+
+    /// <summary>
+    /// Achata os argumentos de uma chamada de ferramenta em "campo=valor, campo=valor",
+    /// truncando valores longos — o conteúdo inteiro de um arquivo Markdown não cabe (nem faz
+    /// sentido) numa linha de progresso no console.
+    /// </summary>
+    private static string DescreverEntrada(BetaToolUseBlock usoDeFerramenta) =>
+        string.Join(", ", usoDeFerramenta.Input.Select(par => $"{par.Key}={ResumirValor(par.Value)}"));
+
+    private static string ResumirValor(JsonElement valor)
+    {
+        const int limite = 60;
+
+        var texto = (valor.ValueKind == JsonValueKind.String ? valor.GetString() ?? "" : valor.GetRawText())
+            .ReplaceLineEndings(" ")
+            .Trim();
+
+        return texto.Length <= limite ? texto : string.Concat(texto.AsSpan(0, limite), "...");
     }
 
     private static BetaContentBlockParam ConverterParaBlocoDeParametro(BetaContentBlock bloco)
