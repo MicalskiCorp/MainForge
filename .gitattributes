@@ -1,0 +1,4 @@
+# PDFs sao binarios. Sem isto, com core.autocrlf=true o Git converte LF -> CRLF
+# no checkout e desloca os offsets da tabela xref, corrompendo o arquivo
+# (PdfSharp falha com "'PdfTrailer' must not be null here.").
+*.pdf binary
