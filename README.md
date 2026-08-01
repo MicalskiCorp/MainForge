@@ -56,21 +56,38 @@ dotnet test MainBuild.sln
 dotnet run --project src/MainBuild.Cli    # o aplicativo
 ```
 
-Na primeira execução, use a opção **4) Configurar a chave da Claude API** para informar sua
+Na primeira execução, use a opção **5) Configurar a chave da Claude API** para informar sua
 API key — nada é exibido enquanto você digita, e a chave é gravada cifrada.
 
 Menu do aplicativo:
 
 1. **Ver sistemas** — o que já foi importado, o que já tem base de conhecimento e ficha.
-2. **Processar um sistema** (Agente Configurador) — lê os PDFs de `Systems/<Sistema>/` e
+2. **Importar um sistema de RPG** — você informa o nome do sistema, os PDFs dos livros e a
+   ficha de personagem editável; o programa valida (livro legível, ficha com campos
+   preenchíveis) e copia para `Systems/<Sistema>/` e `Templates/<Sistema>/`.
+3. **Processar um sistema** (Agente Configurador) — lê os livros **e a ficha em branco** e
    gera `Knowledge/<Sistema>/*.md`. É a operação mais cara em tokens; pede confirmação.
-3. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
+4. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
    em `Output/Personagens/`. `/sair` encerra a conversa.
-4. **Configurar a chave da Claude API** — informar, substituir ou apagar.
+5. **Configurar a chave da Claude API** — informar, substituir ou apagar.
 
-Para adicionar um sistema de RPG novo, sem mexer em código: crie `Systems/<Sistema>/` com o
-PDF do livro e `Templates/<Sistema>/` com a ficha em PDF editável (AcroForm), e processe o
-sistema pela opção 2.
+Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 3
+(ou copiar as pastas na mão para `Systems/` e `Templates/`).
+
+## Os dois arquivos da ficha
+
+Além dos arquivos de regras, o Configurador é obrigado a gerar dois arquivos de nome fixo,
+que são a ponte entre a conversa e o PDF final:
+
+- `Knowledge/<Sistema>/Ficha-Mapeamento.md` — tabela ligando cada campo preenchível do PDF ao
+  dado do personagem que vai nele, com formato e fórmula de cálculo quando houver.
+- `Knowledge/<Sistema>/Ficha-ModeloEmTexto.md` — a ficha redesenhada em arte de texto (ASCII,
+  até 78 colunas), com um marcador `{{NomeDoCampo}}` em cada lugar preenchível.
+
+Antes de gerar o PDF, o Dungeon Master preenche esse desenho com os dados do personagem e o
+mostra na conversa, para o usuário conferir e confirmar. Assim o usuário vê a ficha como ela
+vai ficar sem precisar abrir o PDF, e o mapeamento fica registrado em vez de ser redescoberto
+a cada criação de personagem.
 
 > Se o build ou `dotnet sln add`/`dotnet restore` falhar de forma estranha nesta máquina,
 > verifique a variável de ambiente `MSBuildSDKsPath` — se ela estiver fixada em um SDK antigo
@@ -81,9 +98,9 @@ sistema pela opção 2.
 
 ## Status
 
-Funcionando: as 7 ferramentas locais, o loop de tool-use (`SessaoDeAgente`), o allowlist de
-ferramentas por agente, o armazenamento cifrado da API key e a interface em console
-(`MainBuild.Cli`), com 30 testes automatizados.
+Funcionando: as 8 ferramentas locais, o loop de tool-use (`SessaoDeAgente`), o allowlist de
+ferramentas por agente, a importação de sistemas, o armazenamento cifrado da API key e a
+interface em console (`MainBuild.Cli`), com 44 testes automatizados.
 
 Falta: validar o fluxo completo contra a API de verdade (harness em
 `tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e construir a interface

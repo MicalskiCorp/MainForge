@@ -57,7 +57,7 @@ public sealed class FerramentaPreencherFichaPersonagem(CaminhosDoProjeto caminho
         }
 
         var diretorioModelo = CaminhosDoProjeto.ResolverDentroDe(caminhos.Modelos, sistema);
-        var caminhoModelo = ResolverCaminhoDoModelo(diretorioModelo, arquivoModelo);
+        var caminhoModelo = LocalizadorDeFichaModelo.Resolver(diretorioModelo, arquivoModelo);
         var caminhoSaida = CaminhosDoProjeto.ResolverDentroDe(caminhos.SaidaPersonagens, nomeArquivoSaida);
 
         using var documento = PdfReader.Open(caminhoModelo, PdfDocumentOpenMode.Modify);
@@ -92,37 +92,6 @@ public sealed class FerramentaPreencherFichaPersonagem(CaminhosDoProjeto caminho
         BetaToolResultBlockParamContent resultado =
             $"Ficha salva em Output/Personagens/{nomeArquivoSaida} ({campos.Count} campo(s) preenchido(s)).";
         return Task.FromResult(resultado);
-    }
-
-    private static string ResolverCaminhoDoModelo(string diretorioModelo, string? arquivoModelo)
-    {
-        if (arquivoModelo is not null)
-        {
-            var caminho = CaminhosDoProjeto.ResolverDentroDe(diretorioModelo, arquivoModelo);
-
-            if (!File.Exists(caminho))
-            {
-                throw new BetaToolError($"Template '{arquivoModelo}' não encontrado em '{diretorioModelo}'.");
-            }
-
-            return caminho;
-        }
-
-        if (!Directory.Exists(diretorioModelo))
-        {
-            throw new BetaToolError($"Não há templates em '{diretorioModelo}'.");
-        }
-
-        var pdfs = Directory.EnumerateFiles(diretorioModelo, "*.pdf", SearchOption.TopDirectoryOnly).ToList();
-
-        return pdfs.Count switch
-        {
-            0 => throw new BetaToolError($"Nenhum template PDF encontrado em '{diretorioModelo}'."),
-            1 => pdfs[0],
-            _ => throw new BetaToolError(
-                $"Há mais de um template PDF em '{diretorioModelo}' — informe 'arquivoModelo'. " +
-                $"Opções: {string.Join(", ", pdfs.Select(Path.GetFileName))}."),
-        };
     }
 
     private static void PreencherCampo(PdfAcroField campo, string valor)

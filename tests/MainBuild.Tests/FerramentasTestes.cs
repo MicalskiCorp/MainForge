@@ -14,7 +14,7 @@ public class FerramentasTestes : IDisposable
 
     public FerramentasTestes()
     {
-        _raiz = Path.Combine(Path.GetTempPath(), "rpgforge-tests-" + Guid.NewGuid());
+        _raiz = Path.Combine(Path.GetTempPath(), "mainbuild-tests-" + Guid.NewGuid());
         _caminhos = new CaminhosDoProjeto(_raiz);
     }
 
@@ -130,6 +130,37 @@ public class FerramentasTestes : IDisposable
 
         await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
             ChamadaComEntrada(new { sistema = "Aventura&Cia", arquivo = "nota.txt" }),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LerFichaModelo_DevolveOPdfEOsNomesDosCampos()
+    {
+        var diretorioModelo = Path.Combine(_caminhos.Modelos, "Aventura&Cia");
+        Directory.CreateDirectory(diretorioModelo);
+        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "Ficha.pdf"));
+
+        var ferramenta = new FerramentaLerFichaModelo(_caminhos);
+        var resultado = await ferramenta.ExecuteAsync(
+            ChamadaComEntrada(new { sistema = "Aventura&Cia" }),
+            CancellationToken.None);
+
+        Assert.True(resultado.TryPickBlocks(out var blocos));
+        Assert.Equal(2, blocos!.Count);
+        Assert.True(blocos[0].TryPickBetaRequestDocument(out _));
+
+        // O segundo bloco lista os campos exatamente como preencher_ficha_personagem os exige.
+        Assert.True(blocos[1].TryPickBetaTextBlockParam(out var texto));
+        Assert.Contains("Nome", texto!.Text);
+    }
+
+    [Fact]
+    public async Task LerFichaModelo_SistemaSemTemplate_LancaBetaToolError()
+    {
+        var ferramenta = new FerramentaLerFichaModelo(_caminhos);
+
+        await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
+            ChamadaComEntrada(new { sistema = "SistemaInexistente" }),
             CancellationToken.None));
     }
 

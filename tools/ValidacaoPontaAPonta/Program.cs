@@ -79,7 +79,7 @@ var (origemDaChave, opcoes) = OpcoesClienteClaude.Resolver(new ArmazenamentoDeCh
 if (opcoes is null)
 {
     Erro("Nenhuma chave da Claude API configurada.");
-    Erro("Configure-a no aplicativo (dotnet run --project src/MainBuild.Cli, opção 4)");
+    Erro("Configure-a no aplicativo (dotnet run --project src/MainBuild.Cli, opção 5)");
     Erro("ou defina a variável de ambiente ANTHROPIC_API_KEY.");
     return 1;
 }

@@ -55,6 +55,7 @@ public sealed record DefinicaoDeAgente(string Nome, string NomeArquivoPrompt, IR
         [
             "listar_sistemas",
             "ler_pdf_do_sistema",
+            "ler_ficha_modelo",
             "escrever_arquivo_conhecimento",
             "listar_conhecimento",
         ]);

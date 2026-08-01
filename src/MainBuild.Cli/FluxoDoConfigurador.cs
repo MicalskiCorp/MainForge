@@ -10,18 +10,25 @@ namespace MainBuild.Cli;
 /// </summary>
 internal static class FluxoDoConfigurador
 {
-    public static async Task ExecutarAsync(ContextoDoAplicativo contexto, CancellationToken cancelamento)
+    /// <param name="sistemaEscolhido">
+    /// Já vem preenchido quando o fluxo é chamado logo após uma importação — nesse caso não
+    /// faz sentido perguntar de novo qual sistema processar.
+    /// </param>
+    public static async Task ExecutarAsync(
+        ContextoDoAplicativo contexto,
+        CancellationToken cancelamento,
+        SistemaRpg? sistemaEscolhido = null)
     {
         var sistemas = SistemaRpg.DescobrirImportados(contexto.Caminhos);
 
         if (sistemas.Count == 0)
         {
-            ConsoleUi.Aviso("Nenhum sistema encontrado em Systems/.");
-            ConsoleUi.Info($"Crie uma pasta por sistema em {contexto.Caminhos.Sistemas} e coloque o PDF do livro dentro dela.");
+            ConsoleUi.Aviso("Nenhum sistema importado ainda.");
+            ConsoleUi.Info("Use a opção \"Importar um sistema de RPG\" no menu principal.");
             return;
         }
 
-        var escolhido = ConsoleUi.Escolher(
+        var escolhido = sistemaEscolhido ?? ConsoleUi.Escolher(
             "Qual sistema processar?",
             sistemas,
             sistema => sistema.TemConhecimento(contexto.Caminhos)
@@ -77,8 +84,10 @@ internal static class FluxoDoConfigurador
         try
         {
             resposta = await sessao.EnviarAsync(
-                $"Processe o sistema '{escolhido.Id}': leia o(s) PDF(s) dele e gere a base de " +
-                $"conhecimento completa em Knowledge/{escolhido.Id}/. Ao terminar, resuma o que criou.",
+                $"Processe o sistema '{escolhido.Id}': leia o(s) livro(s) em PDF e também a ficha " +
+                $"em branco de Templates/{escolhido.Id}/, e gere a base de conhecimento completa em " +
+                $"Knowledge/{escolhido.Id}/, incluindo os arquivos Ficha-Mapeamento.md e " +
+                "Ficha-ModeloEmTexto.md. Ao terminar, resuma o que criou.",
                 ProgressoDoAgente.Impressora(),
                 cancelamento);
         }
@@ -109,11 +118,37 @@ internal static class FluxoDoConfigurador
             ConsoleUi.Detalhe($"  · {relativo} ({new FileInfo(arquivo).Length / 1024.0:0.0} KB)");
         }
 
+        AvisarSobreArquivosDaFicha(diretorioConhecimento);
+
         if (!Directory.Exists(escolhido.DiretorioModelo(contexto.Caminhos)))
         {
             ConsoleUi.Aviso(
                 $"Falta a ficha editável em Templates/{escolhido.Id}/ — sem ela o Dungeon Master " +
                 "consegue criar o personagem, mas não gerar o PDF final.");
         }
+    }
+
+    /// <summary>
+    /// Os dois arquivos da ficha têm nome fixo porque o Dungeon Master procura exatamente por
+    /// eles. Se o Configurador não os produziu, o usuário precisa saber agora — e não no meio
+    /// de uma criação de personagem, quando a conversa já custou tokens.
+    /// </summary>
+    private static void AvisarSobreArquivosDaFicha(string diretorioConhecimento)
+    {
+        string[] obrigatorios = ["Ficha-Mapeamento.md", "Ficha-ModeloEmTexto.md"];
+
+        var faltando = obrigatorios
+            .Where(nome => !File.Exists(Path.Combine(diretorioConhecimento, nome)))
+            .ToList();
+
+        if (faltando.Count == 0)
+        {
+            ConsoleUi.Sucesso("Mapeamento e modelo em texto da ficha gerados.");
+            return;
+        }
+
+        ConsoleUi.Aviso($"Faltou o agente gerar: {string.Join(", ", faltando)}.");
+        ConsoleUi.Info("O Dungeon Master precisa desses arquivos para mostrar e preencher a ficha —");
+        ConsoleUi.Info("vale reprocessar o sistema.");
     }
 }

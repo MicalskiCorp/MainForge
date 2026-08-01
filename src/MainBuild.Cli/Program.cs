@@ -26,21 +26,22 @@ Console.CancelKeyPress += (_, evento) =>
     }
 };
 
-ConsoleUi.Titulo("MainBuild — criação de fichas de RPG com a Claude API");
+TelaInicial.Desenhar();
 ConsoleUi.Detalhe($"Projeto: {contexto.Caminhos.Raiz}");
 
 if (!contexto.TemChave)
 {
-    ConsoleUi.Aviso("\nNenhuma chave da Claude API configurada — comece pela opção 4.");
+    ConsoleUi.Aviso("\nNenhuma chave da Claude API configurada — comece pela opção 5.");
 }
 
 while (true)
 {
     ConsoleUi.Titulo("Menu principal");
     ConsoleUi.Info("  1) Ver sistemas e base de conhecimento");
-    ConsoleUi.Info("  2) Processar um sistema (Agente Configurador)");
-    ConsoleUi.Info("  3) Criar um personagem (Agente Dungeon Master)");
-    ConsoleUi.Info($"  4) Configurar a chave da Claude API   [{contexto.DescreverOrigemDaChave()}]");
+    ConsoleUi.Info("  2) Importar um sistema de RPG (livros + ficha)");
+    ConsoleUi.Info("  3) Processar um sistema (Agente Configurador)");
+    ConsoleUi.Info("  4) Criar um personagem (Agente Dungeon Master)");
+    ConsoleUi.Info($"  5) Configurar a chave da Claude API   [{contexto.DescreverOrigemDaChave()}]");
     ConsoleUi.Info("  0) Sair");
 
     var escolha = ConsoleUi.LerLinha("\nEscolha: ");
@@ -58,16 +59,21 @@ while (true)
                 break;
 
             case "2":
-                await FluxoDoConfigurador.ExecutarAsync(contexto, cancelamentoAtual.Token);
+                await FluxoDeImportacao.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 ConsoleUi.Pausar();
                 break;
 
             case "3":
-                await FluxoDeCriacaoDePersonagem.ExecutarAsync(contexto, cancelamentoAtual.Token);
+                await FluxoDoConfigurador.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 ConsoleUi.Pausar();
                 break;
 
             case "4":
+                await FluxoDeCriacaoDePersonagem.ExecutarAsync(contexto, cancelamentoAtual.Token);
+                ConsoleUi.Pausar();
+                break;
+
+            case "5":
                 FluxoDaChaveApi.Executar(contexto);
                 break;
 

@@ -19,6 +19,7 @@ public static class RegistroDeFerramentas
             new FerramentaListarSistemasProntos(caminhos),
             new FerramentaListarConhecimento(caminhos),
             new FerramentaLerPdfDoSistema(caminhos),
+            new FerramentaLerFichaModelo(caminhos),
             new FerramentaEscreverArquivoConhecimento(caminhos),
             new FerramentaLerArquivoConhecimento(caminhos),
             new FerramentaPreencherFichaPersonagem(caminhos),
