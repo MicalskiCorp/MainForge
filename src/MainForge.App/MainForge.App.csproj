@@ -2,9 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MainForge.Core\MainForge.Core.csproj" />
-    <ProjectReference Include="..\MainForge.Claude\MainForge.Claude.csproj" />
+    <ProjectReference Include="..\MainForge.ClaudeCode\MainForge.ClaudeCode.csproj" />
     <ProjectReference Include="..\MainForge.Tools\MainForge.Tools.csproj" />
     <ProjectReference Include="..\MainForge.Agents\MainForge.Agents.csproj" />
+    <!-- Como na CLI: o servidor MCP precisa estar na mesma pasta de saída do aplicativo. -->
+    <ProjectReference Include="..\MainForge.Mcp\MainForge.Mcp.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -2,19 +2,19 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MainForge.Core\MainForge.Core.csproj" />
-    <ProjectReference Include="..\MainForge.Claude\MainForge.Claude.csproj" />
+    <ProjectReference Include="..\MainForge.ClaudeCode\MainForge.ClaudeCode.csproj" />
     <ProjectReference Include="..\MainForge.Tools\MainForge.Tools.csproj" />
     <ProjectReference Include="..\MainForge.Agents\MainForge.Agents.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Anthropic" Version="12.39.0" />
+    <!-- O servidor MCP é um executável à parte, lançado pelo Claude Code. A referência existe
+         só para o binário dele parar na mesma pasta de saída, onde ConfiguracaoDoServidorMcp
+         o procura. -->
+    <ProjectReference Include="..\MainForge.Mcp\MainForge.Mcp.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- TFM com sufixo -windows porque a DPAPI usada para guardar a API key só existe no
-         Windows: assim o compilador sabe disso e não acusa CA1416 em cada chamada. -->
+    <!-- TFM com sufixo -windows por causa do resolvedor de fontes do PdfSharp, que lê
+         C:\Windows\Fonts para preencher a ficha. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

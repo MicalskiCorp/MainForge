@@ -2,12 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MainForge.Core\MainForge.Core.csproj" />
-    <ProjectReference Include="..\MainForge.Claude\MainForge.Claude.csproj" />
-    <ProjectReference Include="..\MainForge.Tools\MainForge.Tools.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Anthropic" Version="12.39.0" />
+    <ProjectReference Include="..\MainForge.ClaudeCode\MainForge.ClaudeCode.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

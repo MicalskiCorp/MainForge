@@ -1,67 +1,48 @@
-﻿using Anthropic.Services.Beta;
-using MainForge.Claude;
+using MainForge.ClaudeCode;
 using MainForge.Core;
 
 namespace MainForge.Cli;
 
 /// <summary>
-/// Estado compartilhado entre os fluxos do menu: caminhos do projeto, armazenamento da API
-/// key e o cliente da Claude API. O cliente é criado sob demanda — abrir o aplicativo, ver
-/// os sistemas disponíveis ou configurar a chave não deve exigir chave nenhuma.
+/// Estado compartilhado entre os fluxos do menu: os caminhos do projeto e a instalação do
+/// Claude Code que executa os agentes.
+///
+/// Repare no que sumiu daqui: chave de API, armazenamento cifrado, origem da chave. O
+/// aplicativo não tem mais credencial nenhuma — quem está autenticado é o Claude Code, com a
+/// assinatura do usuário, e nós só o executamos.
 /// </summary>
 internal sealed class ContextoDoAplicativo
 {
-    private IMessageService? _mensagens;
-
-    public ContextoDoAplicativo(CaminhosDoProjeto caminhos, ArmazenamentoDeChaveApi armazenamento)
+    public ContextoDoAplicativo(CaminhosDoProjeto caminhos)
     {
         Caminhos = caminhos;
-        Armazenamento = armazenamento;
-        RecarregarChave();
+        Opcoes = OpcoesDoClaudeCode.Resolver();
     }
 
     public CaminhosDoProjeto Caminhos { get; }
 
-    public ArmazenamentoDeChaveApi Armazenamento { get; }
+    public OpcoesDoClaudeCode? Opcoes { get; }
 
-    public OrigemDaChaveApi OrigemDaChave { get; private set; }
-
-    public OpcoesClienteClaude? Opcoes { get; private set; }
-
-    public bool TemChave => Opcoes is not null;
+    public bool TemClaudeCode => Opcoes is not null;
 
     /// <summary>
-    /// Relê a chave (variável de ambiente tem prioridade sobre o arquivo cifrado) e descarta
-    /// o cliente atual, para a próxima operação usar a chave nova. Chamado no início e sempre
-    /// que o usuário mexe na chave pelo menu.
+    /// Devolve as opções de execução, ou <c>null</c> (explicando ao usuário) quando não há
+    /// Claude Code instalado. Todo fluxo que vai rodar um agente passa por aqui.
     /// </summary>
-    public void RecarregarChave()
+    public OpcoesDoClaudeCode? ExigirClaudeCode()
     {
-        (OrigemDaChave, Opcoes) = OpcoesClienteClaude.Resolver(Armazenamento);
-        _mensagens = null;
-    }
-
-    /// <summary>
-    /// Devolve o serviço de mensagens da Claude API, criando o cliente na primeira vez.
-    /// Devolve <c>null</c> (e explica ao usuário) quando ainda não há chave configurada.
-    /// </summary>
-    public IMessageService? ObterServicoDeMensagens()
-    {
-        if (Opcoes is null)
+        if (Opcoes is not null)
         {
-            ConsoleUi.Erro("Nenhuma chave da Claude API configurada.");
-            ConsoleUi.Info("Use a opção \"Configurar a chave da Claude API\" no menu principal.");
-            return null;
+            return Opcoes;
         }
 
-        _mensagens ??= FabricaClienteClaude.Criar(Opcoes).Beta.Messages;
-        return _mensagens;
+        ConsoleUi.Erro("Claude Code não encontrado nesta máquina.");
+        ConsoleUi.Info("O MainForge roda os agentes através dele, usando a sua assinatura — não há API key.");
+        ConsoleUi.Info("Instale em https://claude.com/product/claude-code e rode 'claude' uma vez para entrar.");
+        ConsoleUi.Detalhe($"Se já estiver instalado em local não padrão, aponte {LocalizadorDoClaudeCode.VariavelDeAmbiente}.");
+        return null;
     }
 
-    public string DescreverOrigemDaChave() => OrigemDaChave switch
-    {
-        OrigemDaChaveApi.VariavelDeAmbiente => "variável de ambiente ANTHROPIC_API_KEY",
-        OrigemDaChaveApi.ArquivoProtegido => $"arquivo cifrado ({Armazenamento.CaminhoDoArquivo})",
-        _ => "não configurada",
-    };
+    public string DescreverClaudeCode() =>
+        Opcoes is null ? "não encontrado" : Opcoes.CaminhoExecutavel;
 }

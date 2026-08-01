@@ -42,7 +42,7 @@ internal static class TelaInicial
         }
 
         ConsoleUi.EscreverColorido("\n                    M A I N   F O R G E\n", ConsoleColor.Yellow);
-        ConsoleUi.Detalhe("           criação de fichas de RPG com a Claude API\n");
+        ConsoleUi.Detalhe("          criação de fichas de RPG com o Claude Code\n");
     }
 
     private static IEnumerable<(string Linha, ConsoleColor Cor)> MontarPortao()

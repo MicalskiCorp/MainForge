@@ -1,36 +1,72 @@
 # Chatbot para Criação de Fichas de Personagens de RPG
 
-Aplicativo desktop em C#/.NET que usa a Claude API para entender livros de RPG em PDF e
-conduzir a criação de personagens, terminando num PDF de ficha preenchido. Tudo roda
-localmente na máquina do usuário; a única comunicação externa é com a Claude API.
+Aplicativo desktop em C#/.NET que entende livros de RPG em PDF e conduz a criação de
+personagens, terminando num PDF de ficha preenchido. Tudo roda localmente na máquina do
+usuário.
 
 ## Decisões de arquitetura
 
-- **Autenticação**: API key da Anthropic, via o SDK oficial `Anthropic` para .NET. Não existe
-  hoje um Claude Agent SDK para C#, e não há mecanismo suportado para um app de terceiros
-  autenticar usando a assinatura Claude Pro/Max de um usuário — por isso a licença aqui é
-  billing por token com uma API key.
-  A chave **não fica no código-fonte**: o usuário a informa dentro do aplicativo, e ela é
-  guardada cifrada com DPAPI (`%APPDATA%\MainForge\chave-api.dat`), decifrável apenas pela
-  mesma conta de usuário do mesmo Windows. A variável de ambiente `ANTHROPIC_API_KEY`
-  continua funcionando e tem prioridade, para automação.
-- **Ferramentas locais** (ler PDF, escrever Markdown, preencher ficha): expostas como
-  *tools* (function calling) diretamente na Messages API, executadas em processo pelo
-  próprio C#. Não há um servidor MCP — como tudo roda no mesmo processo local, o protocolo
-  MCP não adiciona valor aqui (ele existe para expor ferramentas a clientes externos).
+- **Autenticação**: nenhuma. O aplicativo não tem, não pede e não guarda credencial —
+  ele executa o **Claude Code** já instalado e autenticado na máquina, e quem paga a conta
+  é a assinatura do usuário. Não existe Claude Agent SDK para C#, então o que o
+  `MainForge.ClaudeCode` faz é o que os SDKs de TypeScript e Python fazem por baixo:
+  lançar o `claude` em modo headless (`-p --output-format stream-json`), mandar a mensagem
+  pela stdin e traduzir o fluxo de eventos da stdout.
+- **Ferramentas**: híbridas, por necessidade técnica.
+  - Ler PDF é do `Read` embutido do Claude Code, que lê PDF nativamente. **Não dá para
+    fazer isso por MCP**: uma ferramenta MCP que devolva o PDF faz o Claude Code gravar o
+    binário em disco e passar só o caminho ao modelo, que não consegue lê-lo. Isso foi
+    verificado, não deduzido.
+  - Manipular AcroForm (listar e preencher os campos da ficha) e escrever em `Knowledge/`
+    ficam em C#, expostos por um servidor MCP local (`MainForge.Mcp`, stdio, lançado pelo
+    próprio Claude Code).
 - **.NET 10** (LTS instalada na máquina), solução dividida em projetos por responsabilidade.
+
+### Sobre o MCP
+
+Uma versão anterior deste README dizia que MCP não agregava valor "porque tudo roda no mesmo
+processo". Isso deixou de ser verdade: os agentes rodam agora em outro processo (o Claude
+Code), e o MCP é justamente a ponte entre os dois.
+
+## O guardrail de ferramentas
+
+"Cada agente só pode usar certas ferramentas" continua valendo, em três camadas — nenhuma
+delas suficiente sozinha:
+
+1. **Diretório de trabalho.** O processo roda com a raiz do projeto como diretório de
+   trabalho, e o Claude Code não acessa arquivos fora dele.
+2. **Negações por ferramenta e por caminho** (`--disallowedTools`, em
+   `DefinicaoDeAgente.FerramentasNegadas`). ⚠️ **`--allowedTools` apenas concede, não
+   restringe.** Ferramentas de leitura já são aprovadas por padrão, então listar
+   `Read(Knowledge/**)` *não* impede leituras fora de `Knowledge/` — só uma negação
+   explícita bloqueia. Negação vence concessão.
+3. **Confinamento em código.** Toda **escrita** passa pelo servidor MCP, onde
+   `CaminhosDoProjeto.ResolverDentroDe` rejeita qualquer caminho que escape do diretório
+   permitido. É a única camada que não depende de acertar uma lista de negação — e por isso
+   é onde mora a regra que realmente importa.
+
+| | Configurador | Dungeon Master |
+| --- | --- | --- |
+| Embutidas | `Read`, `Glob` | `Read`, `Glob` |
+| MCP | `escrever_arquivo_conhecimento`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
+| Negações próprias | `Read(Output/**)` | `Read(Systems/**)`, `Read(Templates/**)` |
+
+Negado para os dois, sempre: `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `WebFetch`,
+`WebSearch`, `Grep`, e a leitura do código do próprio aplicativo. Cada um desses é uma saída
+de emergência pela qual um agente contornaria todas as outras restrições.
 
 ## Estrutura da solução
 
 ```
 MainForge.sln
 ├── src/
-│   ├── MainForge.Core     -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
-│   ├── MainForge.Claude   -> wrapper fino sobre o SDK oficial Anthropic
-│   ├── MainForge.Tools    -> implementação das tools (leitura/escrita de arquivos, PDF)
-│   ├── MainForge.Agents   -> DefinicaoDeAgente: prompt + allowlist de tools por agente
-│   ├── MainForge.Cli      -> interface em console (a interface em uso hoje)
-│   └── MainForge.App      -> aplicativo WPF (interface gráfica, ainda um shell vazio)
+│   ├── MainForge.Core       -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
+│   ├── MainForge.ClaudeCode -> localiza e executa o Claude Code; traduz o stream-json em eventos
+│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp) e escrita em Knowledge/
+│   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
+│   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
+│   ├── MainForge.Cli        -> interface em console (a interface em uso hoje)
+│   └── MainForge.App        -> aplicativo WPF (interface gráfica, ainda um shell vazio)
 ├── tests/MainForge.Tests
 ├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução)
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
@@ -40,13 +76,16 @@ MainForge.sln
 └── Output/Personagens/   -> fichas finais preenchidas
 ```
 
-O guardrail "cada agente só pode usar certas ferramentas" é reforçado em código em
-`DefinicaoDeAgente.FerramentasPermitidas` — não depende do agente "se comportar" ao seguir o
-prompt.
-
 **Convenção de idioma:** nomes de solução, projetos e namespaces ficam em inglês (padrão do
 ecossistema .NET), mas todo o resto — classes, métodos, variáveis, comentários e textos de
 UI — é em português (pt-BR).
+
+## Pré-requisito
+
+O [Claude Code](https://claude.com/product/claude-code) instalado e autenticado: rode
+`claude` uma vez num terminal e faça login. O aplicativo o procura no PATH e nos diretórios
+padrão de instalação; se estiver em outro lugar, aponte a variável de ambiente
+`MAINFORGE_CLAUDE_CODE` para o executável.
 
 ## Rodando
 
@@ -55,9 +94,6 @@ dotnet build MainForge.sln
 dotnet test MainForge.sln
 dotnet run --project src/MainForge.Cli    # o aplicativo
 ```
-
-Na primeira execução, use a opção **5) Configurar a chave da Claude API** para informar sua
-API key — nada é exibido enquanto você digita, e a chave é gravada cifrada.
 
 Menu do aplicativo:
 
@@ -69,7 +105,8 @@ Menu do aplicativo:
    gera `Knowledge/<Sistema>/*.md`. É a operação mais cara em tokens; pede confirmação.
 4. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
    em `Output/Personagens/`. `/sair` encerra a conversa.
-5. **Configurar a chave da Claude API** — informar, substituir ou apagar.
+5. **Verificar o Claude Code** — mostra o executável, o modelo e as permissões de cada
+   agente, e faz um turno de teste para confirmar que a assinatura está ativa.
 
 Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 3
 (ou copiar as pastas na mão para `Systems/` e `Templates/`).
@@ -89,19 +126,33 @@ mostra na conversa, para o usuário conferir e confirmar. Assim o usuário vê a
 vai ficar sem precisar abrir o PDF, e o mapeamento fica registrado em vez de ser redescoberto
 a cada criação de personagem.
 
+## Limitações desta abordagem
+
+- **Cota, não dinheiro.** O consumo sai da assinatura do Claude Code (janelas de 5 horas e
+  semanal), não de créditos de API. Processar um livro grande pode esgotar a janela e não há
+  como "pagar mais" para continuar — só esperar.
+- **Não distribuível como está.** Cada pessoa que rodar o aplicativo precisa da própria
+  instalação do Claude Code, autenticada com a própria assinatura.
+- **Menos controle fino.** `max_tokens`, formato exato do prompt e política de retentativa
+  são do Claude Code. Em troca vêm compactação automática de contexto e um loop de agente
+  pronto.
+- **Configuração do usuário vaza para a sessão.** `--strict-mcp-config` impede que servidores
+  MCP globais entrem, mas hooks e settings pessoais do Claude Code ainda se aplicam.
+
+## Status
+
+Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
+permissões por agente (verificado com o Dungeon Master tendo `Systems/` negado de fato), a
+importação de sistemas e a interface em console, com 50 testes automatizados. O Configurador
+foi validado ponta a ponta gerando `Knowledge/SistemaTeste/`.
+
+Falta: rodar a validação ponta a ponta completa incluindo o Dungeon Master
+(`dotnet run --project tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e
+construir a interface gráfica em WPF.
+
 > Se o build ou `dotnet sln add`/`dotnet restore` falhar de forma estranha nesta máquina,
 > verifique a variável de ambiente `MSBuildSDKsPath` — se ela estiver fixada em um SDK antigo
 > (ex.: `.../sdk/2.1.202/Sdks`), remova-a das variáveis de ambiente do Windows.
 
 > PDFs precisam estar marcados como binários no Git (`.gitattributes`): com
 > `core.autocrlf=true`, a conversão de fim de linha corrompe os offsets internos do arquivo.
-
-## Status
-
-Funcionando: as 8 ferramentas locais, o loop de tool-use (`SessaoDeAgente`), o allowlist de
-ferramentas por agente, a importação de sistemas, o armazenamento cifrado da API key e a
-interface em console (`MainForge.Cli`), com 44 testes automatizados.
-
-Falta: validar o fluxo completo contra a API de verdade (harness em
-`tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e construir a interface
-gráfica em WPF.

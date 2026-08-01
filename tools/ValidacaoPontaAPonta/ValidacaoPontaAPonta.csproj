@@ -2,26 +2,28 @@
 
   <!--
     Harness de validação ponta a ponta. NÃO faz parte de MainForge.sln de propósito:
-    ele faz chamadas reais (e pagas) à Claude API, então não deve entrar em
-    "dotnet build MainForge.sln" nem em "dotnet test". Rode manualmente com
-    "dotnet run" apontando para tools/ValidacaoPontaAPonta.
+    ele executa agentes de verdade e consome a cota da assinatura do Claude Code, então
+    não deve entrar em "dotnet build MainForge.sln" nem em "dotnet test". Rode manualmente
+    com "dotnet run" apontando para tools/ValidacaoPontaAPonta.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MainForge.Core\MainForge.Core.csproj" />
-    <ProjectReference Include="..\..\src\MainForge.Claude\MainForge.Claude.csproj" />
+    <ProjectReference Include="..\..\src\MainForge.ClaudeCode\MainForge.ClaudeCode.csproj" />
     <ProjectReference Include="..\..\src\MainForge.Tools\MainForge.Tools.csproj" />
     <ProjectReference Include="..\..\src\MainForge.Agents\MainForge.Agents.csproj" />
+    <!-- O servidor MCP precisa estar na pasta de saída deste harness também: é lá que
+         ConfiguracaoDoServidorMcp o procura para passar ao Claude Code. -->
+    <ProjectReference Include="..\..\src\MainForge.Mcp\MainForge.Mcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Anthropic" Version="12.39.0" />
     <PackageReference Include="PDFsharp" Version="6.2.4" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- -windows por causa da DPAPI usada na resolução da API key. -->
+    <!-- -windows por causa do resolvedor de fontes do PdfSharp, que lê C:\Windows\Fonts. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

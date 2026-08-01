@@ -59,22 +59,23 @@ internal static class FluxoDoConfigurador
         }
 
         ConsoleUi.Aviso(
-            "O agente vai ler esses PDFs pela Claude API. Livros grandes consomem muitos tokens " +
-            "(e portanto custam) — vale começar por um sistema pequeno.");
+            "O agente vai ler esses PDFs inteiros. É a operação mais cara do aplicativo e ela " +
+            "consome a cota da sua assinatura do Claude Code — um livro grande pode esgotar a " +
+            "janela de uso. Vale começar por um sistema pequeno.");
 
         if (!ConsoleUi.Confirmar("Começar o processamento?"))
         {
             return;
         }
 
-        var mensagens = contexto.ObterServicoDeMensagens();
+        var opcoes = contexto.ExigirClaudeCode();
 
-        if (mensagens is null)
+        if (opcoes is null)
         {
             return;
         }
 
-        var sessao = new SessaoDeAgente(mensagens, DefinicaoDeAgente.Configurador, contexto.Caminhos, contexto.Opcoes!);
+        using var sessao = new SessaoDeAgente(opcoes, DefinicaoDeAgente.Configurador, contexto.Caminhos);
 
         ConsoleUi.Titulo("Configurador trabalhando");
         ProgressoDoAgente.Pensando("O Configurador");

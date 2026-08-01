@@ -1,20 +1,82 @@
-using Anthropic.Helpers.Beta;
+using MainForge.ClaudeCode;
 using MainForge.Core;
-using MainForge.Tools;
 
 namespace MainForge.Agents;
 
 /// <summary>
-/// Um agente nomeado: seu prompt de sistema (carregado de Agents/*.md) mais o conjunto
-/// exato de ferramentas que ele pode chamar. É aqui que os guardrails de segurança da
-/// especificação do produto são aplicados em código — um agente nunca recebe uma
-/// ferramenta fora da sua lista, não importa o que o modelo peça.
+/// Um agente nomeado: seu prompt de sistema (carregado de Agents/*.md) mais o conjunto exato
+/// de ferramentas que ele pode usar. É aqui que os guardrails da especificação do produto são
+/// aplicados.
+///
+/// <para><b>Como o guardrail funciona sob o Claude Code.</b> São três camadas, e é preciso
+/// entender por que nenhuma delas sozinha basta:</para>
+///
+/// <list type="number">
+///   <item><b>Diretório de trabalho.</b> O processo roda com a raiz do projeto como diretório
+///   de trabalho, e o Claude Code não acessa arquivos fora dele.</item>
+///   <item><b>Negações por ferramenta e por caminho</b> (<see cref="FerramentasNegadas"/>).
+///   Este é o mecanismo que de fato bloqueia. <c>--allowedTools</c> apenas <em>concede</em>:
+///   ferramentas de leitura já são aprovadas por padrão, então listar
+///   <c>Read(Knowledge/**)</c> não impede leituras fora de Knowledge/ — só uma negação
+///   explícita faz isso.</item>
+///   <item><b>Confinamento em código.</b> Toda <em>escrita</em> passa pelo servidor MCP em
+///   C#, onde <see cref="CaminhosDoProjeto.ResolverDentroDe"/> rejeita qualquer caminho que
+///   escape do diretório permitido. É a única camada que não depende de acertar uma lista de
+///   negação, e por isso é onde mora a regra que realmente importa.</item>
+/// </list>
 /// </summary>
-public sealed record DefinicaoDeAgente(string Nome, string NomeArquivoPrompt, IReadOnlyList<string> FerramentasPermitidas)
+/// <param name="Nome">Nome do agente, usado em mensagens ao usuário.</param>
+/// <param name="NomeArquivoPrompt">Arquivo em Agents/ com o prompt de sistema.</param>
+/// <param name="FerramentasNativasPermitidas">Ferramentas embutidas do Claude Code concedidas.</param>
+/// <param name="FerramentasMcpPermitidas">Ferramentas do servidor MCP do MainForge concedidas, sem prefixo.</param>
+/// <param name="NegacoesEspecificas">Negações próprias deste agente, somadas às comuns a todos.</param>
+public sealed record DefinicaoDeAgente(
+    string Nome,
+    string NomeArquivoPrompt,
+    IReadOnlyList<string> FerramentasNativasPermitidas,
+    IReadOnlyList<string> FerramentasMcpPermitidas,
+    IReadOnlyList<string> NegacoesEspecificas)
 {
+    /// <summary>
+    /// Nome do servidor MCP no arquivo de configuração. O Claude Code expõe as ferramentas
+    /// dele como <c>mcp__mainforge__&lt;ferramenta&gt;</c>.
+    /// </summary>
+    public const string NomeDoServidorMcp = "mainforge";
+
+    /// <summary>
+    /// Negado para todos os agentes, sem exceção. Cada item fecha um caminho pelo qual um
+    /// agente contornaria o próprio allowlist:
+    /// <list type="bullet">
+    ///   <item><c>Bash</c> faria qualquer coisa que as outras negações proíbem;</item>
+    ///   <item><c>Write</c>/<c>Edit</c>/<c>NotebookEdit</c> escreveriam fora do MCP, sem o
+    ///   confinamento de diretório em C#;</item>
+    ///   <item><c>Task</c> abriria um subagente sem estas restrições;</item>
+    ///   <item><c>WebFetch</c>/<c>WebSearch</c> trariam regras da internet — os agentes devem
+    ///   responder a partir dos livros importados, não de outra fonte;</item>
+    ///   <item><c>Grep</c> leria conteúdo de arquivo por um caminho que não confirmei
+    ///   respeitar as negações por diretório (o <c>Read</c> respeita);</item>
+    ///   <item>o código do próprio aplicativo não interessa a nenhum agente de RPG.</item>
+    /// </list>
+    /// </summary>
+    public static readonly IReadOnlyList<string> NegacoesComuns =
+    [
+        "Bash",
+        "Write",
+        "Edit",
+        "NotebookEdit",
+        "Task",
+        "WebFetch",
+        "WebSearch",
+        "Grep",
+        "Read(src/**)",
+        "Read(tests/**)",
+        "Read(tools/**)",
+        "Read(.git/**)",
+    ];
+
     public string CarregarPromptDeSistema(CaminhosDoProjeto caminhos)
     {
-        var caminho = Path.Combine(caminhos.Agentes, NomeArquivoPrompt);
+        var caminho = CaminhoDoPrompt(caminhos);
 
         if (!File.Exists(caminho))
         {
@@ -25,53 +87,65 @@ public sealed record DefinicaoDeAgente(string Nome, string NomeArquivoPrompt, IR
         return File.ReadAllText(caminho);
     }
 
+    public string CaminhoDoPrompt(CaminhosDoProjeto caminhos) =>
+        Path.Combine(caminhos.Agentes, NomeArquivoPrompt);
+
     /// <summary>
-    /// Resolve as instâncias de ferramenta correspondentes a <see cref="FerramentasPermitidas"/>
-    /// a partir do catálogo completo em <see cref="RegistroDeFerramentas"/>. É aqui que o
-    /// allowlist de cada agente vira, de fato, a lista de ferramentas que o
-    /// <c>BetaToolRunner</c> recebe — um agente nunca vê a definição de uma ferramenta fora
-    /// da sua lista, então o modelo não pode nem tentar chamá-la.
+    /// Lista completa de ferramentas concedidas, com as do MCP já prefixadas como o Claude
+    /// Code as nomeia.
     /// </summary>
-    public IReadOnlyList<IBetaRunnableTool> ResolverFerramentas(CaminhosDoProjeto caminhos)
-    {
-        var catalogo = RegistroDeFerramentas.CriarTodas(caminhos);
+    public IReadOnlyList<string> FerramentasPermitidas() =>
+    [
+        .. FerramentasNativasPermitidas,
+        .. FerramentasMcpPermitidas.Select(nome => $"mcp__{NomeDoServidorMcp}__{nome}"),
+    ];
 
-        return FerramentasPermitidas
-            .Select(nome => catalogo.TryGetValue(nome, out var ferramenta)
-                ? ferramenta
-                : throw new InvalidOperationException(
-                    $"Ferramenta '{nome}' listada em FerramentasPermitidas de '{Nome}' não está registrada em RegistroDeFerramentas."))
-            .ToList();
-    }
+    /// <summary>Negações comuns mais as específicas do agente.</summary>
+    public IReadOnlyList<string> FerramentasNegadas() => [.. NegacoesComuns, .. NegacoesEspecificas];
 
     /// <summary>
-    /// Só pode tocar em Systems/, Templates/ e Knowledge/ (escrita limitada a Knowledge/).
-    /// Nunca conversa com o usuário final.
+    /// Monta o pedido de execução deste agente para o Claude Code.
+    /// </summary>
+    public PedidoDeTurno MontarPedido(
+        CaminhosDoProjeto caminhos,
+        string mensagem,
+        string? caminhoConfigMcp,
+        string? idDaSessao,
+        bool retomar) => new()
+        {
+            Mensagem = mensagem,
+            DiretorioDeTrabalho = caminhos.Raiz,
+            CaminhoPromptDeSistema = CaminhoDoPrompt(caminhos),
+            FerramentasPermitidas = FerramentasPermitidas(),
+            FerramentasNegadas = FerramentasNegadas(),
+            CaminhoConfigMcp = caminhoConfigMcp,
+            IdDaSessao = idDaSessao,
+            Retomar = retomar,
+        };
+
+    /// <summary>
+    /// Lê os livros em Systems/ e a ficha em branco em Templates/, e escreve a base de
+    /// conhecimento em Knowledge/. Nunca conversa com o usuário final e nunca olha as fichas
+    /// de personagens já criadas em Output/.
     /// </summary>
     public static readonly DefinicaoDeAgente Configurador = new(
         Nome: "Configurador",
         NomeArquivoPrompt: "Configurador.md",
-        FerramentasPermitidas:
-        [
-            "listar_sistemas",
-            "ler_pdf_do_sistema",
-            "ler_ficha_modelo",
-            "escrever_arquivo_conhecimento",
-            "listar_conhecimento",
-        ]);
+        FerramentasNativasPermitidas: ["Read", "Glob"],
+        FerramentasMcpPermitidas: ["escrever_arquivo_conhecimento", "listar_campos_da_ficha"],
+        NegacoesEspecificas: ["Read(Output/**)"]);
 
     /// <summary>
-    /// Só pode ler Knowledge/ e Templates/, e escrever em Output/Personagens/. Nunca lê os
-    /// PDFs originais e nunca modifica Knowledge/.
+    /// Só lê Knowledge/ e só escreve em Output/Personagens/, pela ferramenta MCP de
+    /// preenchimento. Nunca lê os PDFs originais em Systems/ (caros em tokens, e é justamente
+    /// para isso que o Configurador destilou o conhecimento) nem o template em Templates/ —
+    /// para ver a ficha ele usa o Ficha-ModeloEmTexto.md, e para saber os nomes dos campos,
+    /// o Ficha-Mapeamento.md.
     /// </summary>
     public static readonly DefinicaoDeAgente DungeonMaster = new(
         Nome: "DungeonMaster",
         NomeArquivoPrompt: "DungeonMaster.md",
-        FerramentasPermitidas:
-        [
-            "listar_sistemas_prontos",
-            "ler_arquivo_conhecimento",
-            "listar_conhecimento",
-            "preencher_ficha_personagem",
-        ]);
+        FerramentasNativasPermitidas: ["Read", "Glob"],
+        FerramentasMcpPermitidas: ["preencher_ficha_personagem"],
+        NegacoesEspecificas: ["Read(Systems/**)", "Read(Templates/**)"]);
 }

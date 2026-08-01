@@ -1,14 +1,19 @@
-using System.Text.Json;
-using Anthropic.Helpers.Beta;
-using Anthropic.Models.Beta.Messages;
-using MainForge.Agents;
 using MainForge.Core;
 using MainForge.Tools;
 
 namespace MainForge.Tests;
 
+/// <summary>
+/// Testa as operações que sobraram em C# depois da migração para o Claude Code: escrever a
+/// base de conhecimento e manipular o AcroForm da ficha. As antigas ferramentas de leitura e
+/// listagem sumiram porque agora são o <c>Read</c> e o <c>Glob</c> embutidos do Claude Code —
+/// não há o que testar aqui sobre elas.
+/// </summary>
 public class FerramentasTestes : IDisposable
 {
+    private static readonly string CaminhoFichaFixture =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "FichaTeste.pdf");
+
     private readonly string _raiz;
     private readonly CaminhosDoProjeto _caminhos;
 
@@ -24,232 +29,140 @@ public class FerramentasTestes : IDisposable
         {
             Directory.Delete(_raiz, recursive: true);
         }
+
+        GC.SuppressFinalize(this);
     }
 
-    private static BetaToolUseBlock ChamadaComEntrada(object entrada)
-    {
-        var elemento = JsonSerializer.SerializeToElement(entrada);
-        var dicionario = elemento.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone());
-
-        return new BetaToolUseBlock
-        {
-            ID = "chamada-teste",
-            Name = "ferramenta-teste",
-            Input = dicionario,
-        };
-    }
-
-    [Fact]
-    public async Task ListarSistemas_RetornaSubpastasDeSystemsEmOrdem()
-    {
-        Directory.CreateDirectory(Path.Combine(_caminhos.Sistemas, "Tormenta20"));
-        Directory.CreateDirectory(Path.Combine(_caminhos.Sistemas, "Aventura&Cia"));
-
-        var ferramenta = new FerramentaListarSistemas(_caminhos);
-        var resultado = await ferramenta.ExecuteAsync(ChamadaComEntrada(new { }), CancellationToken.None);
-
-        Assert.True(resultado.TryPickString(out var json));
-        var sistemas = JsonSerializer.Deserialize<List<string>>(json!)!;
-        Assert.Equal(["Aventura&Cia", "Tormenta20"], sistemas);
-    }
-
-    [Fact]
-    public async Task EscreverELerArquivoConhecimento_RoundTrip()
-    {
-        var escrever = new FerramentaEscreverArquivoConhecimento(_caminhos);
-        var ler = new FerramentaLerArquivoConhecimento(_caminhos);
-
-        await escrever.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", caminho = "Classes/Guerreiro.md", conteudo = "# Guerreiro" }),
-            CancellationToken.None);
-
-        var resultado = await ler.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", caminho = "Classes/Guerreiro.md" }),
-            CancellationToken.None);
-
-        Assert.True(resultado.TryPickString(out var conteudo));
-        Assert.Equal("# Guerreiro", conteudo);
-    }
-
-    [Fact]
-    public async Task LerArquivoConhecimento_ArquivoInexistente_LancaBetaToolError()
-    {
-        var ler = new FerramentaLerArquivoConhecimento(_caminhos);
-
-        await Assert.ThrowsAsync<BetaToolError>(() => ler.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", caminho = "Nada.md" }),
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task EscreverArquivoConhecimento_RejeitaCaminhoQueNaoTerminaEmMd()
-    {
-        var escrever = new FerramentaEscreverArquivoConhecimento(_caminhos);
-
-        await Assert.ThrowsAsync<BetaToolError>(() => escrever.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", caminho = "Classes/Guerreiro.txt", conteudo = "x" }),
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task ListarConhecimento_RejeitaPathTraversalNoSistema()
-    {
-        var ferramenta = new FerramentaListarConhecimento(_caminhos);
-
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "../fora" }),
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task LerPdfDoSistema_DevolveBlocoDeDocumento()
-    {
-        var diretorioSistema = Path.Combine(_caminhos.Sistemas, "Aventura&Cia");
-        Directory.CreateDirectory(diretorioSistema);
-        var caminhoPdf = Path.Combine(diretorioSistema, "Livro.pdf");
-        await File.WriteAllBytesAsync(caminhoPdf, "%PDF-1.4 conteudo falso"u8.ToArray());
-
-        var ferramenta = new FerramentaLerPdfDoSistema(_caminhos);
-        var resultado = await ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", arquivo = "Livro.pdf" }),
-            CancellationToken.None);
-
-        Assert.True(resultado.TryPickBlocks(out var blocos));
-        var bloco = Assert.Single(blocos!);
-        Assert.True(bloco.TryPickBetaRequestDocument(out _));
-    }
-
-    [Fact]
-    public async Task LerPdfDoSistema_ArquivoNaoPdf_LancaBetaToolError()
-    {
-        var diretorioSistema = Path.Combine(_caminhos.Sistemas, "Aventura&Cia");
-        Directory.CreateDirectory(diretorioSistema);
-        await File.WriteAllTextAsync(Path.Combine(diretorioSistema, "nota.txt"), "oi");
-
-        var ferramenta = new FerramentaLerPdfDoSistema(_caminhos);
-
-        await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", arquivo = "nota.txt" }),
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task LerFichaModelo_DevolveOPdfEOsNomesDosCampos()
+    private string PrepararTemplate(string nomeArquivo = "Ficha.pdf")
     {
         var diretorioModelo = Path.Combine(_caminhos.Modelos, "Aventura&Cia");
         Directory.CreateDirectory(diretorioModelo);
-        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "Ficha.pdf"));
-
-        var ferramenta = new FerramentaLerFichaModelo(_caminhos);
-        var resultado = await ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia" }),
-            CancellationToken.None);
-
-        Assert.True(resultado.TryPickBlocks(out var blocos));
-        Assert.Equal(2, blocos!.Count);
-        Assert.True(blocos[0].TryPickBetaRequestDocument(out _));
-
-        // O segundo bloco lista os campos exatamente como preencher_ficha_personagem os exige.
-        Assert.True(blocos[1].TryPickBetaTextBlockParam(out var texto));
-        Assert.Contains("Nome", texto!.Text);
+        var destino = Path.Combine(diretorioModelo, nomeArquivo);
+        File.Copy(CaminhoFichaFixture, destino);
+        return destino;
     }
 
     [Fact]
-    public async Task LerFichaModelo_SistemaSemTemplate_LancaBetaToolError()
+    public async Task EscreverConhecimento_GravaOArquivoEDevolveCaminhoRelativo()
     {
-        var ferramenta = new FerramentaLerFichaModelo(_caminhos);
+        var gravado = await EscritorDeConhecimento.EscreverAsync(
+            _caminhos, "Aventura&Cia", "Classes/Guerreiro.md", "# Guerreiro");
 
-        await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "SistemaInexistente" }),
-            CancellationToken.None));
+        var esperado = Path.Combine(_caminhos.Conhecimento, "Aventura&Cia", "Classes", "Guerreiro.md");
+        Assert.True(File.Exists(esperado));
+        Assert.Equal("# Guerreiro", await File.ReadAllTextAsync(esperado));
+        Assert.Equal(Path.GetRelativePath(_raiz, esperado), gravado);
     }
 
     [Fact]
-    public void ResolverFerramentas_ConfiguradorResolveTodasAsSuasFerramentas()
+    public async Task EscreverConhecimento_RejeitaCaminhoQueNaoTerminaEmMd()
     {
-        var ferramentas = DefinicaoDeAgente.Configurador.ResolverFerramentas(_caminhos);
+        await Assert.ThrowsAsync<ErroDeFerramenta>(() => EscritorDeConhecimento.EscreverAsync(
+            _caminhos, "Aventura&Cia", "Classes/Guerreiro.txt", "x"));
+    }
 
-        var nomes = ferramentas.Select(f => f.Name).ToList();
-        Assert.Equal(DefinicaoDeAgente.Configurador.FerramentasPermitidas.Count, nomes.Count);
-        Assert.Equal(DefinicaoDeAgente.Configurador.FerramentasPermitidas.OrderBy(n => n), nomes.OrderBy(n => n));
+    /// <summary>
+    /// O confinamento de diretório é a camada do guardrail que não depende de configuração
+    /// externa nenhuma — é o que garante que "o Configurador só escreve em Knowledge/" valha
+    /// mesmo que uma regra de permissão do Claude Code seja afrouxada por engano.
+    /// </summary>
+    [Theory]
+    [InlineData("../fora", "Arquivo.md")]
+    [InlineData("Aventura&Cia", "../../fora.md")]
+    [InlineData("Aventura&Cia", "../../../Windows/System32/fora.md")]
+    public async Task EscreverConhecimento_RejeitaEscapeDoDiretorioPermitido(string sistema, string caminho)
+    {
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => EscritorDeConhecimento.EscreverAsync(
+            _caminhos, sistema, caminho, "conteudo"));
     }
 
     [Fact]
-    public void ResolverFerramentas_DungeonMasterResolveTodasAsSuasFerramentas()
+    public void ListarCamposDaFicha_DevolveOsNomesDoAcroForm()
     {
-        var ferramentas = DefinicaoDeAgente.DungeonMaster.ResolverFerramentas(_caminhos);
+        PrepararTemplate();
 
-        var nomes = ferramentas.Select(f => f.Name).ToList();
-        Assert.Equal(DefinicaoDeAgente.DungeonMaster.FerramentasPermitidas.Count, nomes.Count);
-        Assert.Equal(DefinicaoDeAgente.DungeonMaster.FerramentasPermitidas.OrderBy(n => n), nomes.OrderBy(n => n));
+        var campos = PreenchedorDeFicha.ListarCampos(_caminhos, "Aventura&Cia", arquivoModelo: null);
+
+        Assert.Contains("Nome", campos);
     }
 
-    private static readonly string CaminhoFichaFixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "FichaTeste.pdf");
+    [Fact]
+    public void ListarCamposDaFicha_SistemaSemTemplate_LancaErroDeFerramenta()
+    {
+        Assert.Throws<ErroDeFerramenta>(() =>
+            PreenchedorDeFicha.ListarCampos(_caminhos, "SistemaInexistente", arquivoModelo: null));
+    }
 
     [Fact]
-    public async Task PreencherFichaPersonagem_PreencheCampoDeTextoESalvaEmOutput()
+    public void PreencherFicha_PreencheCampoDeTextoESalvaEmOutput()
     {
-        var diretorioModelo = Path.Combine(_caminhos.Modelos, "Aventura&Cia");
-        Directory.CreateDirectory(diretorioModelo);
-        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "Ficha.pdf"));
+        PrepararTemplate();
 
-        var ferramenta = new FerramentaPreencherFichaPersonagem(_caminhos);
-        await ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", campos = new { Nome = "Thoradin" }, nomeArquivoSaida = "Thoradin.pdf" }),
-            CancellationToken.None);
+        var gerado = PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["Nome"] = "Thoradin" },
+            "Thoradin.pdf");
 
         var caminhoSaida = Path.Combine(_caminhos.SaidaPersonagens, "Thoradin.pdf");
         Assert.True(File.Exists(caminhoSaida));
+        Assert.Equal(Path.GetRelativePath(_raiz, caminhoSaida), gerado);
 
-        using var documentoGerado = PdfSharp.Pdf.IO.PdfReader.Open(caminhoSaida, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
-        var campoNome = (PdfSharp.Pdf.AcroForms.PdfTextField)documentoGerado.AcroForm!.Fields["Nome"]!;
+        using var documento = PdfSharp.Pdf.IO.PdfReader.Open(caminhoSaida, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        var campoNome = (PdfSharp.Pdf.AcroForms.PdfTextField)documento.AcroForm!.Fields["Nome"]!;
         Assert.Equal("Thoradin", campoNome.Text);
     }
 
+    /// <summary>
+    /// A mensagem precisa listar os campos disponíveis: é lendo isso que o agente corrige a
+    /// própria chamada sem uma nova rodada de perguntas ao usuário.
+    /// </summary>
     [Fact]
-    public async Task PreencherFichaPersonagem_CampoInexistente_LancaBetaToolErrorComListaDeCamposDisponiveis()
+    public void PreencherFicha_CampoInexistente_ErroListaOsCamposDisponiveis()
     {
-        var diretorioModelo = Path.Combine(_caminhos.Modelos, "Aventura&Cia");
-        Directory.CreateDirectory(diretorioModelo);
-        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "Ficha.pdf"));
+        PrepararTemplate();
 
-        var ferramenta = new FerramentaPreencherFichaPersonagem(_caminhos);
+        var excecao = Assert.Throws<ErroDeFerramenta>(() => PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["CampoQueNaoExiste"] = "x" },
+            "Saida.pdf"));
 
-        var excecao = await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", campos = new { CampoQueNaoExiste = "x" }, nomeArquivoSaida = "Saida.pdf" }),
-            CancellationToken.None));
-
-        Assert.True(excecao.Content.TryPickString(out var mensagem));
-        Assert.Contains("CampoQueNaoExiste", mensagem);
-        Assert.Contains("Nome", mensagem);
+        Assert.Contains("CampoQueNaoExiste", excecao.Message);
+        Assert.Contains("Nome", excecao.Message);
     }
 
     [Fact]
-    public async Task PreencherFichaPersonagem_MaisDeUmTemplate_ExigeArquivoModelo()
+    public void PreencherFicha_MaisDeUmTemplate_ExigeArquivoModelo()
     {
-        var diretorioModelo = Path.Combine(_caminhos.Modelos, "Aventura&Cia");
-        Directory.CreateDirectory(diretorioModelo);
-        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "FichaA.pdf"));
-        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "FichaB.pdf"));
+        PrepararTemplate("FichaA.pdf");
+        PrepararTemplate("FichaB.pdf");
 
-        var ferramenta = new FerramentaPreencherFichaPersonagem(_caminhos);
+        var excecao = Assert.Throws<ErroDeFerramenta>(() => PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["Nome"] = "Thoradin" },
+            "Saida.pdf"));
 
-        await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", campos = new { Nome = "Thoradin" }, nomeArquivoSaida = "Saida.pdf" }),
-            CancellationToken.None));
+        Assert.Contains("arquivoModelo", excecao.Message);
     }
 
     [Fact]
-    public async Task PreencherFichaPersonagem_RejeitaNomeDeSaidaSemExtensaoPdf()
+    public void PreencherFicha_RejeitaNomeDeSaidaSemExtensaoPdf()
     {
-        var diretorioModelo = Path.Combine(_caminhos.Modelos, "Aventura&Cia");
-        Directory.CreateDirectory(diretorioModelo);
-        File.Copy(CaminhoFichaFixture, Path.Combine(diretorioModelo, "Ficha.pdf"));
+        PrepararTemplate();
 
-        var ferramenta = new FerramentaPreencherFichaPersonagem(_caminhos);
+        Assert.Throws<ErroDeFerramenta>(() => PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["Nome"] = "Thoradin" },
+            "Thoradin"));
+    }
 
-        await Assert.ThrowsAsync<BetaToolError>(() => ferramenta.ExecuteAsync(
-            ChamadaComEntrada(new { sistema = "Aventura&Cia", campos = new { Nome = "Thoradin" }, nomeArquivoSaida = "Thoradin" }),
-            CancellationToken.None));
+    [Fact]
+    public void PreencherFicha_RejeitaSaidaForaDeOutputPersonagens()
+    {
+        PrepararTemplate();
+
+        Assert.Throws<UnauthorizedAccessException>(() => PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["Nome"] = "Thoradin" },
+            "../../fora.pdf"));
     }
 }

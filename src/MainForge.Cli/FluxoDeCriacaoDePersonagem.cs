@@ -33,14 +33,14 @@ internal static class FluxoDeCriacaoDePersonagem
             return;
         }
 
-        var mensagens = contexto.ObterServicoDeMensagens();
+        var opcoes = contexto.ExigirClaudeCode();
 
-        if (mensagens is null)
+        if (opcoes is null)
         {
             return;
         }
 
-        var sessao = new SessaoDeAgente(mensagens, DefinicaoDeAgente.DungeonMaster, contexto.Caminhos, contexto.Opcoes!);
+        using var sessao = new SessaoDeAgente(opcoes, DefinicaoDeAgente.DungeonMaster, contexto.Caminhos);
 
         Directory.CreateDirectory(contexto.Caminhos.SaidaPersonagens);
         var fichasConhecidas = FichasEmSaida(contexto.Caminhos);
@@ -102,7 +102,7 @@ internal static class FluxoDeCriacaoDePersonagem
 
             if (proximaMensagem.Equals("/sair", StringComparison.OrdinalIgnoreCase))
             {
-                ConsoleUi.Detalhe("Conversa encerrada. O histórico dela não é salvo.");
+                ConsoleUi.Detalhe($"Conversa encerrada. Ela fica guardada no Claude Code — dá para revê-la com 'claude --resume {sessao.IdDaSessao}'.");
                 return;
             }
         }
