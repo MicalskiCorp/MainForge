@@ -11,7 +11,7 @@ localmente na máquina do usuário; a única comunicação externa é com a Clau
   autenticar usando a assinatura Claude Pro/Max de um usuário — por isso a licença aqui é
   billing por token com uma API key.
   A chave **não fica no código-fonte**: o usuário a informa dentro do aplicativo, e ela é
-  guardada cifrada com DPAPI (`%APPDATA%\RpgForge\chave-api.dat`), decifrável apenas pela
+  guardada cifrada com DPAPI (`%APPDATA%\MainBuild\chave-api.dat`), decifrável apenas pela
   mesma conta de usuário do mesmo Windows. A variável de ambiente `ANTHROPIC_API_KEY`
   continua funcionando e tem prioridade, para automação.
 - **Ferramentas locais** (ler PDF, escrever Markdown, preencher ficha): expostas como
@@ -23,15 +23,15 @@ localmente na máquina do usuário; a única comunicação externa é com a Clau
 ## Estrutura da solução
 
 ```
-RpgForge.sln
+MainBuild.sln
 ├── src/
-│   ├── RpgForge.Core     -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
-│   ├── RpgForge.Claude   -> wrapper fino sobre o SDK oficial Anthropic
-│   ├── RpgForge.Tools    -> implementação das tools (leitura/escrita de arquivos, PDF)
-│   ├── RpgForge.Agents   -> DefinicaoDeAgente: prompt + allowlist de tools por agente
-│   ├── RpgForge.Cli      -> interface em console (a interface em uso hoje)
-│   └── RpgForge.App      -> aplicativo WPF (interface gráfica, ainda um shell vazio)
-├── tests/RpgForge.Tests
+│   ├── MainBuild.Core     -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
+│   ├── MainBuild.Claude   -> wrapper fino sobre o SDK oficial Anthropic
+│   ├── MainBuild.Tools    -> implementação das tools (leitura/escrita de arquivos, PDF)
+│   ├── MainBuild.Agents   -> DefinicaoDeAgente: prompt + allowlist de tools por agente
+│   ├── MainBuild.Cli      -> interface em console (a interface em uso hoje)
+│   └── MainBuild.App      -> aplicativo WPF (interface gráfica, ainda um shell vazio)
+├── tests/MainBuild.Tests
 ├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução)
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
 ├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema
@@ -51,9 +51,9 @@ UI — é em português (pt-BR).
 ## Rodando
 
 ```
-dotnet build RpgForge.sln
-dotnet test RpgForge.sln
-dotnet run --project src/RpgForge.Cli    # o aplicativo
+dotnet build MainBuild.sln
+dotnet test MainBuild.sln
+dotnet run --project src/MainBuild.Cli    # o aplicativo
 ```
 
 Na primeira execução, use a opção **4) Configurar a chave da Claude API** para informar sua
@@ -83,7 +83,7 @@ sistema pela opção 2.
 
 Funcionando: as 7 ferramentas locais, o loop de tool-use (`SessaoDeAgente`), o allowlist de
 ferramentas por agente, o armazenamento cifrado da API key e a interface em console
-(`RpgForge.Cli`), com 30 testes automatizados.
+(`MainBuild.Cli`), com 30 testes automatizados.
 
 Falta: validar o fluxo completo contra a API de verdade (harness em
 `tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e construir a interface

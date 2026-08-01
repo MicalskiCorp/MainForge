@@ -1,10 +1,10 @@
 ﻿using Anthropic;
+using MainBuild.Agents;
+using MainBuild.Claude;
+using MainBuild.Core;
+using MainBuild.Tools;
 using PdfSharp.Pdf.AcroForms;
 using PdfSharp.Pdf.IO;
-using RpgForge.Agents;
-using RpgForge.Claude;
-using RpgForge.Core;
-using RpgForge.Tools;
 
 // Harness de validação ponta a ponta do fluxo completo:
 //   Configurador -> Knowledge/*.md -> Dungeon Master -> Output/Personagens/*.pdf
@@ -73,13 +73,13 @@ if (somentePdf)
 Titulo("Etapa 2 — criando o cliente da Claude API");
 
 // Mesma resolução que o aplicativo usa: variável de ambiente primeiro, senão a chave que o
-// usuário configurou dentro do RpgForge.Cli (cifrada com DPAPI).
+// usuário configurou dentro do MainBuild.Cli (cifrada com DPAPI).
 var (origemDaChave, opcoes) = OpcoesClienteClaude.Resolver(new ArmazenamentoDeChaveApi());
 
 if (opcoes is null)
 {
     Erro("Nenhuma chave da Claude API configurada.");
-    Erro("Configure-a no aplicativo (dotnet run --project src/RpgForge.Cli, opção 4)");
+    Erro("Configure-a no aplicativo (dotnet run --project src/MainBuild.Cli, opção 4)");
     Erro("ou defina a variável de ambiente ANTHROPIC_API_KEY.");
     return 1;
 }

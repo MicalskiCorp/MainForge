@@ -1,17 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Harness de validação ponta a ponta. NÃO faz parte de RpgForge.sln de propósito:
+    Harness de validação ponta a ponta. NÃO faz parte de MainBuild.sln de propósito:
     ele faz chamadas reais (e pagas) à Claude API, então não deve entrar em
-    "dotnet build RpgForge.sln" nem em "dotnet test". Rode manualmente com
+    "dotnet build MainBuild.sln" nem em "dotnet test". Rode manualmente com
     "dotnet run" apontando para tools/ValidacaoPontaAPonta.
   -->
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\RpgForge.Core\RpgForge.Core.csproj" />
-    <ProjectReference Include="..\..\src\RpgForge.Claude\RpgForge.Claude.csproj" />
-    <ProjectReference Include="..\..\src\RpgForge.Tools\RpgForge.Tools.csproj" />
-    <ProjectReference Include="..\..\src\RpgForge.Agents\RpgForge.Agents.csproj" />
+    <ProjectReference Include="..\..\src\MainBuild.Core\MainBuild.Core.csproj" />
+    <ProjectReference Include="..\..\src\MainBuild.Claude\MainBuild.Claude.csproj" />
+    <ProjectReference Include="..\..\src\MainBuild.Tools\MainBuild.Tools.csproj" />
+    <ProjectReference Include="..\..\src\MainBuild.Agents\MainBuild.Agents.csproj" />
   </ItemGroup>
 
   <ItemGroup>
