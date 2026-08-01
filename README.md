@@ -11,7 +11,7 @@ localmente na máquina do usuário; a única comunicação externa é com a Clau
   autenticar usando a assinatura Claude Pro/Max de um usuário — por isso a licença aqui é
   billing por token com uma API key.
   A chave **não fica no código-fonte**: o usuário a informa dentro do aplicativo, e ela é
-  guardada cifrada com DPAPI (`%APPDATA%\MainBuild\chave-api.dat`), decifrável apenas pela
+  guardada cifrada com DPAPI (`%APPDATA%\MainForge\chave-api.dat`), decifrável apenas pela
   mesma conta de usuário do mesmo Windows. A variável de ambiente `ANTHROPIC_API_KEY`
   continua funcionando e tem prioridade, para automação.
 - **Ferramentas locais** (ler PDF, escrever Markdown, preencher ficha): expostas como
@@ -23,15 +23,15 @@ localmente na máquina do usuário; a única comunicação externa é com a Clau
 ## Estrutura da solução
 
 ```
-MainBuild.sln
+MainForge.sln
 ├── src/
-│   ├── MainBuild.Core     -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
-│   ├── MainBuild.Claude   -> wrapper fino sobre o SDK oficial Anthropic
-│   ├── MainBuild.Tools    -> implementação das tools (leitura/escrita de arquivos, PDF)
-│   ├── MainBuild.Agents   -> DefinicaoDeAgente: prompt + allowlist de tools por agente
-│   ├── MainBuild.Cli      -> interface em console (a interface em uso hoje)
-│   └── MainBuild.App      -> aplicativo WPF (interface gráfica, ainda um shell vazio)
-├── tests/MainBuild.Tests
+│   ├── MainForge.Core     -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
+│   ├── MainForge.Claude   -> wrapper fino sobre o SDK oficial Anthropic
+│   ├── MainForge.Tools    -> implementação das tools (leitura/escrita de arquivos, PDF)
+│   ├── MainForge.Agents   -> DefinicaoDeAgente: prompt + allowlist de tools por agente
+│   ├── MainForge.Cli      -> interface em console (a interface em uso hoje)
+│   └── MainForge.App      -> aplicativo WPF (interface gráfica, ainda um shell vazio)
+├── tests/MainForge.Tests
 ├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução)
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
 ├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema
@@ -51,9 +51,9 @@ UI — é em português (pt-BR).
 ## Rodando
 
 ```
-dotnet build MainBuild.sln
-dotnet test MainBuild.sln
-dotnet run --project src/MainBuild.Cli    # o aplicativo
+dotnet build MainForge.sln
+dotnet test MainForge.sln
+dotnet run --project src/MainForge.Cli    # o aplicativo
 ```
 
 Na primeira execução, use a opção **5) Configurar a chave da Claude API** para informar sua
@@ -100,7 +100,7 @@ a cada criação de personagem.
 
 Funcionando: as 8 ferramentas locais, o loop de tool-use (`SessaoDeAgente`), o allowlist de
 ferramentas por agente, a importação de sistemas, o armazenamento cifrado da API key e a
-interface em console (`MainBuild.Cli`), com 44 testes automatizados.
+interface em console (`MainForge.Cli`), com 44 testes automatizados.
 
 Falta: validar o fluxo completo contra a API de verdade (harness em
 `tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e construir a interface

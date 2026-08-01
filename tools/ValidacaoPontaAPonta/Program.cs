@@ -1,8 +1,8 @@
 ﻿using Anthropic;
-using MainBuild.Agents;
-using MainBuild.Claude;
-using MainBuild.Core;
-using MainBuild.Tools;
+using MainForge.Agents;
+using MainForge.Claude;
+using MainForge.Core;
+using MainForge.Tools;
 using PdfSharp.Pdf.AcroForms;
 using PdfSharp.Pdf.IO;
 
@@ -73,13 +73,13 @@ if (somentePdf)
 Titulo("Etapa 2 — criando o cliente da Claude API");
 
 // Mesma resolução que o aplicativo usa: variável de ambiente primeiro, senão a chave que o
-// usuário configurou dentro do MainBuild.Cli (cifrada com DPAPI).
+// usuário configurou dentro do MainForge.Cli (cifrada com DPAPI).
 var (origemDaChave, opcoes) = OpcoesClienteClaude.Resolver(new ArmazenamentoDeChaveApi());
 
 if (opcoes is null)
 {
     Erro("Nenhuma chave da Claude API configurada.");
-    Erro("Configure-a no aplicativo (dotnet run --project src/MainBuild.Cli, opção 5)");
+    Erro("Configure-a no aplicativo (dotnet run --project src/MainForge.Cli, opção 5)");
     Erro("ou defina a variável de ambiente ANTHROPIC_API_KEY.");
     return 1;
 }
