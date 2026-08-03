@@ -48,6 +48,18 @@ internal static class FluxoDoClaudeCode
             return;
         }
 
+        if (resultado.Limite is { } limite)
+        {
+            ConsoleUi.Aviso($"A instalação está certa, mas a cota da assinatura acabou: {limite.Mensagem}");
+
+            ConsoleUi.Info(limite.Liberacao is { } liberacao
+                ? $"A próxima janela abre por volta de {liberacao:dd/MM HH:mm}."
+                : "O Claude Code não informou quando a próxima janela abre.");
+
+            ConsoleUi.Detalhe("Nas operações longas o aplicativo espera essa virada sozinho e continua de onde parou.");
+            return;
+        }
+
         ConsoleUi.Erro($"O teste falhou: {resultado.Detalhe ?? "motivo não informado"}");
         ConsoleUi.Info("Rode 'claude' num terminal e confira se ele pede login.");
     }

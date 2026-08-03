@@ -101,9 +101,10 @@ Titulo("Etapa 3 — Configurador processando o sistema");
 using var configurador = new SessaoDeAgente(opcoes, DefinicaoDeAgente.Configurador, caminhos);
 
 var respostaConfigurador = await configurador.EnviarAsync(
-    $"Processe o sistema '{sistema}': leia o(s) PDF(s) dele e a ficha em branco, e gere a " +
-    $"base de conhecimento completa em Knowledge/{sistema}/, incluindo Ficha-Mapeamento.md e " +
-    "Ficha-ModeloEmTexto.md. Quando terminar, resuma os arquivos que criou.",
+    $"Processe o sistema '{sistema}' do zero: leia o(s) PDF(s) dele e a ficha em branco, " +
+    "registre o plano de arquivos e gere a base de conhecimento completa em " +
+    $"Knowledge/{sistema}/, incluindo Ficha-Mapeamento.md e Ficha-ModeloEmTexto.md. " +
+    "Quando terminar, resuma os arquivos que criou.",
     Progresso);
 
 Console.WriteLine(respostaConfigurador);
@@ -118,6 +119,7 @@ if (!Directory.Exists(diretorioConhecimento))
 
 var arquivosGerados = Directory
     .EnumerateFiles(diretorioConhecimento, "*.md", SearchOption.AllDirectories)
+    .Where(arquivo => !Path.GetFileName(arquivo).Equals(IndiceDeConhecimento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase))
     .ToList();
 
 Ok($"{arquivosGerados.Count} arquivo(s) de conhecimento gerado(s):");
@@ -126,6 +128,35 @@ foreach (var arquivo in arquivosGerados)
 {
     Console.WriteLine($"    {Path.GetRelativePath(caminhos.Raiz, arquivo)} ({new FileInfo(arquivo).Length} bytes)");
 }
+
+// O índice é o que o Dungeon Master usa para navegar: sem ele, a etapa seguinte só
+// funcionaria por sorte (ou lendo a base inteira, que é o que se quer evitar).
+var indiceDoSistema = Path.Combine(diretorioConhecimento, IndiceDeConhecimento.NomeDoArquivo);
+
+if (!File.Exists(indiceDoSistema))
+{
+    Erro($"Faltou o índice em '{indiceDoSistema}'.");
+    return 1;
+}
+
+Ok($"Índices gerados, a partir de {Path.GetFileName(indiceDoSistema)} na raiz do sistema.");
+
+var estadoDoSistema = EstadoDoProcessamento.Carregar(caminhos, sistema);
+estadoDoSistema.SincronizarComDisco();
+
+if (estadoDoSistema.Pendentes.Count > 0)
+{
+    Erro($"O Configurador deixou {estadoDoSistema.Pendentes.Count} arquivo(s) do plano por fazer:");
+
+    foreach (var item in estadoDoSistema.Pendentes)
+    {
+        Console.WriteLine($"    {item.Caminho}");
+    }
+
+    return 1;
+}
+
+Ok($"Progresso registrado sem pendências: {estadoDoSistema.Resumo()}.");
 
 if (ateConfigurador)
 {

@@ -14,96 +14,50 @@ namespace MainForge.Cli;
 /// </summary>
 internal static class TelaInicial
 {
-    private const int MargemEsquerda = 4;
-    private const int LarguraDaTorre = 15;
-    private const int LarguraDoVao = 36;
-    private const int LarguraDoPortao = 18;
-
-    // Peças da torre (todas com exatamente LarguraDaTorre caracteres).
-    private const string AmeiasDaTorre = "|_|_|_|_|_|_|_|";
-    private const string ParedeDaTorre = "|             |";
-    private const string SeteiraDaTorre = "|  []     []  |";
-    private const string BaseDaTorre = "|_____________|";
-
-    // Peças do portão (todas com exatamente LarguraDoPortao caracteres).
-    private const string ArcoDoPortao = " ________________ ";
-    private const string OmbreirasDoPortao = "/                \\";
-    private const string BarraDaGrade = " |--+--+--+--+--| ";
-    private const string VaoDaGrade = " |  |  |  |  |  | ";
-    private const string BaseDaGrade = "_|__|__|__|__|__|_";
-
     public static void Desenhar()
     {
         Console.WriteLine();
-
-        foreach (var (linha, cor) in MontarPortao())
-        {
-            ConsoleUi.EscreverColorido(linha, cor);
-        }
-
-        ConsoleUi.EscreverColorido("\n                    M A I N   F O R G E\n", ConsoleColor.Yellow);
-        ConsoleUi.Detalhe("          criação de fichas de RPG com o Claude Code\n");
-    }
-
-    private static IEnumerable<(string Linha, ConsoleColor Cor)> MontarPortao()
-    {
-        const ConsoleColor fogo = ConsoleColor.Yellow;
-        const ConsoleColor pedra = ConsoleColor.DarkGray;
-
-        // As tochas ficam centralizadas sobre cada torre.
-        yield return (ParDeTochas("(@)"), fogo);
-        yield return (ParDeTochas("(@@@)"), fogo);
-        yield return (ParDeTochas("\\|/"), fogo);
-        yield return (ParDeTochas("|"), pedra);
-        yield return (ParDeTochas("_|_"), pedra);
-
-        yield return (Linha(AmeiasDaTorre, new string(' ', LarguraDoVao)), pedra);
-        yield return (Linha(SeteiraDaTorre, new string(' ', LarguraDoVao)), pedra);
-
-        // A muralha entre as torres, e sob ela o portão propriamente dito.
-        yield return (Linha(ParedeDaTorre, new string('_', LarguraDoVao)), pedra);
-        yield return (Linha(SeteiraDaTorre, CentralizarNoVao("")), pedra);
-        yield return (Linha(ParedeDaTorre, CentralizarNoVao(ArcoDoPortao)), pedra);
-        yield return (Linha(SeteiraDaTorre, CentralizarNoVao(OmbreirasDoPortao)), pedra);
-        yield return (Linha(ParedeDaTorre, CentralizarNoVao(BarraDaGrade)), pedra);
-        yield return (Linha(SeteiraDaTorre, CentralizarNoVao(VaoDaGrade)), pedra);
-        yield return (Linha(ParedeDaTorre, CentralizarNoVao(BarraDaGrade)), pedra);
-        yield return (Linha(SeteiraDaTorre, CentralizarNoVao(VaoDaGrade)), pedra);
-        yield return (Linha(BaseDaTorre, CentralizarNoVao(BaseDaGrade, preencimento: '_')), pedra);
-
-        yield return ($"   /{new string('=', LarguraDaTorre * 2 + LarguraDoVao)}\\", pedra);
-    }
-
-    /// <summary>Uma linha completa: margem + torre + vão + torre.</summary>
-    private static string Linha(string torre, string vao) =>
-        new StringBuilder()
-            .Append(' ', MargemEsquerda)
-            .Append(torre)
-            .Append(vao)
-            .Append(torre)
-            .ToString();
-
-    /// <summary>Centraliza uma peça do portão dentro do vão entre as torres.</summary>
-    private static string CentralizarNoVao(string peca, char preencimento = ' ')
-    {
-        var lateral = new string(preencimento, (LarguraDoVao - LarguraDoPortao) / 2);
-        var conteudo = peca.Length == 0 ? new string(preencimento, LarguraDoPortao) : peca;
-
-        return lateral + conteudo + lateral;
-    }
-
-    /// <summary>A mesma peça de tocha sobre o centro de cada uma das duas torres.</summary>
-    private static string ParDeTochas(string peca)
-    {
-        var centroDaTorreEsquerda = MargemEsquerda + LarguraDaTorre / 2;
-        var centroDaTorreDireita = MargemEsquerda + LarguraDaTorre + LarguraDoVao + LarguraDaTorre / 2;
-        var inicio = peca.Length / 2;
-
-        var linha = new StringBuilder(new string(' ', centroDaTorreDireita + LarguraDaTorre));
-
-        linha.Remove(centroDaTorreEsquerda - inicio, peca.Length).Insert(centroDaTorreEsquerda - inicio, peca);
-        linha.Remove(centroDaTorreDireita - inicio, peca.Length).Insert(centroDaTorreDireita - inicio, peca);
-
-        return linha.ToString().TrimEnd();
+        ConsoleUi.EscreverColorido(" -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|..                                    .;;;;;;:                                                    :;;;;;;.                                     ..|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|                                      ..;;;;;:                                                    .;;;;;:.                                       |", ConsoleColor.DarkGray);        
+        ConsoleUi.EscreverColorido("|.......   ............   ......       .;;;;;;: .........  ..........    ..............   .......  :;;;;;;.     ........  ..............  ....... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|.......   ............   ...██████   ██████;;: ........███.........    ███████████....  ......... :;;;;;;.     ........   .............  ....... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|........  ............   ...░░██████ ██████+;: ........░░░........  :;;░░███░░░░░░█...  ......... :;+;;;;.     ........  ..............  ....... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|.....  .....   ..  .........░███░█████░███xx;██████...████..████████+++░███x;.█.░...██████..████████xx+███████ .██████.  .............  .......  |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|.....  .....   ..  .........░███░░███ ░███xx░░░░░███ ░░███ ░░███░░███;;░███████.:::███░░███░░███░░███ ███░░███ ███░░███::...   ..........        |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|............................░███ ░░░  ░███xx;███████;:░███;;░███;░███+X░███░░░█:::░███;░███.░███.░░░x░███:░███░███████......  ............  .... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|..............  .....:;;;;;.░███;:.   ░███XX███░░███: ░███;;░███.░███;x░███x:░+.:;░███;░███.░███: ;;X░███;░███░███░░░;;;;;;:. ............  .... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|................:;;;;;;;;;;;█████;..  █████░░████████ █████;████$█████$█████:;+XX$░░██████ .█████.;+$░░███████░░██████;;;;;;: :;;;:.......  .... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|................:;;;;;;;;;;;░░░░░;   .░░░░░$+░░░░░░░░ ░░░░░$░░░░;░░░░░$░░░░░;;;;$$$$░░░░░░  ░░░░░ ;+$$$░░░░░███:░░░░░░;;;;;;: :;;;:.......  .... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|........  :;;;;;;;;;;;; ;;;x$$+;;  .  ;;X$$$x; .;;;;;;;;;X$$$$$$Xx+;+X;;;+$x;;+X$$$$$x$;;;;;;;;;. ;x$$$███.░███:;;;;;;;;.;;;;;;;;;;;;;. :;;;;;:. |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|.......  .;;;;;;;;;;;;; ;;;xXX+;;  . .;;X$$$x;.:;;;;;;;;$$$X$$$X+;: .:::;::  .;+X$$Xx$$$;;;;;;;;: ;x$$$░░██████;;;;;;;;; ;;;;;;;;;;;;;: ;;;;;;;. |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;:;;;;: .;;;;;;;;;;;;; ;;;;;;;;;  ..:;;+$$$+;.:;;;;;;+$$$$$$;;                  ;x$$$$$$;;;;;;;:.;+$$$░░░░░░  ;;;+;;;;; ;;;;;;;;;;;;;; ;;;;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;...:::. .;;;;;;;;;;;;; ;;;;;;;;:  . .;;x$$$X;. ;;;;;;$$$$$$;                      ;$$$$$$:;;;;;..;x$$$x+;.    :;;;;;;;: ;;;;;;;;;;;;;; ;;;;;;;; |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|...   ...:;;;  ;;;+;+++x++;;;   .:...:;;$$$$X;:;;;;: x$$$$$;                        ;$$$$$X :;;;;:;X$$$$+;: ..::::  ;+++++;;; ;;;;;;;;;;;;...... |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;. :;;;;;;;;.;+$$$$$$$$XX;;.:;;;;..:;;x$$$X;;;x$$+:$$$$$;                          ;$$$$$.;$$x;;;X$$$x;;:..;;;;;;.+$$$$$X;;:;;;;;;;;;;;;::;;;;.|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;. ;;;;;;;;;:;;x$$$$$$$+;;;.;;;;;..:;;+$$$$;;;;;;;:$Xxxx;                          ;$XxX$:;;+;;;;X$$$++;:..;;;;;;.;$$$$$x;;:;;;;;;;;;;;;.;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;: ;;;;;;;;;:;;;;;;;;;;;;;;.;;;;;..:;;X$$$$;;;;;;;.;;;;;;                          ;x;;;; ;;;;;;;$$$$$+;:..;;;;;;.;;;++;;;;.;;;;;;;;;;;;.;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;. .::::::: .;;::::::::::::  .    .:;;X$$$$;:.. ;&&$$$$$&$;                      ;x&&$$$$&&+   :;X$$$X;;:           .. .    :;;;;;;::;;:.:;;;;.|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;:;;;x$$$$;:;;+X$$$$$+;;; ;;..:;;X$$$X;;;;;:$$$$$$$$+;                      ;;$$$$$X$$;;;;;;X$$$X+;:.  .;;;X$$$X;.;;+$$$$$$$$$$+.;$$$;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;:;;x$$$$$;.;;;;;;;;;;;;;.;;..:;;x$$$$;;;;;.  ......                          ......  .;;;;;$$$$x+;:.  .;;;;++++;.;;;+x$$$$$$$$;.;$$X;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;:;;;+xx+;;:;;;;;;;;;;;;;.;;..:;;X$$$$;;;;;;: ;;;;;;:                        :;;;;;; :;;;;;;$$$$X+;:.. .;;;;;;;;;.;;;;;++x$$X++;.;X+;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;:;;;;;;;;;:;;;;;;;;;;;;. ....:;;$$$$$;;;;;;..x$x$$+:                        ;;$$x$$ .;;;;;;X$$$$+;:.   :;;;;;;;: ;;;;;;;;;;;;;;.;;;;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;x$$$$$+:;X$$$$$$++x+;.;++++;;:..:;;$$$$X;;$$$$x:X$$$$+:                        ;;$$$$X.x$$$x;;x$$$$;;:..:;;;;.;+x$$$$$$X;;$$$$$XXxXx+;:;+++;|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;+$$$$$$X;;;;;++;;;;;+;.;;;;;;;:..:;+$$$$X;:+$$$;:X$$$$;;                        ;;$$$$x.;$$$+:;X$$$$+;: .:;;;;:;;;;+;;;;;;.;++xx+;;;;;;;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;x$$$Xx;;;;;;;;;;;;;;;.;;;;;;;:..:;;X$$$X;:;;;;;.x$$$$+:                        ;;$$$$x ;;;;;:;X$$$$+;: .:;;;:.;;;;;;;;;;;.;;;;;;;;;;;;:;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;;;;::;;;;;;;;;;;; ;;;;;;:;..;;;;X$$X+X;;;;;.x$$$$+:                        ;;$$$$X ;;;;;x+x$$$+;;:.:;;;;:.;;;;;;;;;;: ;;;;;;;;;;;;.;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;;.:.....      :;;++;;;;...+&&&&&&&&&&$;     X$$$$+:                        :;$$$$$     ;$&&&&&&&&&&x:. .:::....:.. ...:::.....:;;;;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;;.;;+++;;x+;;;;$$$X+;;;:..;x$$$$$$$$$;;;;;;:X$$$$+;                        :;$$$$$.;;;;;+$$$$$$$$$+;...;;;;;+x$$X;;;;++++;;;;;.++++++;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;: ;;;;;;;;;;;;:;++;;;;;:..;+xxxx$$$$X;;;;;;:+$$XX;:  ..::::::.. .;;:.:..   :;$X$$x.;;;;;;x$$$$xxxx+;..:;;;;;;;++;::;;;;;;;;;;;.;;;;;;;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|::....:;;  ;;;;;;;;;;;..::::::.....x$$$$$$$$$$+;;;;  ;+;;;; ;;+++++++x;;;+++++++;;;; .+;++; .::;+x$$$$$$$$$$x:.....::.::::.:;;;;;;;;;;: :;;;;::: |", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;;;;;;;;;;;;;;++++;;:;;:...;;;;;;;;;;;;;;x$$$$$x ;$$$$X+;x$$$$&$$$$&x$&$&&$$$X;:+$$$$$+:;;;;;;;;;;;;;:..:;;.;;;x++;;;;;;;;;;;;;;;:.;;;;;.|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;;;;;;;;;;;;;;;;;;;+$$$+;:.;;;;;;;;;;;;+$&&&&&&;$&&&&&&&&&&&&&&&&&&&&$$&&$$x+xX+;$&&&&&$x;;;;;;;;;;;;..;;x$$x;;;;;;;;;;;;;;;;;;;;;;:;;;;.|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;+++xxxxxxX$$$$$+;x$$$$$$$&&&&$$&&&&&&&&&&&&&&$$&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&X$&&&&&&&&&&&&&&&&&&&&&&$$$$$X;x$$$$$$$$$xx+++++;;;;;;x;|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;++++++XXXxx$$$$$$$+x$$$$&$$&&&&&&&&$&&&&&&&&&&&&&;;;$$$&&&$&&&&&&&&&&&&$$$&$$$$$$&&$$$$$$$X$&&&&&&&&&&&&&$$$$$$$$$&&$$$$X+x$$$$$XX$$$$Xx++++;;:|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|+xx$$$$$$$$$$$$$$$$x$$$$$$$$&&$&&&&&&&&&&&&&&&&&&&$$&&&&&&&&&&&&$$&&&&&&&&&&&&$$&&&&&&&&&&&&$$&&&&&&&&&&&&&&&&&&&&&&&&$$$$$$x+$$$$$$$$$$$$$$Xxxx;|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|X$$$$$$$$$$$$$$$$;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;$$$$$$$$$$$$$$;$$$$$$$$$$$$$$;$$$$$$$$$$$$$$;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$+;$$$$$$$$$$$$$$$$+|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;.;;;;;;;;;;;;;;:;;;;;;;;;;;;;; ;;;;;;;;;;;;;;.;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;.|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido("|:;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;.;CRIAÇÃO DE FICHAS DE RPG COM O CLAUDE CODE;.;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;.|", ConsoleColor.DarkGray);
+        ConsoleUi.EscreverColorido(" -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ", ConsoleColor.DarkGray);        
     }
 }

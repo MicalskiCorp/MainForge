@@ -4,7 +4,6 @@ using MainForge.Core;
 // Interface do MainForge em modo console. A interface gráfica (WPF, projeto MainForge.App)
 // virá depois — os fluxos de negócio moram nos agentes e nas ferramentas, não aqui, então
 // trocar de interface não exige reescrever nada disso.
-
 ConsoleUi.Preparar();
 
 var contexto = new ContextoDoAplicativo(CaminhosDoProjeto.Descobrir());
@@ -28,7 +27,7 @@ ConsoleUi.Detalhe($"Projeto: {contexto.Caminhos.Raiz}");
 
 if (!contexto.TemClaudeCode)
 {
-    ConsoleUi.Aviso("\nClaude Code não encontrado — os agentes não vão rodar. Veja a opção 5.");
+    ConsoleUi.Aviso("\nClaude Code não encontrado — os agentes não vão rodar. Veja a opção 6.");
 }
 
 while (true)
@@ -36,9 +35,10 @@ while (true)
     ConsoleUi.Titulo("Menu principal");
     ConsoleUi.Info("  1) Ver sistemas e base de conhecimento");
     ConsoleUi.Info("  2) Importar um sistema de RPG (livros + ficha)");
-    ConsoleUi.Info("  3) Processar um sistema (Agente Configurador)");
-    ConsoleUi.Info("  4) Criar um personagem (Agente Dungeon Master)");
-    ConsoleUi.Info($"  5) Verificar o Claude Code   [{contexto.DescreverClaudeCode()}]");
+    ConsoleUi.Info("  3) Adicionar livro a um sistema (compêndio/expansão)");
+    ConsoleUi.Info("  4) Processar um sistema (Agente Configurador)");
+    ConsoleUi.Info("  5) Criar um personagem (Agente Dungeon Master)");
+    ConsoleUi.Info($"  6) Verificar o Claude Code   [{contexto.DescreverClaudeCode()}]");
     ConsoleUi.Info("  0) Sair");
 
     var escolha = ConsoleUi.LerLinha("\nEscolha: ");
@@ -61,16 +61,21 @@ while (true)
                 break;
 
             case "3":
-                await FluxoDoConfigurador.ExecutarAsync(contexto, cancelamentoAtual.Token);
+                await FluxoDeAdicaoDeLivro.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 ConsoleUi.Pausar();
                 break;
 
             case "4":
-                await FluxoDeCriacaoDePersonagem.ExecutarAsync(contexto, cancelamentoAtual.Token);
+                await FluxoDoConfigurador.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 ConsoleUi.Pausar();
                 break;
 
             case "5":
+                await FluxoDeCriacaoDePersonagem.ExecutarAsync(contexto, cancelamentoAtual.Token);
+                ConsoleUi.Pausar();
+                break;
+
+            case "6":
                 await FluxoDoClaudeCode.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 ConsoleUi.Pausar();
                 break;

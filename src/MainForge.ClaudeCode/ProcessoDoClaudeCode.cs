@@ -11,7 +11,7 @@ namespace MainForge.ClaudeCode;
 /// antigo cliente da Claude API: em vez de mandar mensagens para a API com uma chave, o
 /// aplicativo dirige um Claude Code já autenticado com a assinatura do usuário.
 /// </summary>
-public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes)
+public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorDeTurno
 {
     /// <summary>
     /// Roda um turno e devolve os acontecimentos conforme eles chegam. O último evento é
@@ -38,7 +38,7 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes)
         {
             yield return new TurnoConcluido(
                 "", null, Falhou: true,
-                $"Não foi possível iniciar '{opcoes.CaminhoExecutavel}'.", null);
+                $"Não foi possível iniciar '{opcoes.CaminhoExecutavel}'.", null, null);
             yield break;
         }
 
@@ -85,7 +85,14 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes)
                 : $"O Claude Code terminou com código {processo.ExitCode} sem produzir resposta.";
         }
 
-        yield return new TurnoConcluido(respostaFinal ?? "", idDaSessao, falhou, motivo, custo);
+        // Cota esgotada é procurada só no caminho de falha, e sobre tudo que o CLI disse: a
+        // mensagem tanto pode vir no corpo do 'result' quanto na saída de erro, dependendo de
+        // onde o limite bateu.
+        var limite = falhou
+            ? DetectorDeLimiteDeUso.Detectar($"{motivo}\n{erros}")
+            : null;
+
+        yield return new TurnoConcluido(respostaFinal ?? "", idDaSessao, falhou, motivo, custo, limite);
     }
 
     private ProcessStartInfo MontarInicio(PedidoDeTurno pedido)
@@ -197,7 +204,19 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes)
                     respostaFinal = Texto(raiz, "result") ?? "";
                     falhou = raiz.TryGetProperty("is_error", out var erroEl) &&
                              erroEl.ValueKind == JsonValueKind.True;
-                    motivo = falhou ? (Texto(raiz, "subtype") ?? "erro desconhecido") : null;
+
+                    // Numa falha, o 'subtype' dá a categoria ("error_during_execution") e o
+                    // corpo do 'result' dá o que realmente aconteceu — inclusive a mensagem de
+                    // cota esgotada. Juntar os dois é o que permite reconhecê-la depois.
+                    motivo = falhou
+                        ? string.Join(": ", new[] { Texto(raiz, "subtype"), respostaFinal }
+                            .Where(parte => !string.IsNullOrWhiteSpace(parte)))
+                        : null;
+
+                    if (falhou && string.IsNullOrWhiteSpace(motivo))
+                    {
+                        motivo = "erro desconhecido";
+                    }
 
                     if (raiz.TryGetProperty("total_cost_usd", out var custoEl) &&
                         custoEl.ValueKind == JsonValueKind.Number)

@@ -132,7 +132,14 @@ public sealed record DefinicaoDeAgente(
         Nome: "Configurador",
         NomeArquivoPrompt: "Configurador.md",
         FerramentasNativasPermitidas: ["Read", "Glob"],
-        FerramentasMcpPermitidas: ["escrever_arquivo_conhecimento", "listar_campos_da_ficha"],
+        FerramentasMcpPermitidas:
+        [
+            "escrever_arquivo_conhecimento",
+            "descrever_pasta_de_conhecimento",
+            "registrar_plano_de_conhecimento",
+            "consultar_progresso",
+            "listar_campos_da_ficha",
+        ],
         NegacoesEspecificas: ["Read(Output/**)"]);
 
     /// <summary>

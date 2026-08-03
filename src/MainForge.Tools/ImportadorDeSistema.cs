@@ -78,6 +78,52 @@ public static class ImportadorDeSistema
     }
 
     /// <summary>
+    /// Acrescenta livros a um sistema que já existe — o caso dos compêndios e expansões, que
+    /// não trazem ficha nova nem substituem o livro básico, só somam conteúdo ao sistema.
+    ///
+    /// <para>Exige que o sistema já tenha sido importado: um compêndio sozinho não descreve a
+    /// criação de personagem inteira, e processá-lo sem o livro básico produziria uma base de
+    /// conhecimento cheia de buracos.</para>
+    /// </summary>
+    /// <returns>Os nomes dos arquivos copiados para <c>Systems/&lt;sistema&gt;/</c>.</returns>
+    public static IReadOnlyList<string> AdicionarLivros(
+        CaminhosDoProjeto caminhos,
+        string nomeDoSistema,
+        IReadOnlyList<string> caminhosDosLivros)
+    {
+        var sistema = ValidarNome(nomeDoSistema);
+        var diretorioDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Sistemas, sistema.Id);
+
+        if (!Directory.Exists(diretorioDoSistema))
+        {
+            throw new InvalidOperationException(
+                $"O sistema '{sistema.Id}' ainda não foi importado. Importe o livro básico e a ficha antes " +
+                "de acrescentar um compêndio ou expansão.");
+        }
+
+        if (caminhosDosLivros.Count == 0)
+        {
+            throw new ArgumentException("Informe ao menos um livro em PDF.", nameof(caminhosDosLivros));
+        }
+
+        foreach (var livro in caminhosDosLivros)
+        {
+            ValidarPdfLegivel(livro, "livro");
+        }
+
+        var copiados = new List<string>();
+
+        foreach (var livro in caminhosDosLivros)
+        {
+            var nomeDoArquivo = Path.GetFileName(livro);
+            File.Copy(livro, Path.Combine(diretorioDoSistema, nomeDoArquivo), overwrite: true);
+            copiados.Add(nomeDoArquivo);
+        }
+
+        return copiados;
+    }
+
+    /// <summary>
     /// Lê os nomes dos campos de formulário de uma ficha, sem copiar nada. A interface usa
     /// isto para mostrar ao usuário o que encontrou antes de ele confirmar a importação.
     /// </summary>

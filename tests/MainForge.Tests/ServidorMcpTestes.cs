@@ -104,7 +104,7 @@ public class ServidorMcpTestes : IDisposable
     }
 
     [Fact]
-    public async Task ToolsList_AnunciaExatamenteAsTresFerramentasComEsquema()
+    public async Task ToolsList_AnunciaExatamenteAsFerramentasDoAplicativoComEsquema()
     {
         var respostas = await ConversarAsync("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
 
@@ -113,11 +113,88 @@ public class ServidorMcpTestes : IDisposable
         var nomes = ferramentas.Select(f => f!["name"]!.GetValue<string>()).OrderBy(n => n).ToList();
 
         Assert.Equal(
-            ["escrever_arquivo_conhecimento", "listar_campos_da_ficha", "preencher_ficha_personagem"],
+            [
+                "consultar_progresso",
+                "descrever_pasta_de_conhecimento",
+                "escrever_arquivo_conhecimento",
+                "listar_campos_da_ficha",
+                "preencher_ficha_personagem",
+                "registrar_plano_de_conhecimento",
+            ],
             nomes);
 
         // Sem inputSchema válido o Claude Code descarta a ferramenta silenciosamente.
         Assert.All(ferramentas, f => Assert.Equal("object", f!["inputSchema"]!["type"]!.GetValue<string>()));
+    }
+
+    /// <summary>
+    /// O ciclo que sustenta a retomada, visto pelo protocolo: o agente anuncia o plano, grava
+    /// um dos arquivos, e a consulta de progresso já sabe o que ficou faltando.
+    /// </summary>
+    [Fact]
+    public async Task PlanoEProgresso_ConsultaSabeOQueFaltaDepoisDeUmaGravacao()
+    {
+        await ConversarAsync(Chamada(1, "registrar_plano_de_conhecimento", new
+        {
+            sistema = "Aventura&Cia",
+            itens = new[]
+            {
+                new { caminho = "Classes/Guerreiro.md", descricao = "Classe Guerreiro" },
+                new { caminho = "Classes/Mago.md", descricao = "Classe Mago" },
+            },
+        }));
+
+        await ConversarAsync(Chamada(2, "escrever_arquivo_conhecimento", new
+        {
+            sistema = "Aventura&Cia",
+            caminho = "Classes/Guerreiro.md",
+            conteudo = "# Guerreiro",
+            resumo = "Classe Guerreiro: dado de vida d10.",
+        }));
+
+        var respostas = await ConversarAsync(Chamada(3, "consultar_progresso", new { sistema = "Aventura&Cia" }));
+        var texto = TextoDoResultado(Assert.Single(respostas));
+
+        Assert.Contains("Classes/Mago.md", texto);
+        Assert.Contains("1 de 2", texto);
+    }
+
+    /// <summary>
+    /// O índice é derivado do conteúdo da pasta. Deixar o agente gravá-lo na mão criaria uma
+    /// segunda versão da verdade, que divergiria na primeira vez que ele esquecesse.
+    /// </summary>
+    [Fact]
+    public async Task EscreverArquivoConhecimento_RecusaGravarIndiceNaMao()
+    {
+        var respostas = await ConversarAsync(Chamada(1, "escrever_arquivo_conhecimento", new
+        {
+            sistema = "Aventura&Cia",
+            caminho = "Classes/index.md",
+            conteudo = "# Indice inventado",
+            resumo = "x",
+        }));
+
+        var resposta = Assert.Single(respostas);
+        Assert.True(EhErro(resposta));
+        Assert.Contains("index.md", TextoDoResultado(resposta));
+    }
+
+    [Fact]
+    public async Task EscreverArquivoConhecimento_GeraOIndiceDaPastaComOResumoInformado()
+    {
+        await ConversarAsync(Chamada(1, "escrever_arquivo_conhecimento", new
+        {
+            sistema = "Aventura&Cia",
+            caminho = "Classes/Guerreiro.md",
+            conteudo = "# Guerreiro",
+            resumo = "Classe Guerreiro: dado de vida d10 e estilos de luta.",
+        }));
+
+        var indice = await File.ReadAllTextAsync(
+            Path.Combine(_caminhos.Conhecimento, "Aventura&Cia", "Classes", "index.md"));
+
+        Assert.Contains("Guerreiro.md", indice);
+        Assert.Contains("dado de vida d10", indice);
     }
 
     [Fact]

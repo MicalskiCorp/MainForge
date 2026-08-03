@@ -130,6 +130,51 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
     }
 
     [Fact]
+    public void AdicionarLivros_SomaAoSistemaSemMexerNoQueJaEstavaLa()
+    {
+        var basico = CriarArquivoDeOrigem("Livro Basico.pdf");
+        var ficha = CriarArquivoDeOrigem("Ficha.pdf");
+        ImportadorDeSistema.Importar(_caminhos, "Aventura&Cia", [basico], ficha);
+
+        var compendio = CriarArquivoDeOrigem("Compendio.pdf");
+        var adicionados = ImportadorDeSistema.AdicionarLivros(_caminhos, "Aventura&Cia", [compendio]);
+
+        Assert.Equal(["Compendio.pdf"], adicionados);
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Compendio.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Livro Basico.pdf")));
+    }
+
+    /// <summary>
+    /// Um compêndio sozinho não descreve a criação de personagem inteira: processá-lo sem o
+    /// livro básico produziria uma base cheia de buracos, e o erro só apareceria muito depois,
+    /// no meio de uma conversa com o Dungeon Master.
+    /// </summary>
+    [Fact]
+    public void AdicionarLivros_SistemaQueNaoExiste_Rejeita()
+    {
+        var compendio = CriarArquivoDeOrigem("Compendio.pdf");
+
+        var excecao = Assert.Throws<InvalidOperationException>(
+            () => ImportadorDeSistema.AdicionarLivros(_caminhos, "SistemaInexistente", [compendio]));
+
+        Assert.Contains("não foi importado", excecao.Message);
+    }
+
+    [Fact]
+    public void AdicionarLivros_ArquivoQueNaoEPdf_RejeitaSemCopiarNada()
+    {
+        var basico = CriarArquivoDeOrigem("Livro Basico.pdf");
+        var ficha = CriarArquivoDeOrigem("Ficha.pdf");
+        ImportadorDeSistema.Importar(_caminhos, "Aventura&Cia", [basico], ficha);
+
+        var naoPdf = Path.Combine(_origem, "expansao.txt");
+        File.WriteAllText(naoPdf, "isto nao e um pdf");
+
+        Assert.Throws<ArgumentException>(() => ImportadorDeSistema.AdicionarLivros(_caminhos, "Aventura&Cia", [naoPdf]));
+        Assert.False(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "expansao.txt")));
+    }
+
+    [Fact]
     public void Importar_SistemaJaExistente_SobrescreveSemFalhar()
     {
         var livro = CriarArquivoDeOrigem("Livro.pdf");

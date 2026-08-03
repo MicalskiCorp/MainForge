@@ -27,13 +27,31 @@ public sealed record FalhaDeFerramenta(string Detalhe) : EventoDeAgente;
 public sealed record AgentePensando : EventoDeAgente;
 
 /// <summary>
+/// A cota da assinatura acabou e o turno está parado esperando a próxima janela abrir. É
+/// repetido de tempos em tempos durante a espera, para a interface poder mostrar quanto falta
+/// em vez de parecer travada.
+/// </summary>
+/// <param name="Ate">Quando a janela abre, se o Claude Code informou.</param>
+/// <param name="Restante">Quanto ainda falta esperar.</param>
+/// <param name="Mensagem">A mensagem original do Claude Code, já resumida.</param>
+public sealed record AguardandoLimiteDeUso(
+    DateTimeOffset? Ate,
+    TimeSpan Restante,
+    string Mensagem) : EventoDeAgente;
+
+/// <summary>
 /// Fim do turno. <paramref name="Resposta"/> é o texto final do agente.
 /// <paramref name="IdDaSessao"/> precisa ser guardado para retomar a conversa no turno
 /// seguinte.
 /// </summary>
+/// <param name="Limite">
+/// Preenchido quando a falha foi cota da assinatura esgotada, e não erro. Quem chama decide se
+/// espera a janela virar ou desiste.
+/// </param>
 public sealed record TurnoConcluido(
     string Resposta,
     string? IdDaSessao,
     bool Falhou,
     string? MotivoDaFalha,
-    decimal? CustoUsd) : EventoDeAgente;
+    decimal? CustoUsd,
+    LimiteDeUso? Limite = null) : EventoDeAgente;

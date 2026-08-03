@@ -1,5 +1,6 @@
 ﻿using MainForge.Agents;
 using MainForge.Core;
+using MainForge.Tools;
 
 namespace MainForge.Cli;
 
@@ -24,9 +25,7 @@ internal static class FluxoDeCriacaoDePersonagem
         var escolhido = ConsoleUi.Escolher(
             "Criar personagem em qual sistema?",
             prontos,
-            sistema => Directory.Exists(sistema.DiretorioModelo(contexto.Caminhos))
-                ? sistema.Id
-                : $"{sistema.Id}  (sem ficha em Templates/ — não dá para gerar o PDF)");
+            sistema => DescreverSistema(contexto.Caminhos, sistema));
 
         if (escolhido is null)
         {
@@ -106,6 +105,31 @@ internal static class FluxoDeCriacaoDePersonagem
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// Avisa antes da conversa o que só apareceria no meio dela: sem ficha em Templates/ não
+    /// sai PDF nenhum, e com processamento pela metade o agente vai esbarrar em regra que não
+    /// foi extraída.
+    /// </summary>
+    private static string DescreverSistema(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        var avisos = new List<string>();
+
+        if (!Directory.Exists(sistema.DiretorioModelo(caminhos)))
+        {
+            avisos.Add("sem ficha em Templates/ — não dá para gerar o PDF");
+        }
+
+        var estado = EstadoDoProcessamento.Carregar(caminhos, sistema.Id);
+        estado.SincronizarComDisco();
+
+        if (estado.Pendentes.Count > 0 || estado.LivrosPendentes.Count > 0)
+        {
+            avisos.Add($"processamento incompleto: {estado.Resumo()}");
+        }
+
+        return avisos.Count == 0 ? sistema.Id : $"{sistema.Id}  ({string.Join("; ", avisos)})";
     }
 
     private static HashSet<string> FichasEmSaida(CaminhosDoProjeto caminhos) =>

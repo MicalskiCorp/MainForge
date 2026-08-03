@@ -7,7 +7,16 @@ namespace MainForge.ClaudeCode;
 /// <param name="Versao">Versão relatada pelo CLI, ou <c>null</c> se nem isso respondeu.</param>
 /// <param name="Autenticado">Se um turno trivial completou — é o que prova que a assinatura está ativa.</param>
 /// <param name="Detalhe">Mensagem de erro quando algo falhou.</param>
-public sealed record ResultadoDoDiagnostico(string? Versao, bool Autenticado, string? Detalhe);
+/// <param name="Limite">
+/// Preenchido quando a falha foi cota esgotada. Sem isto, a assinatura ativa porém sem cota
+/// apareceria como "não autenticado", e o usuário sairia procurando um problema de login que
+/// não existe.
+/// </param>
+public sealed record ResultadoDoDiagnostico(
+    string? Versao,
+    bool Autenticado,
+    string? Detalhe,
+    LimiteDeUso? Limite = null);
 
 /// <summary>
 /// Confere se o Claude Code está instalado e autenticado. Vale a pena existir porque as duas
@@ -51,7 +60,11 @@ public static class DiagnosticoDoClaudeCode
             {
                 if (evento is TurnoConcluido conclusao)
                 {
-                    return new ResultadoDoDiagnostico(versao, !conclusao.Falhou, conclusao.MotivoDaFalha);
+                    return new ResultadoDoDiagnostico(
+                        versao,
+                        !conclusao.Falhou,
+                        conclusao.MotivoDaFalha,
+                        conclusao.Limite);
                 }
             }
 

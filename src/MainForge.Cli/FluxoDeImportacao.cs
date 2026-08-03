@@ -22,10 +22,11 @@ internal static class FluxoDeImportacao
             return;
         }
 
-        var livros = LerCaminhosDosLivros();
+        var livros = EntradaDeArquivos.LerPdfs("livro do sistema");
 
         if (livros.Count == 0)
         {
+            ConsoleUi.Aviso("Nenhum livro informado — importação cancelada.");
             return;
         }
 
@@ -79,38 +80,6 @@ internal static class FluxoDeImportacao
         }
     }
 
-    private static List<string> LerCaminhosDosLivros()
-    {
-        ConsoleUi.Info("");
-        ConsoleUi.Info("Caminho do PDF de cada livro do sistema, um por linha.");
-        ConsoleUi.Detalhe("Enter numa linha vazia encerra a lista.");
-
-        var livros = new List<string>();
-
-        while (true)
-        {
-            var caminho = LimparCaminho(ConsoleUi.LerLinha($"  Livro {livros.Count + 1}: "));
-
-            if (caminho.Length == 0)
-            {
-                if (livros.Count == 0)
-                {
-                    ConsoleUi.Aviso("Nenhum livro informado — importação cancelada.");
-                }
-
-                return livros;
-            }
-
-            if (!File.Exists(caminho))
-            {
-                ConsoleUi.Erro($"Não encontrei '{caminho}'.");
-                continue;
-            }
-
-            livros.Add(caminho);
-        }
-    }
-
     private static string? LerCaminhoDaFicha()
     {
         ConsoleUi.Info("");
@@ -118,7 +87,7 @@ internal static class FluxoDeImportacao
 
         while (true)
         {
-            var caminho = LimparCaminho(ConsoleUi.LerLinha("  Ficha: "));
+            var caminho = EntradaDeArquivos.Limpar(ConsoleUi.LerLinha("  Ficha: "));
 
             if (caminho.Length == 0)
             {
@@ -145,10 +114,4 @@ internal static class FluxoDeImportacao
             }
         }
     }
-
-    /// <summary>
-    /// Arrastar um arquivo para o console cola o caminho entre aspas quando ele tem espaço;
-    /// tirar as aspas evita um "arquivo não encontrado" que confundiria o usuário.
-    /// </summary>
-    private static string LimparCaminho(string digitado) => digitado.Trim().Trim('"');
 }

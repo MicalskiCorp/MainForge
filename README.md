@@ -48,7 +48,7 @@ delas suficiente sozinha:
 | | Configurador | Dungeon Master |
 | --- | --- | --- |
 | Embutidas | `Read`, `Glob` | `Read`, `Glob` |
-| MCP | `escrever_arquivo_conhecimento`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
+| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
 | Negações próprias | `Read(Output/**)` | `Read(Systems/**)`, `Read(Templates/**)` |
 
 Negado para os dois, sempre: `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `WebFetch`,
@@ -61,18 +61,22 @@ de emergência pela qual um agente contornaria todas as outras restrições.
 MainForge.sln
 ├── src/
 │   ├── MainForge.Core       -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
-│   ├── MainForge.ClaudeCode -> localiza e executa o Claude Code; traduz o stream-json em eventos
-│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp) e escrita em Knowledge/
+│   ├── MainForge.ClaudeCode -> localiza e executa o Claude Code; traduz o stream-json em eventos;
+│   │                           reconhece cota esgotada (LimiteDeUso) para poder esperar a janela
+│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), escrita em Knowledge/,
+│   │                           os índices (IndiceDeConhecimento) e o progresso (EstadoDoProcessamento)
 │   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
 │   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
 │   ├── MainForge.Cli        -> interface em console (a interface em uso hoje)
 │   └── MainForge.App        -> aplicativo WPF (interface gráfica, ainda um shell vazio)
 ├── tests/MainForge.Tests
-├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução)
+├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução), sobre o
+│                                 sistema fictício "SistemaTeste"
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
 ├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema
 ├── Templates/            -> fichas em PDF editável, um subdiretório por sistema
-├── Knowledge/            -> base de conhecimento em Markdown, gerada pelo Configurador
+├── Knowledge/            -> base de conhecimento em Markdown, gerada pelo Configurador,
+│                            com um index.md por nível e o registro de progresso do sistema
 └── Output/Personagens/   -> fichas finais preenchidas
 ```
 
@@ -97,19 +101,73 @@ dotnet run --project src/MainForge.Cli    # o aplicativo
 
 Menu do aplicativo:
 
-1. **Ver sistemas** — o que já foi importado, o que já tem base de conhecimento e ficha.
+1. **Ver sistemas** — o que já foi importado, o que já tem base de conhecimento e ficha, e o
+   que ficou pela metade.
 2. **Importar um sistema de RPG** — você informa o nome do sistema, os PDFs dos livros e a
    ficha de personagem editável; o programa valida (livro legível, ficha com campos
    preenchíveis) e copia para `Systems/<Sistema>/` e `Templates/<Sistema>/`.
-3. **Processar um sistema** (Agente Configurador) — lê os livros **e a ficha em branco** e
-   gera `Knowledge/<Sistema>/*.md`. É a operação mais cara em tokens; pede confirmação.
-4. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
+3. **Adicionar livro a um sistema** — compêndios, expansões e suplementos de um sistema que já
+   existe. O livro entra em `Systems/<Sistema>/` e o Configurador lê **só ele**, somando o
+   conteúdo à base que já está pronta.
+4. **Processar um sistema** (Agente Configurador) — lê os livros **e a ficha em branco** e
+   gera `Knowledge/<Sistema>/*.md`. É a operação mais cara em tokens; pede confirmação. Se já
+   houver progresso, pergunta se é para continuar de onde parou ou recomeçar do zero.
+5. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
    em `Output/Personagens/`. `/sair` encerra a conversa.
-5. **Verificar o Claude Code** — mostra o executável, o modelo e as permissões de cada
+6. **Verificar o Claude Code** — mostra o executável, o modelo e as permissões de cada
    agente, e faz um turno de teste para confirmar que a assinatura está ativa.
 
-Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 3
+Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 4
 (ou copiar as pastas na mão para `Systems/` e `Templates/`).
+
+O sistema `SistemaTeste` não aparece em nenhuma dessas telas: ele existe só para o harness de
+validação, que o alcança pelo nome. Esconder é da interface, não do disco — quem abre o
+aplicativo veria um sistema fictício ao lado dos de verdade sem ter como saber que não é para
+usar.
+
+## A base de conhecimento é indexada
+
+Cada pasta de `Knowledge/` ganha um `index.md` com uma linha sobre cada arquivo e cada
+subpasta dela, e `Knowledge/index.md` lista os sistemas. É por aí que o Dungeon Master navega:
+lê o índice, decide o que interessa e abre só isso, em vez de varrer a base inteira para achar
+uma regra.
+
+Os índices são derivados, não escritos pelo agente — são regravados a cada gravação, e a
+ferramenta de escrita recusa um `index.md` vindo do modelo. O que o Configurador fornece é o
+`resumo` de cada arquivo e a descrição de cada pasta; o formato é do C#. Bases geradas por
+versões anteriores do aplicativo são indexadas na primeira vez que o sistema é processado, com
+descrições derivadas do próprio conteúdo — sem custo de tokens.
+
+## Processamento retomável
+
+O Configurador registra o plano de arquivos antes de começar, e cada gravação atualiza
+`Knowledge/<Sistema>/_estado-do-processamento.json`. Uma execução interrompida — cota
+esgotada, Ctrl+C, máquina desligada — deixa esse registro coerente com o que existe em disco,
+e a execução seguinte pergunta o que falta em vez de reler o livro inteiro.
+
+Três consequências práticas:
+
+- Apagar um `.md` na mão basta para mandá-lo ser regerado: o disco é a verdade final, e o
+  registro é reconciliado com ele antes de cada execução.
+- Trocar um PDF em `Systems/<Sistema>/` (mesmo nome, conteúdo diferente) marca aquele livro
+  como não lido de novo, porque tamanho e data de modificação mudaram.
+- Uma base que já existia antes de tudo isso é **adotada**: a opção 1 do menu oferece gerar
+  índice e registro a partir do que está em disco (de graça, sem agente). Os `.md` presentes
+  entram como prontos e os livros, como ainda não lidos — que é a leitura honesta de uma base
+  gerada pela metade. A execução seguinte então oferece "ler só os livros ainda não
+  incorporados", em vez de recomeçar o sistema inteiro.
+
+## Quando a cota da assinatura acaba
+
+Cota esgotada não é tratada como erro. O aplicativo reconhece a mensagem do Claude Code,
+descobre quando a janela vira (o CLI manda o instante junto da mensagem), mostra a contagem
+regressiva e retoma a **mesma conversa** quando a hora chega — o livro já lido continua no
+contexto. Ctrl+C cancela a espera; o que já foi gerado fica salvo de qualquer forma.
+
+Os limites dessa espera estão em `PoliticaDeLimiteDeUso`: por padrão, até 3 esperas por turno
+e no máximo 6 horas cada uma (uma janela curta inteira, com folga). Uma cota semanal esgotada
+estoura esse teto de propósito — aí o aplicativo avisa e devolve o controle em vez de dormir
+por dias.
 
 ## Os dois arquivos da ficha
 
@@ -130,7 +188,7 @@ a cada criação de personagem.
 
 - **Cota, não dinheiro.** O consumo sai da assinatura do Claude Code (janelas de 5 horas e
   semanal), não de créditos de API. Processar um livro grande pode esgotar a janela e não há
-  como "pagar mais" para continuar — só esperar.
+  como "pagar mais" para continuar — só esperar, que é o que o aplicativo faz sozinho.
 - **Não distribuível como está.** Cada pessoa que rodar o aplicativo precisa da própria
   instalação do Claude Code, autenticada com a própria assinatura.
 - **Menos controle fino.** `max_tokens`, formato exato do prompt e política de retentativa
