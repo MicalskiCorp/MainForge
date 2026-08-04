@@ -2,7 +2,7 @@
 
 Caminho: `Knowledge/SistemaTeste/`
 
-Sistema de RPG minimalista. Um personagem é definido por nome, classe, nível, três atributos (Forca, Destreza, Constituicao), Pontos de Vida e equipamento. Não existem raças, antecedentes, perícias, idiomas, magias ou
+Sistema de RPG minimalista usado para validar o fluxo do aplicativo ponta a ponta. As regras estão em base/; na raiz ficam só os dois arquivos da ficha.
 
 ## Arquivos
 
@@ -10,13 +10,9 @@ Sistema de RPG minimalista. Um personagem é definido por nome, classe, nível, 
 | --- | --- |
 | [Ficha-Mapeamento.md](Ficha-Mapeamento.md) | Modelo: `Templates/SistemaTeste/Ficha.pdf` — 8 campos preenchíveis. |
 | [Ficha-ModeloEmTexto.md](Ficha-ModeloEmTexto.md) | Reproduz o leiaute de `Templates/SistemaTeste/Ficha.pdf` na mesma ordem de blocos: título, Nome, Classe/Nivel, os três atributos, Pontos de Vida e Equipamento. |
-| [README.md](README.md) | Sistema de RPG minimalista. Um personagem é definido por nome, classe, nível, três atributos (Forca, Destreza, Constituicao), Pontos de Vida e equipamento. Não existem raças, antecedentes, perícias, idiomas, magias ou |
 
 ## Subpastas
 
 | Pasta | Conteudo |
 | --- | --- |
-| [Atributos](Atributos/index.md) |  |
-| [Classes](Classes/index.md) |  |
-| [Equipamento](Equipamento/index.md) |  |
-| [Progressao](Progressao/index.md) |  |
+| [base](base/index.md) | Jogo base do SistemaTeste. Um personagem é definido por nome, classe, nível, três atributos (Forca, Destreza, Constituicao), Pontos de Vida e equipamento. Não existem raças, antecedentes, perícias, idiomas ou magias. |

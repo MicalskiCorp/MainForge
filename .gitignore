@@ -21,3 +21,12 @@ appsettings.Local.json
 # Generated character sheets stay local by default.
 /Output/Personagens/*
 !/Output/Personagens/.gitkeep
+
+# Livros e fichas importados pelo usuário ficam locais: são PDFs comerciais, pesam dezenas de
+# MB e, uma vez no histórico do Git, só saem reescrevendo-o. O conhecimento destilado deles
+# (Knowledge/), esse sim é versionado — é Markdown pequeno e custou a leitura dos livros.
+# SistemaTeste é a exceção: os PDFs dele são fixtures minúsculos do harness de validação.
+/Systems/*/
+!/Systems/SistemaTeste/
+/Templates/*/
+!/Templates/SistemaTeste/

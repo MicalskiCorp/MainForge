@@ -1,0 +1,63 @@
+{
+  "Sistema": "SistemaTeste",
+  "AtualizadoEm": "2026-08-04T00:23:30.4309062-03:00",
+  "Livros": [
+    {
+      "Arquivo": "Regras.pdf",
+      "Fonte": "base",
+      "Tamanho": 1966,
+      "ModificadoEm": 639211551737275831,
+      "Estado": "Pendente"
+    }
+  ],
+  "Plano": [
+    {
+      "Caminho": "Ficha-Mapeamento.md",
+      "Descricao": "Modelo: `Templates/SistemaTeste/Ficha.pdf` — 8 campos preenchíveis.",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "Ficha-ModeloEmTexto.md",
+      "Descricao": "Reproduz o leiaute de `Templates/SistemaTeste/Ficha.pdf` na mesma ordem de blocos: título, Nome, Classe/Nivel, os três atributos, Pontos de Vida e Equipamento.",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "base/README.md",
+      "Descricao": "Sistema de RPG minimalista. Um personagem é definido por nome, classe, nível, três atributos (Forca, Destreza, Constituicao), Pontos de Vida e equipamento. Não existem raças, antecedentes, perícias, idiomas, magias ou",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "base/Atributos/Atributos.md",
+      "Descricao": "Todo personagem do Sistema Teste tem exatamente três atributos:",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "base/Classes/Batedor.md",
+      "Descricao": "Uma das duas classes disponíveis no Sistema Teste (a outra é o Guerreiro). Todo personagem escolhe exatamente uma classe.",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "base/Classes/Guerreiro.md",
+      "Descricao": "Uma das duas classes disponíveis no Sistema Teste (a outra é o Batedor). Todo personagem escolhe exatamente uma classe.",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "base/Equipamento/Equipamento-Inicial.md",
+      "Descricao": "Todo personagem começa com três itens: o item da sua classe, mais uma Mochila e uma Tocha (estes dois são comuns a todos os personagens).",
+      "Estado": "Concluido",
+      "Livro": null
+    },
+    {
+      "Caminho": "base/Progressao/Niveis.md",
+      "Descricao": "Todo personagem começa no Nível 1.",
+      "Estado": "Concluido",
+      "Livro": null
+    }
+  ]
+}
