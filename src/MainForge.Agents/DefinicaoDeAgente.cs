@@ -55,6 +55,9 @@ public sealed record DefinicaoDeAgente(
     ///   responder a partir dos livros importados, não de outra fonte;</item>
     ///   <item><c>Grep</c> leria conteúdo de arquivo por um caminho que não confirmei
     ///   respeitar as negações por diretório (o <c>Read</c> respeita);</item>
+    ///   <item><c>Skill</c> carregaria instruções de <c>.claude/skills/</c>, que existem para
+    ///   quem desenvolve o aplicativo e falam do código dele — o agente roda com a raiz do
+    ///   projeto como diretório de trabalho, então enxergaria essas skills sem esta negação;</item>
     ///   <item>o código do próprio aplicativo não interessa a nenhum agente de RPG.</item>
     /// </list>
     /// </summary>
@@ -65,6 +68,7 @@ public sealed record DefinicaoDeAgente(
         "Edit",
         "NotebookEdit",
         "Task",
+        "Skill",
         "WebFetch",
         "WebSearch",
         "Grep",
@@ -72,6 +76,7 @@ public sealed record DefinicaoDeAgente(
         "Read(tests/**)",
         "Read(tools/**)",
         "Read(.git/**)",
+        "Read(.claude/**)",
     ];
 
     public string CarregarPromptDeSistema(CaminhosDoProjeto caminhos)
@@ -155,4 +160,28 @@ public sealed record DefinicaoDeAgente(
         FerramentasNativasPermitidas: ["Read", "Glob"],
         FerramentasMcpPermitidas: ["preencher_ficha_personagem"],
         NegacoesEspecificas: ["Read(Systems/**)", "Read(Templates/**)"]);
+
+    /// <summary>
+    /// O Dungeon Master de uma mesa que não usa todas as expansões: as fontes que o usuário não
+    /// escolheu viram negação de leitura por caminho.
+    ///
+    /// <para><b>Por que negar em vez de pedir.</b> "Não use o compêndio X" no prompt é um pedido
+    /// — o modelo esbarra no arquivo enquanto navega pelo índice e o conteúdo entra na conversa
+    /// de qualquer jeito. Negar a pasta faz a escolha do usuário valer mesmo: o personagem não
+    /// pode ganhar uma subclasse de um livro que a mesa não usa se o agente não alcança o
+    /// arquivo onde ela está.</para>
+    /// </summary>
+    /// <param name="sistema">Sistema em que o personagem está sendo criado.</param>
+    /// <param name="fontesRecusadas">Fontes que ficam de fora — em geral, as expansões não marcadas.</param>
+    public static DefinicaoDeAgente DungeonMasterLimitadoA(
+        SistemaRpg sistema,
+        IReadOnlyList<FonteDoSistema> fontesRecusadas) =>
+        DungeonMaster with
+        {
+            NegacoesEspecificas =
+            [
+                .. DungeonMaster.NegacoesEspecificas,
+                .. fontesRecusadas.Select(fonte => $"Read(Knowledge/{sistema.Id}/{fonte.Id}/**)"),
+            ],
+        };
 }

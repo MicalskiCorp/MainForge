@@ -27,8 +27,8 @@ internal static class FluxoDeSistemas
         }
 
         ConsoleUi.Info("");
-        ConsoleUi.Info($"  {"Sistema",-24} {"Livros",-8} {"Conhecimento",-30} {"Ficha",-8}");
-        ConsoleUi.Detalhe($"  {new string('-', 24)} {new string('-', 8)} {new string('-', 30)} {new string('-', 8)}");
+        ConsoleUi.Info($"  {"Sistema",-24} {"Livros",-8} {"Conhecimento",-32} {"Ficha",-8}");
+        ConsoleUi.Detalhe($"  {new string('-', 24)} {new string('-', 8)} {new string('-', 32)} {new string('-', 8)}");
 
         var pendencias = new List<string>();
 
@@ -53,7 +53,9 @@ internal static class FluxoDeSistemas
 
             var descricaoFicha = fichas == 0 ? "faltando" : $"{fichas}";
 
-            ConsoleUi.Info($"  {sistema.Id,-24} {livros,-8} {descricaoConhecimento,-30} {descricaoFicha,-8}");
+            ConsoleUi.Info($"  {sistema.Id,-24} {livros,-8} {descricaoConhecimento,-32} {descricaoFicha,-8}");
+
+            MostrarFontes(caminhos, sistema);
         }
 
         if (pendencias.Count > 0)
@@ -63,11 +65,88 @@ internal static class FluxoDeSistemas
             ConsoleUi.Info("Processar de novo continua de onde parou — não recomeça do zero.");
         }
 
+        OferecerMigracaoParaFontes(caminhos, sistemas);
         OferecerReindexacao(caminhos, sistemas);
 
         var personagens = Contar(caminhos.SaidaPersonagens, "*.pdf");
         ConsoleUi.Info("");
         ConsoleUi.Detalhe($"Fichas já geradas em Output/Personagens/: {personagens}");
+    }
+
+    /// <summary>
+    /// Mostra de que fontes o sistema é feito — o jogo base e cada expansão, com quantos livros
+    /// cada uma tem e se o conhecimento dela já foi gerado. É esta lista que vira a pergunta
+    /// "quais expansões esta mesa usa?" na criação de personagem, então vale conferir aqui se
+    /// um compêndio caiu na pasta certa.
+    /// </summary>
+    private static void MostrarFontes(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        var comLivro = sistema.DescobrirFontes(caminhos);
+
+        if (comLivro.Count == 0)
+        {
+            return;
+        }
+
+        var comConhecimento = sistema
+            .DescobrirFontesComConhecimento(caminhos)
+            .Select(fonte => fonte.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var fonte in comLivro)
+        {
+            var livros = Contar(sistema.DiretorioDaFonte(caminhos, fonte), "*.pdf");
+            var situacao = comConhecimento.Contains(fonte.Id) ? "conhecimento gerado" : "ainda não processada";
+
+            ConsoleUi.Detalhe($"    · {fonte.Id,-20} {livros} livro(s) — {situacao}");
+        }
+    }
+
+    /// <summary>
+    /// Leva um sistema do layout antigo — livros e conhecimento soltos na pasta do sistema —
+    /// para o layout com fonte, movendo tudo para <c>base/</c>.
+    ///
+    /// <para>Enquanto isso não acontece, a pergunta "quais expansões esta mesa usa?" não tem o
+    /// que oferecer: não há como distinguir o que veio do livro básico do que veio de um
+    /// compêndio. Reprocessar resolveria também, mas custaria a releitura dos livros inteiros;
+    /// mover arquivo não custa nada.</para>
+    /// </summary>
+    private static void OferecerMigracaoParaFontes(CaminhosDoProjeto caminhos, IReadOnlyList<SistemaRpg> sistemas)
+    {
+        var antigos = sistemas.Where(sistema => sistema.PrecisaMigrarParaFontes(caminhos)).ToList();
+
+        if (antigos.Count == 0)
+        {
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Aviso($"No layout antigo, sem separação entre jogo base e expansões: {string.Join(", ", antigos.Select(sistema => sistema.Id))}.");
+        ConsoleUi.Info($"Os livros e o conhecimento desses sistemas vão para a pasta '{FonteDoSistema.IdDaBase}/', e");
+        ConsoleUi.Info("a partir daí cada compêndio novo pode entrar numa pasta própria — que é o que");
+        ConsoleUi.Info("permite escolher, ao criar um personagem, quais expansões aquela mesa usa.");
+        ConsoleUi.Detalhe("É só mover arquivo: não relê livro nenhum e não custa tokens.");
+
+        if (!ConsoleUi.Confirmar("Migrar agora?"))
+        {
+            return;
+        }
+
+        foreach (var sistema in antigos)
+        {
+            try
+            {
+                var resultado = MigracaoDeFontes.Migrar(caminhos, sistema.Id);
+
+                ConsoleUi.Sucesso(
+                    $"  {sistema.Id}: {resultado.Livros.Count} livro(s) e {resultado.Conhecimento.Count} item(ns) " +
+                    $"de conhecimento em {FonteDoSistema.IdDaBase}/.");
+            }
+            catch (Exception excecao) when (excecao is IOException or UnauthorizedAccessException)
+            {
+                ConsoleUi.Erro($"  {sistema.Id}: {excecao.Message}");
+            }
+        }
     }
 
     /// <summary>

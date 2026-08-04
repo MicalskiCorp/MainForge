@@ -9,11 +9,13 @@ namespace MainForge.Tools;
 /// entrou no projeto.
 /// </summary>
 /// <param name="Sistema">O sistema criado ou atualizado.</param>
-/// <param name="Livros">Nomes dos arquivos de livro copiados para Systems/&lt;sistema&gt;/.</param>
+/// <param name="Fonte">A fonte em que os livros entraram — sempre o jogo base, aqui.</param>
+/// <param name="Livros">Nomes dos arquivos de livro copiados para Systems/&lt;sistema&gt;/base/.</param>
 /// <param name="Ficha">Nome do arquivo de ficha copiado para Templates/&lt;sistema&gt;/.</param>
 /// <param name="CamposDaFicha">Campos de formulário encontrados na ficha.</param>
 public sealed record ResultadoDaImportacao(
     SistemaRpg Sistema,
+    FonteDoSistema Fonte,
     IReadOnlyList<string> Livros,
     string Ficha,
     IReadOnlyList<string> CamposDaFicha);
@@ -34,6 +36,12 @@ public static class ImportadorDeSistema
         GlobalFontSettings.FontResolver ??= new ResolvedorDeFontesDoWindows();
     }
 
+    /// <summary>
+    /// Cria o sistema a partir dos livros do jogo base e da ficha em branco. Os livros vão para
+    /// <c>Systems/&lt;sistema&gt;/base/</c>: quem importa um sistema está trazendo o jogo base
+    /// por definição — expansão entra depois, por <see cref="AdicionarLivros"/>, e precisa de um
+    /// sistema já existente para se somar.
+    /// </summary>
     public static ResultadoDaImportacao Importar(
         CaminhosDoProjeto caminhos,
         string nomeDoSistema,
@@ -56,39 +64,36 @@ public static class ImportadorDeSistema
         var camposDaFicha = LerCamposDaFicha(caminhoDaFicha);
 
         // Só copia depois de tudo validado, para não deixar o projeto num estado pela metade.
-        var diretorioDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Sistemas, sistema.Id);
+        var diretorioDaFonte = sistema.DiretorioDaFonte(caminhos, FonteDoSistema.Base);
         var diretorioDoModelo = CaminhosDoProjeto.ResolverDentroDe(caminhos.Modelos, sistema.Id);
 
-        Directory.CreateDirectory(diretorioDoSistema);
+        Directory.CreateDirectory(diretorioDaFonte);
         Directory.CreateDirectory(diretorioDoModelo);
 
-        var livrosCopiados = new List<string>();
-
-        foreach (var livro in caminhosDosLivros)
-        {
-            var nomeDoArquivo = Path.GetFileName(livro);
-            File.Copy(livro, Path.Combine(diretorioDoSistema, nomeDoArquivo), overwrite: true);
-            livrosCopiados.Add(nomeDoArquivo);
-        }
+        var livrosCopiados = Copiar(caminhosDosLivros, diretorioDaFonte);
 
         var nomeDaFicha = Path.GetFileName(caminhoDaFicha);
         File.Copy(caminhoDaFicha, Path.Combine(diretorioDoModelo, nomeDaFicha), overwrite: true);
 
-        return new ResultadoDaImportacao(sistema, livrosCopiados, nomeDaFicha, camposDaFicha);
+        return new ResultadoDaImportacao(sistema, FonteDoSistema.Base, livrosCopiados, nomeDaFicha, camposDaFicha);
     }
 
     /// <summary>
-    /// Acrescenta livros a um sistema que já existe — o caso dos compêndios e expansões, que
-    /// não trazem ficha nova nem substituem o livro básico, só somam conteúdo ao sistema.
+    /// Acrescenta livros a uma fonte de um sistema que já existe: uma expansão nova, uma
+    /// expansão que ganhou outro volume, ou um livro que faltava no próprio jogo base.
     ///
     /// <para>Exige que o sistema já tenha sido importado: um compêndio sozinho não descreve a
     /// criação de personagem inteira, e processá-lo sem o livro básico produziria uma base de
     /// conhecimento cheia de buracos.</para>
+    ///
+    /// <para>Cada expansão tem pasta própria — é ela que permite ao usuário dizer, na criação do
+    /// personagem, que aquela mesa usa este compêndio e não aquele.</para>
     /// </summary>
-    /// <returns>Os nomes dos arquivos copiados para <c>Systems/&lt;sistema&gt;/</c>.</returns>
+    /// <returns>Os nomes dos arquivos copiados para <c>Systems/&lt;sistema&gt;/&lt;fonte&gt;/</c>.</returns>
     public static IReadOnlyList<string> AdicionarLivros(
         CaminhosDoProjeto caminhos,
         string nomeDoSistema,
+        FonteDoSistema fonte,
         IReadOnlyList<string> caminhosDosLivros)
     {
         var sistema = ValidarNome(nomeDoSistema);
@@ -111,12 +116,20 @@ public static class ImportadorDeSistema
             ValidarPdfLegivel(livro, "livro");
         }
 
+        var destino = sistema.DiretorioDaFonte(caminhos, FonteDoSistema.Criar(fonte.Id));
+        Directory.CreateDirectory(destino);
+
+        return Copiar(caminhosDosLivros, destino);
+    }
+
+    private static IReadOnlyList<string> Copiar(IReadOnlyList<string> origens, string destino)
+    {
         var copiados = new List<string>();
 
-        foreach (var livro in caminhosDosLivros)
+        foreach (var origem in origens)
         {
-            var nomeDoArquivo = Path.GetFileName(livro);
-            File.Copy(livro, Path.Combine(diretorioDoSistema, nomeDoArquivo), overwrite: true);
+            var nomeDoArquivo = Path.GetFileName(origem);
+            File.Copy(origem, Path.Combine(destino, nomeDoArquivo), overwrite: true);
             copiados.Add(nomeDoArquivo);
         }
 
@@ -147,31 +160,10 @@ public static class ImportadorDeSistema
     /// <summary>
     /// O nome do sistema vira nome de pasta em Systems/, Templates/ e Knowledge/, então
     /// precisa ser um nome de pasta simples — nada de barra, "..", nem caractere proibido.
+    /// A regra é a mesma do nome de expansão, e por isso mora em <see cref="NomeDePasta"/>.
     /// </summary>
-    private static SistemaRpg ValidarNome(string nomeDoSistema)
-    {
-        var nome = nomeDoSistema.Trim();
-
-        if (string.IsNullOrEmpty(nome))
-        {
-            throw new ArgumentException("O nome do sistema não pode ser vazio.", nameof(nomeDoSistema));
-        }
-
-        if (nome != Path.GetFileName(nome) || nome is "." or "..")
-        {
-            throw new ArgumentException(
-                $"'{nomeDoSistema}' não serve como nome de pasta — use um nome simples, ex.: \"Aventura&Cia\".",
-                nameof(nomeDoSistema));
-        }
-
-        var proibidos = Path.GetInvalidFileNameChars().Where(nome.Contains).ToList();
-
-        return proibidos.Count == 0
-            ? new SistemaRpg(nome)
-            : throw new ArgumentException(
-                $"O nome '{nomeDoSistema}' tem caractere(s) não permitido(s): {string.Join(" ", proibidos)}",
-                nameof(nomeDoSistema));
-    }
+    private static SistemaRpg ValidarNome(string nomeDoSistema) =>
+        new(NomeDePasta.Validar(nomeDoSistema, "sistema", nameof(nomeDoSistema)));
 
     private static void ValidarPdfLegivel(string caminho, string oQueE)
     {

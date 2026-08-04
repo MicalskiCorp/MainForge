@@ -28,14 +28,33 @@ As pastas de topo com nome em inglês e inicial maiúscula (`Agents/`, `Systems/
 | `tests/MainForge.Tests` | testes xunit de tudo em `src/` | pessoas | `dotnet test` |
 | `tools/ValidacaoPontaAPonta` | harness manual do fluxo completo, **fora da .sln** de propósito (gasta cota real) | pessoas | `dotnet run` manual |
 | `Agents/` | prompt de sistema de cada agente, em Markdown (`Configurador.md`, `DungeonMaster.md`) | pessoas | `DefinicaoDeAgente.CarregarPromptDeSistema` |
-| `Systems/<Sistema>/` | livros oficiais em PDF, um subdiretório por sistema | `ImportadorDeSistema` | agente Configurador (`Read`) |
+| `Systems/<Sistema>/<fonte>/` | livros oficiais em PDF, um subdiretório por sistema e, dentro, um por fonte | `ImportadorDeSistema` | agente Configurador (`Read`) |
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
-| `Knowledge/<Sistema>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
+| `Knowledge/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
 
 `Systems/`, `Templates/`, `Knowledge/` e `Output/` têm um `README.md` explicando a convenção
 daquela pasta — se você criar uma pasta de topo nova, ela também precisa de um.
+
+## O segundo nível: fonte
+
+Dentro de `Systems/<Sistema>/` e de `Knowledge/<Sistema>/` há **uma pasta por fonte**: `base/`
+é o jogo base (nome fixo, em `FonteDoSistema.IdDaBase`) e cada outra é uma expansão, com o nome
+que o usuário deu. Os dois lados usam os mesmos nomes: o conhecimento destilado dos livros de
+uma fonte mora na pasta de mesmo nome.
+
+Isto é guardrail, não arrumação. Na criação de personagem o usuário escolhe quais expansões a
+mesa usa, e `DefinicaoDeAgente.DungeonMasterLimitadoA` transforma as recusadas em
+`Read(Knowledge/<Sistema>/<fonte>/**)` negado. Conteúdo na pasta errada vira regra que vale numa
+mesa que não a escolheu.
+
+Duas exceções ficam na **raiz** de `Knowledge/<Sistema>/`, listadas em
+`SistemaRpg.ArquivosDaFicha`: `Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`. A ficha em PDF é
+do sistema inteiro e precisa valer com qualquer expansão selecionada.
+
+`MigracaoDeFontes` leva um sistema do layout antigo (tudo solto na pasta do sistema) para este,
+movendo arquivo e reapontando o registro de progresso — nunca reprocessando.
 
 ## Os projetos em `src/`
 
@@ -73,8 +92,9 @@ resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`); `net10.0-windows10.0.1
 | prompt/instrução de agente | `Agents/<Agente>.md` (nunca embutido em C#) | se for um agente novo, um `static readonly DefinicaoDeAgente` em [DefinicaoDeAgente.cs](src/MainForge.Agents/DefinicaoDeAgente.cs) |
 | conceito de domínio puro | `src/MainForge.Core/` | só se não depender de PDF, de agente nem de interface |
 | algo sobre executar o Claude Code | `src/MainForge.ClaudeCode/` | mantenha o projeto ignorante de RPG |
-| sistema de RPG novo | `Systems/<Sistema>/` + `Templates/<Sistema>/` pela opção 2 do menu | **não exige mexer em código** |
-| arquivo de conhecimento | `Knowledge/<Sistema>/` pelo agente | nunca escreva ali na mão |
+| sistema de RPG novo | `Systems/<Sistema>/base/` + `Templates/<Sistema>/` pela opção 2 do menu | **não exige mexer em código** |
+| expansão/compêndio | `Systems/<Sistema>/<Expansao>/` pela opção 3 do menu | **não exige mexer em código** |
+| arquivo de conhecimento | `Knowledge/<Sistema>/<fonte>/` pelo agente | nunca escreva ali na mão |
 
 Projeto `.csproj` novo só quando a responsabilidade não couber em nenhum dos sete — e aí ele
 entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da solução).
@@ -97,6 +117,10 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    linha corrompe os offsets internos do arquivo.
 7. **`Output/` é do usuário.** Nada do código lê de lá para tomar decisão, e o Configurador tem
    `Read(Output/**)` negado.
+8. **Todo conteúdo mora numa fonte.** Em `Systems/` e em `Knowledge/`, nada de conteúdo fica
+   solto na raiz do sistema — a única exceção é `SistemaRpg.ArquivosDaFicha`. Código novo que
+   monte caminho de sistema passa pela fonte (`DiretorioDaFonte`,
+   `DiretorioConhecimentoDaFonte`), nunca por `Path.Combine(caminhos.Sistemas, sistema, ...)`.
 
 ## Como navegar (em vez de varrer)
 
@@ -105,8 +129,9 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
 - "O que o agente pode fazer?" → `Agents/<Agente>.md` (o que ele sabe) e `DefinicaoDeAgente`
   (o que ele consegue). Os dois precisam concordar.
 - "Como o conhecimento está organizado?" → `Knowledge/index.md` e o `index.md` de cada pasta.
-  A estrutura interna de `Knowledge/<Sistema>/` é decidida pelo agente conforme o sistema de
-  RPG — **não há esqueleto fixo** e o código não deve assumir um.
+  A estrutura interna de **cada fonte** é decidida pelo agente conforme o sistema de RPG —
+  **não há esqueleto fixo** e o código não deve assumir um. O nível da fonte, esse sim, é do
+  código: `base/` e uma pasta por expansão, sempre.
 - "Isso já tem teste?" → `tests/MainForge.Tests/<Classe>Testes.cs`, mesmo nome da classe.
 
 ## Antes de criar um arquivo, confira

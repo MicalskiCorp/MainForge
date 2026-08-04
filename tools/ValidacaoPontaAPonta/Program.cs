@@ -30,7 +30,7 @@ Titulo($"Sistema alvo: {sistema}");
 // ---------------------------------------------------------------------------
 Titulo("Etapa 1 — validando os PDFs de entrada");
 
-var caminhoRegras = Path.Combine(caminhos.Sistemas, sistema, "Regras.pdf");
+var caminhoRegras = Path.Combine(caminhos.Sistemas, sistema, FonteDoSistema.IdDaBase, "Regras.pdf");
 var caminhoFicha = Path.Combine(caminhos.Modelos, sistema, "Ficha.pdf");
 
 if (!File.Exists(caminhoRegras) || !File.Exists(caminhoFicha))
@@ -101,10 +101,11 @@ Titulo("Etapa 3 — Configurador processando o sistema");
 using var configurador = new SessaoDeAgente(opcoes, DefinicaoDeAgente.Configurador, caminhos);
 
 var respostaConfigurador = await configurador.EnviarAsync(
-    $"Processe o sistema '{sistema}' do zero: leia o(s) PDF(s) dele e a ficha em branco, " +
-    "registre o plano de arquivos e gere a base de conhecimento completa em " +
-    $"Knowledge/{sistema}/, incluindo Ficha-Mapeamento.md e Ficha-ModeloEmTexto.md. " +
-    "Quando terminar, resuma os arquivos que criou.",
+    $"Processe o sistema '{sistema}' do zero: leia o(s) PDF(s) em " +
+    $"Systems/{sistema}/{FonteDoSistema.IdDaBase}/ e a ficha em branco, registre o plano de " +
+    $"arquivos e gere a base de conhecimento completa em Knowledge/{sistema}/{FonteDoSistema.IdDaBase}/. " +
+    $"Os dois arquivos da ficha ({string.Join(" e ", SistemaRpg.ArquivosDaFicha)}) ficam na raiz " +
+    $"de Knowledge/{sistema}/, fora da pasta de fonte. Quando terminar, resuma os arquivos que criou.",
     Progresso);
 
 Console.WriteLine(respostaConfigurador);
@@ -177,7 +178,8 @@ using var dungeonMaster = new SessaoDeAgente(opcoes, DefinicaoDeAgente.DungeonMa
 // A primeira mensagem já embute todas as decisões, para o teste rodar sem interação humana.
 var roteiro = new[]
 {
-    $"Quero criar um personagem no sistema '{sistema}'. Já decidi tudo: classe Guerreiro, " +
+    $"Quero criar um personagem no sistema '{sistema}'. Esta mesa usa só o jogo base: " +
+    $"Knowledge/{sistema}/{FonteDoSistema.IdDaBase}/index.md. Já decidi tudo: classe Guerreiro, " +
     "nome 'Thoradin', e pode distribuir os 3 pontos livres de atributo como achar melhor " +
     "pelas regras. Calcule o resto conforme as regras do sistema, me mostre a ficha final " +
     "e peça minha confirmação antes de gerar o PDF.",

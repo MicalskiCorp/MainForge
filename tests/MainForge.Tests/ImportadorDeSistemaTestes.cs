@@ -53,8 +53,26 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         Assert.Equal("Ficha.pdf", resultado.Ficha);
         Assert.Contains("Nome", resultado.CamposDaFicha);
 
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Livro Basico.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Livro Basico.pdf")));
         Assert.True(File.Exists(Path.Combine(_caminhos.Modelos, "Aventura&Cia", "Ficha.pdf")));
+    }
+
+    /// <summary>
+    /// Importar um sistema é trazer o jogo base dele: os livros caem em <c>base/</c> sem
+    /// pergunta nenhuma, e é isso que dá a toda expansão futura uma pasta irmã com que ser
+    /// comparada na hora de escolher o que aquela mesa usa.
+    /// </summary>
+    [Fact]
+    public void Importar_ColocaOsLivrosNaFonteBase()
+    {
+        var livro = CriarArquivoDeOrigem("Livro Basico.pdf");
+        var ficha = CriarArquivoDeOrigem("Ficha.pdf");
+
+        var resultado = ImportadorDeSistema.Importar(_caminhos, "Aventura&Cia", [livro], ficha);
+
+        Assert.True(resultado.Fonte.EhBase);
+        Assert.Equal([FonteDoSistema.Base], resultado.Sistema.DescobrirFontes(_caminhos));
+        Assert.False(resultado.Sistema.PrecisaMigrarParaFontes(_caminhos));
     }
 
     [Fact]
@@ -67,7 +85,7 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         var resultado = ImportadorDeSistema.Importar(_caminhos, "Tormenta20", [primeiro, segundo], ficha);
 
         Assert.Equal(2, resultado.Livros.Count);
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Tormenta20", "Livro2.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Tormenta20", "base", "Livro2.pdf")));
     }
 
     [Fact]
@@ -129,19 +147,55 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         Assert.Throws<ArgumentException>(() => ImportadorDeSistema.Importar(_caminhos, nome, [livro], ficha));
     }
 
+    /// <summary>
+    /// A expansão entra numa pasta própria, ao lado de <c>base/</c> e sem tocá-la. É essa
+    /// separação em disco que a criação de personagem transforma numa escolha do usuário.
+    /// </summary>
     [Fact]
-    public void AdicionarLivros_SomaAoSistemaSemMexerNoQueJaEstavaLa()
+    public void AdicionarLivros_ExpansaoVaiParaPastaPropriaSemMexerNaBase()
     {
         var basico = CriarArquivoDeOrigem("Livro Basico.pdf");
         var ficha = CriarArquivoDeOrigem("Ficha.pdf");
         ImportadorDeSistema.Importar(_caminhos, "Aventura&Cia", [basico], ficha);
 
         var compendio = CriarArquivoDeOrigem("Compendio.pdf");
-        var adicionados = ImportadorDeSistema.AdicionarLivros(_caminhos, "Aventura&Cia", [compendio]);
+        var adicionados = ImportadorDeSistema.AdicionarLivros(
+            _caminhos, "Aventura&Cia", FonteDoSistema.Criar("Compendio-Arcano"), [compendio]);
 
         Assert.Equal(["Compendio.pdf"], adicionados);
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Compendio.pdf")));
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Livro Basico.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Compendio-Arcano", "Compendio.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Livro Basico.pdf")));
+
+        Assert.Equal(
+            [FonteDoSistema.Base, new FonteDoSistema("Compendio-Arcano")],
+            new SistemaRpg("Aventura&Cia").DescobrirFontes(_caminhos));
+    }
+
+    /// <summary>
+    /// Um segundo livro do próprio jogo base não vira expansão — é a mesma fonte, e precisa
+    /// valer em toda mesa como o primeiro.
+    /// </summary>
+    [Fact]
+    public void AdicionarLivros_NaFonteBase_CaiJuntoDoLivroBasico()
+    {
+        var basico = CriarArquivoDeOrigem("Livro Basico.pdf");
+        var ficha = CriarArquivoDeOrigem("Ficha.pdf");
+        ImportadorDeSistema.Importar(_caminhos, "Aventura&Cia", [basico], ficha);
+
+        var segundo = CriarArquivoDeOrigem("Guia do Mestre.pdf");
+        ImportadorDeSistema.AdicionarLivros(_caminhos, "Aventura&Cia", FonteDoSistema.Base, [segundo]);
+
+        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Guia do Mestre.pdf")));
+        Assert.Single(new SistemaRpg("Aventura&Cia").DescobrirFontes(_caminhos));
+    }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData("sub/pasta")]
+    [InlineData("  ")]
+    public void AdicionarLivros_NomeDeExpansaoInvalido_Rejeita(string nome)
+    {
+        Assert.Throws<ArgumentException>(() => FonteDoSistema.Criar(nome));
     }
 
     /// <summary>
@@ -154,8 +208,8 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
     {
         var compendio = CriarArquivoDeOrigem("Compendio.pdf");
 
-        var excecao = Assert.Throws<InvalidOperationException>(
-            () => ImportadorDeSistema.AdicionarLivros(_caminhos, "SistemaInexistente", [compendio]));
+        var excecao = Assert.Throws<InvalidOperationException>(() => ImportadorDeSistema.AdicionarLivros(
+            _caminhos, "SistemaInexistente", FonteDoSistema.Criar("Compendio-Arcano"), [compendio]));
 
         Assert.Contains("não foi importado", excecao.Message);
     }
@@ -170,8 +224,10 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         var naoPdf = Path.Combine(_origem, "expansao.txt");
         File.WriteAllText(naoPdf, "isto nao e um pdf");
 
-        Assert.Throws<ArgumentException>(() => ImportadorDeSistema.AdicionarLivros(_caminhos, "Aventura&Cia", [naoPdf]));
-        Assert.False(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "expansao.txt")));
+        Assert.Throws<ArgumentException>(() => ImportadorDeSistema.AdicionarLivros(
+            _caminhos, "Aventura&Cia", FonteDoSistema.Criar("Compendio-Arcano"), [naoPdf]));
+
+        Assert.False(Directory.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Compendio-Arcano")));
     }
 
     [Fact]

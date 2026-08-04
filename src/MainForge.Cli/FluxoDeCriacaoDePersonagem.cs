@@ -32,6 +32,13 @@ internal static class FluxoDeCriacaoDePersonagem
             return;
         }
 
+        var fontes = EscolherFontes(contexto.Caminhos, escolhido);
+
+        if (fontes is null)
+        {
+            return;
+        }
+
         var opcoes = contexto.ExigirClaudeCode();
 
         if (opcoes is null)
@@ -39,7 +46,9 @@ internal static class FluxoDeCriacaoDePersonagem
             return;
         }
 
-        using var sessao = new SessaoDeAgente(opcoes, DefinicaoDeAgente.DungeonMaster, contexto.Caminhos);
+        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(escolhido, fontes.Recusadas);
+
+        using var sessao = new SessaoDeAgente(opcoes, agente, contexto.Caminhos);
 
         Directory.CreateDirectory(contexto.Caminhos.SaidaPersonagens);
         var fichasConhecidas = FichasEmSaida(contexto.Caminhos);
@@ -47,11 +56,7 @@ internal static class FluxoDeCriacaoDePersonagem
         ConsoleUi.Titulo($"Dungeon Master — criando personagem em '{escolhido.Id}'");
         ConsoleUi.Detalhe("Converse normalmente. Digite /sair para encerrar a conversa e voltar ao menu.");
 
-        // A primeira mensagem é automática: o sistema já foi escolhido no menu, então não faz
-        // sentido o agente começar perguntando qual é.
-        var proximaMensagem =
-            $"Quero criar um personagem no sistema '{escolhido.Id}'. Me conduza pelo processo, " +
-            "um passo de cada vez, seguindo as regras desse sistema.";
+        var proximaMensagem = PrimeiraMensagem(escolhido, fontes);
 
         while (true)
         {
@@ -107,6 +112,101 @@ internal static class FluxoDeCriacaoDePersonagem
         }
     }
 
+    /// <summary>As fontes que valem nesta mesa e as que ficaram de fora.</summary>
+    private sealed record FontesDaMesa(
+        IReadOnlyList<FonteDoSistema> Escolhidas,
+        IReadOnlyList<FonteDoSistema> Recusadas);
+
+    /// <summary>
+    /// Pergunta quais expansões valem para este personagem. O jogo base entra sempre — é o que
+    /// define o sistema —, então a pergunta é só sobre o que é opcional.
+    ///
+    /// <para>Não é uma pergunta de conveniência: cada mesa combina quais compêndios estão em
+    /// jogo, e um personagem com uma subclasse de um livro que o grupo não usa é um personagem
+    /// inválido. O que não for escolhido aqui vira negação de leitura, então o agente não
+    /// consegue oferecê-lo nem por engano.</para>
+    ///
+    /// <para>Devolve <c>null</c> quando o usuário desiste, e uma seleção vazia de expansões
+    /// quando ele quer só o jogo base.</para>
+    /// </summary>
+    private static FontesDaMesa? EscolherFontes(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        var comConhecimento = sistema.DescobrirFontesComConhecimento(caminhos);
+        var expansoes = comConhecimento.Where(fonte => !fonte.EhBase).ToList();
+
+        // Sistema ainda no layout antigo, sem pasta de fonte: tudo que existe vale, e não há
+        // escolha a fazer. Continuar sem nenhuma fonte deixaria o agente sem base nenhuma.
+        if (comConhecimento.Count == 0 || expansoes.Count == 0)
+        {
+            return new FontesDaMesa(comConhecimento, []);
+        }
+
+        var escolhidas = ConsoleUi.EscolherVarios(
+            $"Quais expansões de '{sistema.Id}' esta mesa usa?",
+            expansoes,
+            fonte => $"{fonte.Id}  ({DescreverFonte(caminhos, sistema, fonte)})");
+
+        ConsoleUi.Info("");
+        ConsoleUi.Sucesso(escolhidas.Count == 0
+            ? "Só o jogo base."
+            : $"Jogo base + {string.Join(", ", escolhidas.Select(fonte => fonte.Id))}.");
+
+        var recusadas = expansoes.Except(escolhidas).ToList();
+
+        if (recusadas.Count > 0)
+        {
+            ConsoleUi.Detalhe($"Fora desta mesa: {string.Join(", ", recusadas.Select(fonte => fonte.Id))} — o agente não vai conseguir ler.");
+        }
+
+        return new FontesDaMesa([FonteDoSistema.Base, .. escolhidas], recusadas);
+    }
+
+    /// <summary>
+    /// A primeira mensagem é automática: o sistema e as expansões já foram escolhidos no menu,
+    /// então não faz sentido o agente começar perguntando. Os caminhos vão escritos por extenso
+    /// porque deduzi-los do nome do sistema é onde o agente erra — nome com '&amp;' ou acento
+    /// vira uma leitura recusada antes de a conversa começar.
+    /// </summary>
+    private static string PrimeiraMensagem(SistemaRpg sistema, FontesDaMesa fontes)
+    {
+        var texto = new System.Text.StringBuilder()
+            .AppendLine($"Quero criar um personagem no sistema '{sistema.Id}'.")
+            .AppendLine()
+            .AppendLine("Esta mesa usa exatamente estas fontes de regra, e nenhuma outra:");
+
+        foreach (var fonte in fontes.Escolhidas)
+        {
+            texto.AppendLine($"- {fonte.Rotulo}: Knowledge/{sistema.Id}/{fonte.Id}/index.md");
+        }
+
+        if (fontes.Recusadas.Count > 0)
+        {
+            texto
+                .AppendLine()
+                .AppendLine("Fora desta mesa (a leitura destas pastas está negada, não tente abri-las):")
+                .AppendLine(string.Join(", ", fontes.Recusadas.Select(fonte => $"Knowledge/{sistema.Id}/{fonte.Id}/")));
+        }
+
+        return texto
+            .AppendLine()
+            .AppendLine($"A ficha do sistema está em Knowledge/{sistema.Id}/, fora das pastas de fonte:")
+            .AppendLine($"{string.Join(" e ", SistemaRpg.ArquivosDaFicha)}.")
+            .AppendLine()
+            .AppendLine("Me conduza pelo processo, um passo de cada vez, seguindo as regras dessas fontes.")
+            .ToString();
+    }
+
+    private static string DescreverFonte(CaminhosDoProjeto caminhos, SistemaRpg sistema, FonteDoSistema fonte)
+    {
+        var diretorio = sistema.DiretorioConhecimentoDaFonte(caminhos, fonte);
+
+        var arquivos = Directory
+            .EnumerateFiles(diretorio, "*.md", SearchOption.AllDirectories)
+            .Count(arquivo => !Path.GetFileName(arquivo).Equals(SistemaRpg.NomeDoIndice, StringComparison.OrdinalIgnoreCase));
+
+        return $"{arquivos} arquivo(s) de regra";
+    }
+
     /// <summary>
     /// Avisa antes da conversa o que só apareceria no meio dela: sem ficha em Templates/ não
     /// sai PDF nenhum, e com processamento pela metade o agente vai esbarrar em regra que não
@@ -127,6 +227,13 @@ internal static class FluxoDeCriacaoDePersonagem
         if (estado.Pendentes.Count > 0 || estado.LivrosPendentes.Count > 0)
         {
             avisos.Add($"processamento incompleto: {estado.Resumo()}");
+        }
+
+        var expansoes = sistema.DescobrirFontesComConhecimento(caminhos).Count(fonte => !fonte.EhBase);
+
+        if (expansoes > 0)
+        {
+            avisos.Add($"{expansoes} expansão(ões) disponível(is)");
         }
 
         return avisos.Count == 0 ? sistema.Id : $"{sistema.Id}  ({string.Join("; ", avisos)})";

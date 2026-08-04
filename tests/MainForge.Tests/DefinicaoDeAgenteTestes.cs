@@ -54,16 +54,18 @@ public class DefinicaoDeAgenteTestes
     }
 
     /// <summary>
-    /// Estas quatro são as saídas de emergência do guardrail: com qualquer uma delas
-    /// concedida, um agente contorna todas as outras restrições. Bash rodaria qualquer
-    /// comando, Write/Edit escreveriam fora do confinamento em C#, e Task abriria um subagente
-    /// sem nenhuma dessas regras.
+    /// Estas são as saídas de emergência do guardrail: com qualquer uma delas concedida, um
+    /// agente contorna todas as outras restrições. Bash rodaria qualquer comando, Write/Edit
+    /// escreveriam fora do confinamento em C#, Task abriria um subagente sem nenhuma dessas
+    /// regras, e Skill carregaria instruções de <c>.claude/skills/</c> — que são do
+    /// desenvolvimento do aplicativo e falam do código dele.
     /// </summary>
     [Theory]
     [InlineData("Bash")]
     [InlineData("Write")]
     [InlineData("Edit")]
     [InlineData("Task")]
+    [InlineData("Skill")]
     public void NenhumAgentePodeUsarFerramentaQueContornaOGuardrail(string ferramenta)
     {
         foreach (var agente in TodosOsAgentes)
@@ -84,6 +86,53 @@ public class DefinicaoDeAgenteTestes
 
         Assert.Contains("Read(Systems/**)", negadas);
         Assert.Contains("Read(Templates/**)", negadas);
+    }
+
+    /// <summary>
+    /// Os agentes rodam com a raiz do projeto como diretório de trabalho, então a configuração
+    /// do Claude Code de quem desenvolve o aplicativo fica no caminho deles. Nada ali é assunto
+    /// de um agente de RPG — e `.claude/skills/` inclusive descreve o código-fonte, que eles já
+    /// não podem ler.
+    /// </summary>
+    [Fact]
+    public void NenhumAgenteLeAConfiguracaoDoClaudeCodeDoProjeto()
+    {
+        foreach (var agente in TodosOsAgentes)
+        {
+            Assert.Contains("Read(.claude/**)", agente.FerramentasNegadas());
+        }
+    }
+
+    /// <summary>
+    /// A escolha de expansões feita pelo usuário antes da conversa vira negação de leitura. Se
+    /// fosse só um pedido no prompt, o agente esbarraria no arquivo enquanto navega pelo índice
+    /// e o conteúdo entraria na conversa de qualquer jeito — o personagem acabaria com uma
+    /// opção de um livro que aquela mesa não usa.
+    /// </summary>
+    [Fact]
+    public void DungeonMasterLimitadoA_NegaAsFontesQueAMesaNaoUsa()
+    {
+        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(
+            new SistemaRpg("Aventura&Cia"),
+            [new FonteDoSistema("Compendio-Arcano"), new FonteDoSistema("Compendio-Sombrio")]);
+
+        var negadas = agente.FerramentasNegadas();
+
+        Assert.Contains("Read(Knowledge/Aventura&Cia/Compendio-Arcano/**)", negadas);
+        Assert.Contains("Read(Knowledge/Aventura&Cia/Compendio-Sombrio/**)", negadas);
+
+        // O que a mesa usa continua acessível, e as negações de sempre seguem valendo.
+        Assert.DoesNotContain("Read(Knowledge/Aventura&Cia/base/**)", negadas);
+        Assert.Contains("Read(Systems/**)", negadas);
+        Assert.Contains("Bash", negadas);
+    }
+
+    [Fact]
+    public void DungeonMasterLimitadoA_SemExpansaoRecusada_NaoAcrescentaNegacao()
+    {
+        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(new SistemaRpg("Aventura&Cia"), []);
+
+        Assert.Equal(DefinicaoDeAgente.DungeonMaster.FerramentasNegadas(), agente.FerramentasNegadas());
     }
 
     /// <summary>

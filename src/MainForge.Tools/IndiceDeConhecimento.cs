@@ -23,7 +23,7 @@ public sealed record ItemDoIndice(string Nome, string Descricao);
 /// </summary>
 public static class IndiceDeConhecimento
 {
-    public const string NomeDoArquivo = "index.md";
+    public const string NomeDoArquivo = SistemaRpg.NomeDoIndice;
 
     private const int LimiteDaDescricao = 220;
     private const string SecaoDeArquivos = "## Arquivos";

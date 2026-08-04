@@ -62,6 +62,11 @@ internal static class FluxoDoConfigurador
             return;
         }
 
+        if (!GarantirLayoutComFontes(caminhos, escolhido))
+        {
+            return;
+        }
+
         // Reconstruir antes de olhar o estado indexa bases geradas por versões anteriores do
         // aplicativo (que não tinham index.md) sem gastar um token.
         IndiceDeConhecimento.Reconstruir(caminhos, escolhido.Id);
@@ -70,7 +75,7 @@ internal static class FluxoDoConfigurador
         estado.SincronizarComDisco();
 
         ConsoleUi.Titulo($"Processar '{escolhido.Id}'");
-        MostrarSituacao(estado, pdfs);
+        MostrarSituacao(estado, pdfs, escolhido.DiretorioSistemas(caminhos));
 
         var modo = EscolherModo(estado, modoSugerido);
 
@@ -100,6 +105,7 @@ internal static class FluxoDoConfigurador
         }
 
         var livrosNovos = estado.LivrosPendentes.Select(livro => livro.Arquivo).ToList();
+        var mensagem = PromptDoConfigurador.Montar(modo.Value, escolhido, estado);
 
         // Processar é longo e não interativo: se a cota acabar no meio, o aplicativo espera a
         // janela virar e retoma sozinho, por mais que ela demore. Devolver o controle ao usuário
@@ -119,10 +125,7 @@ internal static class FluxoDoConfigurador
 
         try
         {
-            resposta = await sessao.EnviarAsync(
-                PromptDoConfigurador.Montar(modo.Value, escolhido, estado, livrosNovos),
-                ProgressoDoAgente.Impressora(),
-                cancelamento);
+            resposta = await sessao.EnviarAsync(mensagem, ProgressoDoAgente.Impressora(), cancelamento);
         }
         catch (OperationCanceledException)
         {
@@ -142,6 +145,41 @@ internal static class FluxoDoConfigurador
         Concluir(caminhos, escolhido, livrosNovos);
     }
 
+    /// <summary>
+    /// Um sistema do layout antigo precisa ser separado por fonte antes de ser processado. Sem
+    /// isso o agente receberia um mapa de pastas que não corresponde ao disco — e o conteúdo
+    /// sairia fora de qualquer fonte, que é o mesmo que não dar ao usuário a escolha das
+    /// expansões. Migrar é só mover arquivo, então a pergunta é só para o usuário não ver o
+    /// próprio projeto mudar de forma sem aviso.
+    /// </summary>
+    private static bool GarantirLayoutComFontes(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        if (!sistema.PrecisaMigrarParaFontes(caminhos))
+        {
+            return true;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Aviso($"'{sistema.Id}' ainda está sem separação entre jogo base e expansões.");
+        ConsoleUi.Info($"Antes de processar, os livros e o conhecimento dele vão para a pasta '{FonteDoSistema.IdDaBase}/',");
+        ConsoleUi.Info("para que cada compêndio futuro tenha pasta própria e possa ser escolhido (ou não)");
+        ConsoleUi.Detalhe("na criação de personagem. É só mover arquivo: não relê livro e não custa tokens.");
+
+        if (!ConsoleUi.Confirmar("Migrar agora e seguir?"))
+        {
+            ConsoleUi.Info("Processamento cancelado — a separação por fonte é pré-requisito.");
+            return false;
+        }
+
+        var resultado = MigracaoDeFontes.Migrar(caminhos, sistema.Id);
+
+        ConsoleUi.Sucesso(
+            $"  {resultado.Livros.Count} livro(s) e {resultado.Conhecimento.Count} item(ns) de " +
+            $"conhecimento movidos para {FonteDoSistema.IdDaBase}/.");
+
+        return true;
+    }
+
     private static string DescreverEscolha(CaminhosDoProjeto caminhos, SistemaRpg sistema)
     {
         if (!sistema.TemConhecimento(caminhos))
@@ -155,7 +193,10 @@ internal static class FluxoDoConfigurador
         return $"{sistema.Id}  ({estado.Resumo()})";
     }
 
-    private static void MostrarSituacao(EstadoDoProcessamento estado, IReadOnlyList<string> pdfs)
+    private static void MostrarSituacao(
+        EstadoDoProcessamento estado,
+        IReadOnlyList<string> pdfs,
+        string diretorioDoSistema)
     {
         ConsoleUi.Info($"{pdfs.Count} PDF(s) no sistema:");
 
@@ -167,7 +208,11 @@ internal static class FluxoDoConfigurador
                 livro.Estado == EstadoDoItem.Concluido);
 
             var situacao = lido ? "já processado" : "ainda não lido";
-            ConsoleUi.Detalhe($"  · {nome} ({new FileInfo(pdf).Length / 1024} KB) — {situacao}");
+
+            // O caminho relativo mostra a fonte junto do nome: é o que deixa ver, de relance,
+            // que um compêndio caiu na pasta do jogo base por engano.
+            var relativo = Path.GetRelativePath(diretorioDoSistema, pdf);
+            ConsoleUi.Detalhe($"  · {relativo} ({new FileInfo(pdf).Length / 1024} KB) — {situacao}");
         }
 
         if (estado.TemHistorico)
@@ -246,6 +291,13 @@ internal static class FluxoDoConfigurador
                 break;
         }
 
+        ConsoleUi.Info("");
+        ConsoleUi.Info(
+            "Se a cota acabar no meio, o aplicativo mostra a contagem regressiva, espera a próxima " +
+            "janela abrir — mesmo que seja a semanal, daqui a dias — e retoma a mesma conversa " +
+            "sozinho, sem reler o que já leu. Basta deixar a janela do aplicativo aberta; Ctrl+C " +
+            "cancela a espera a qualquer momento.");
+
         return ConsoleUi.Confirmar("Começar o processamento?");
     }
 
@@ -291,13 +343,6 @@ internal static class FluxoDoConfigurador
         }
 
         ConsoleUi.Detalhe($"  · mais um {IndiceDeConhecimento.NomeDoArquivo} por nível, gerado automaticamente.");
-        ConsoleUi.Info("");
-        ConsoleUi.Info(
-            "Se a cota acabar no meio, o aplicativo mostra a contagem regressiva, espera a próxima " +
-            "janela abrir — mesmo que seja a semanal, daqui a dias — e retoma a mesma conversa " +
-            "sozinho, sem reler o que já leu. Basta deixar a janela do aplicativo aberta; Ctrl+C " +
-            "cancela a espera a qualquer momento.");
-
 
         if (estado.Pendentes.Count > 0)
         {
@@ -346,9 +391,7 @@ internal static class FluxoDoConfigurador
     /// </summary>
     private static void AvisarSobreArquivosDaFicha(string diretorioConhecimento)
     {
-        string[] obrigatorios = ["Ficha-Mapeamento.md", "Ficha-ModeloEmTexto.md"];
-
-        var faltando = obrigatorios
+        var faltando = SistemaRpg.ArquivosDaFicha
             .Where(nome => !File.Exists(Path.Combine(diretorioConhecimento, nome)))
             .ToList();
 

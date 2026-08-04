@@ -29,8 +29,14 @@ public sealed record ItemDoPlano
 /// <summary>Um livro do sistema e se o conteúdo dele já entrou na base.</summary>
 public sealed record LivroDoSistema
 {
-    /// <summary>Nome do arquivo dentro de <c>Systems/&lt;sistema&gt;/</c>.</summary>
+    /// <summary>Nome do arquivo dentro de <c>Systems/&lt;sistema&gt;/&lt;fonte&gt;/</c>.</summary>
     public required string Arquivo { get; init; }
+
+    /// <summary>
+    /// A fonte a que o livro pertence — <c>base</c> ou o nome da expansão. É o que diz ao
+    /// Configurador em qual pasta de <c>Knowledge/</c> o conteúdo dele deve cair.
+    /// </summary>
+    public string Fonte { get; init; } = FonteDoSistema.IdDaBase;
 
     public long Tamanho { get; init; }
 
@@ -96,6 +102,20 @@ public sealed class EstadoDoProcessamento
     /// <summary>Há algo registrado de uma execução anterior a que valha a pena voltar.</summary>
     [JsonIgnore]
     public bool TemHistorico => Plano.Count > 0 || Livros.Any(livro => livro.Estado == EstadoDoItem.Concluido);
+
+    /// <summary>
+    /// Os livros ainda não lidos agrupados pela fonte a que pertencem, base primeiro. O
+    /// Configurador precisa deste recorte: o destino do conteúdo em <c>Knowledge/</c> depende
+    /// da fonte do livro, não do livro em si.
+    /// </summary>
+    public IReadOnlyList<(FonteDoSistema Fonte, IReadOnlyList<string> Livros)> PendentesPorFonte()
+    {
+        var porFonte = LivrosPendentes
+            .GroupBy(livro => livro.Fonte, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(grupo => new FonteDoSistema(grupo.Key), grupo => (IReadOnlyList<string>)[.. grupo.Select(livro => livro.Arquivo)]);
+
+        return [.. FonteDoSistema.Ordenar(porFonte.Keys).Select(fonte => (fonte, porFonte[fonte]))];
+    }
 
     public static string CaminhoDoArquivo(CaminhosDoProjeto caminhos, string sistema) =>
         Path.Combine(CaminhosDoProjeto.ResolverDentroDe(caminhos.Conhecimento, sistema), NomeDoArquivo);
@@ -282,7 +302,7 @@ public sealed class EstadoDoProcessamento
         foreach (var livro in Livros)
         {
             var situacao = livro.Estado == EstadoDoItem.Concluido ? "ja lido" : "PENDENTE";
-            texto.AppendLine($"- {livro.Arquivo} — {situacao}");
+            texto.AppendLine($"- [{livro.Fonte}] {livro.Arquivo} — {situacao}");
         }
 
         texto.AppendLine();
@@ -383,6 +403,7 @@ public sealed class EstadoDoProcessamento
             var atual = new LivroDoSistema
             {
                 Arquivo = nome,
+                Fonte = FonteDoLivro(diretorio, caminho),
                 Tamanho = informacao.Length,
                 ModificadoEm = informacao.LastWriteTimeUtc.Ticks,
             };
@@ -396,10 +417,23 @@ public sealed class EstadoDoProcessamento
             var registrado = Livros[indice];
 
             // Mesmo nome, conteúdo diferente: o livro foi trocado e precisa ser lido de novo.
+            // A fonte é recensada sempre — mover o livro de pasta não deve obrigar a relê-lo.
             Livros[indice] = registrado.Tamanho == atual.Tamanho && registrado.ModificadoEm == atual.ModificadoEm
-                ? registrado
+                ? registrado with { Fonte = atual.Fonte }
                 : atual;
         }
+    }
+
+    /// <summary>
+    /// A fonte é a primeira pasta abaixo de <c>Systems/&lt;sistema&gt;/</c>. Um PDF solto na
+    /// raiz é do layout antigo e conta como jogo base — é o que a migração vai formalizar.
+    /// </summary>
+    private static string FonteDoLivro(string diretorioDoSistema, string caminhoDoLivro)
+    {
+        var relativo = Path.GetRelativePath(diretorioDoSistema, caminhoDoLivro).Replace('\\', '/');
+        var barra = relativo.IndexOf('/');
+
+        return barra <= 0 ? FonteDoSistema.IdDaBase : relativo[..barra];
     }
 
     private int IndiceDoItem(string caminho) =>

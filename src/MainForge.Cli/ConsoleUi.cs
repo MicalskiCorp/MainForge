@@ -147,6 +147,50 @@ internal static class ConsoleUi
         }
     }
 
+    /// <summary>
+    /// Mostra uma lista numerada e devolve os itens marcados. Diferente de
+    /// <see cref="Escolher{T}"/>, aqui "nenhum" é uma resposta legítima e não um cancelamento:
+    /// jogar só com o livro básico é a escolha mais comum de todas, então ela é o Enter vazio.
+    /// </summary>
+    public static IReadOnlyList<T> EscolherVarios<T>(string titulo, IReadOnlyList<T> itens, Func<T, string> rotulo)
+    {
+        Titulo(titulo);
+
+        for (var indice = 0; indice < itens.Count; indice++)
+        {
+            Console.WriteLine($"  {indice + 1}) {rotulo(itens[indice])}");
+        }
+
+        Detalhe("\n  Números separados por vírgula (ex.: 1,3).  't' = todas.  Enter = nenhuma.");
+
+        while (true)
+        {
+            var digitado = LerLinha("\nEscolha: ");
+
+            if (digitado.Length == 0)
+            {
+                return [];
+            }
+
+            if (digitado.Equals("t", StringComparison.OrdinalIgnoreCase))
+            {
+                return itens;
+            }
+
+            var numeros = digitado
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(parte => int.TryParse(parte, out var numero) ? numero : -1)
+                .ToList();
+
+            if (numeros.All(numero => numero >= 1 && numero <= itens.Count))
+            {
+                return [.. numeros.Distinct().Select(numero => itens[numero - 1])];
+            }
+
+            Aviso($"Use números entre 1 e {itens.Count}, separados por vírgula.");
+        }
+    }
+
     public static void Pausar()
     {
         Console.WriteLine();

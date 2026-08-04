@@ -80,10 +80,12 @@ MainForge.sln
 │                            mapa de onde cada coisa mora e é obrigatória antes de mexer nele
 ├── CLAUDE.md             -> instruções de projeto para o Claude Code de desenvolvimento
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
-├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema
+├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema e, dentro
+│                            dele, um por fonte: base/ e uma pasta por expansão
 ├── Templates/            -> fichas em PDF editável, um subdiretório por sistema
 ├── Knowledge/            -> base de conhecimento em Markdown, gerada pelo Configurador,
-│                            com um index.md por nível e o registro de progresso do sistema
+│                            com a mesma divisão por fonte, um index.md por nível e o
+│                            registro de progresso do sistema
 └── Output/Personagens/   -> fichas finais preenchidas
 ```
 
@@ -106,21 +108,47 @@ dotnet test MainForge.sln
 dotnet run --project src/MainForge.Cli    # o aplicativo
 ```
 
+O aplicativo abre maximizado, no console clássico e no Windows Terminal. Não é capricho: a tela
+inicial tem cerca de 145 colunas, o desenho da ficha em texto tem 78, e o progresso do agente
+imprime chamadas de ferramenta longas — numa janela de 80x25 tudo isso quebra linha.
+
+Achar a janela é o problema todo, e `JanelaDoConsole` resolve de dois jeitos porque são dois
+mundos. No conhost, `GetConsoleWindow` já devolve a janela de verdade. No Windows Terminal (e
+em qualquer host via ConPTY) ele devolve uma `PseudoConsoleWindow`, que é um objeto interno do
+próprio processo, sem pixel na tela — mexer nela não maximiza nada e chega a travar o console.
+O terminal também não é processo ancestral nosso, então nem pela árvore de processos se chega
+até ele. O que liga os dois é o **título**: o terminal espelha no título da janela o título do
+console da aba ativa, então o aplicativo escreve um título único, acha a janela que passou a
+exibi-lo e maximiza aquela.
+
+Um pedido só não basta: o terminal ainda está se montando quando o aplicativo começa, e o
+tamanho de inicialização que ele aplica em seguida desfazia o nosso — daí a janela abrir
+maximizada e encolher logo depois, de forma intermitente. Por isso o pedido é reafirmado por
+cinco segundos, numa linha de execução em segundo plano (o menu aparece na hora). Passado esse
+prazo, o aplicativo não mexe mais na janela: quem quiser restaurá-la na mão manda.
+
+Duas consequências: rodando dentro de um terminal que já estava aberto com outras abas, é
+aquela janela inteira que é maximizada — a janela não é nossa, nós só pedimos; e
+`MAINFORGE_SEM_MAXIMIZAR=1` desliga tudo isso.
+
 Menu do aplicativo:
 
 1. **Ver sistemas** — o que já foi importado, o que já tem base de conhecimento e ficha, e o
    que ficou pela metade.
 2. **Importar um sistema de RPG** — você informa o nome do sistema, os PDFs dos livros e a
    ficha de personagem editável; o programa valida (livro legível, ficha com campos
-   preenchíveis) e copia para `Systems/<Sistema>/` e `Templates/<Sistema>/`.
-3. **Adicionar livro a um sistema** — compêndios, expansões e suplementos de um sistema que já
-   existe. O livro entra em `Systems/<Sistema>/` e o Configurador lê **só ele**, somando o
-   conteúdo à base que já está pronta.
+   preenchíveis) e copia para `Systems/<Sistema>/base/` e `Templates/<Sistema>/`. Importar um
+   sistema é trazer o jogo base dele — expansão entra pela opção 3.
+3. **Adicionar livro a um sistema** — pergunta se o livro é do jogo base ou de uma expansão (e,
+   se for de uma expansão nova, o nome dela). O livro entra em `Systems/<Sistema>/<fonte>/` e o
+   Configurador lê **só ele**, somando o conteúdo à base que já está pronta.
 4. **Processar um sistema** (Agente Configurador) — lê os livros **e a ficha em branco** e
-   gera `Knowledge/<Sistema>/*.md`. É a operação mais cara em tokens; pede confirmação. Se já
-   houver progresso, pergunta se é para continuar de onde parou ou recomeçar do zero.
-5. **Criar um personagem** (Agente Dungeon Master) — conversa livre até a ficha em PDF sair
-   em `Output/Personagens/`. `/sair` encerra a conversa.
+   gera `Knowledge/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais cara em
+   tokens; pede confirmação. Se já houver progresso, pergunta se é para continuar de onde parou
+   ou recomeçar do zero.
+5. **Criar um personagem** (Agente Dungeon Master) — pergunta primeiro quais expansões aquela
+   mesa usa e depois é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
+   `/sair` encerra a conversa.
 6. **Verificar o Claude Code** — mostra o executável, o modelo e as permissões de cada
    agente, e faz um turno de teste para confirmar que a assinatura está ativa.
 
@@ -131,6 +159,33 @@ O sistema `SistemaTeste` não aparece em nenhuma dessas telas: ele existe só pa
 validação, que o alcança pelo nome. Esconder é da interface, não do disco — quem abre o
 aplicativo veria um sistema fictício ao lado dos de verdade sem ter como saber que não é para
 usar.
+
+## Jogo base e expansões
+
+Um sistema é dividido por **fonte**: `base/` é o jogo base e cada outra pasta é uma expansão
+(compêndio, suplemento), com o nome que o usuário deu a ela. A divisão vale nos dois lados —
+`Systems/<Sistema>/<fonte>/` guarda os PDFs e `Knowledge/<Sistema>/<fonte>/` guarda o
+conhecimento destilado deles.
+
+Isso existe por causa de uma pergunta na criação de personagem: **quais expansões esta mesa
+usa?** Cada grupo combina quais compêndios estão em jogo, e um personagem com uma subclasse de
+um livro que o grupo não usa é um personagem inválido.
+
+A resposta não vira um pedido no prompt — vira **negação de leitura**: as pastas das expansões
+não marcadas são bloqueadas para o Dungeon Master naquela sessão (`DungeonMasterLimitadoA`).
+Pedir "não use o compêndio X" não bastaria: o agente esbarraria no arquivo enquanto navega pelo
+índice e o conteúdo entraria na conversa de qualquer jeito.
+
+Duas consequências para o Configurador: o conteúdo de um livro vai **sempre** para a pasta da
+fonte dele, e conteúdo de expansão que altera uma regra do jogo base vira arquivo novo dentro
+da expansão, citando o original em vez de reescrevê-lo — quem não usa aquele livro precisa
+continuar vendo a regra intacta. As únicas exceções são `Ficha-Mapeamento.md` e
+`Ficha-ModeloEmTexto.md`, que ficam na raiz do sistema porque a ficha em PDF é do sistema
+inteiro e não muda com a expansão em uso.
+
+Um sistema importado por uma versão anterior do aplicativo tem tudo solto na pasta do sistema.
+A opção 1 do menu oferece movê-lo para `base/` (e o processamento exige isso antes de começar):
+é só mover arquivo, sem reler livro nenhum.
 
 ## A base de conhecimento é indexada
 
@@ -156,8 +211,9 @@ Três consequências práticas:
 
 - Apagar um `.md` na mão basta para mandá-lo ser regerado: o disco é a verdade final, e o
   registro é reconciliado com ele antes de cada execução.
-- Trocar um PDF em `Systems/<Sistema>/` (mesmo nome, conteúdo diferente) marca aquele livro
-  como não lido de novo, porque tamanho e data de modificação mudaram.
+- Trocar um PDF em `Systems/<Sistema>/<fonte>/` (mesmo nome, conteúdo diferente) marca aquele
+  livro como não lido de novo, porque tamanho e data de modificação mudaram. Só **mover** um
+  livro de fonte não: o conteúdo é o mesmo, muda apenas o destino dele em `Knowledge/`.
 - Uma base que já existia antes de tudo isso é **adotada**: a opção 1 do menu oferece gerar
   índice e registro a partir do que está em disco (de graça, sem agente). Os `.md` presentes
   entram como prontos e os livros, como ainda não lidos — que é a leitura honesta de uma base
@@ -218,7 +274,7 @@ a cada criação de personagem.
 
 Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
 permissões por agente (verificado com o Dungeon Master tendo `Systems/` negado de fato), a
-importação de sistemas e a interface em console, com 102 testes automatizados. O Configurador
+importação de sistemas e a interface em console, com 140 testes automatizados. O Configurador
 foi validado ponta a ponta gerando `Knowledge/SistemaTeste/`.
 
 Falta: rodar a validação ponta a ponta completa incluindo o Dungeon Master
@@ -231,26 +287,3 @@ construir a interface gráfica em WPF.
 
 > PDFs precisam estar marcados como binários no Git (`.gitattributes`): com
 > `core.autocrlf=true`, a conversão de fim de linha corrompe os offsets internos do arquivo.
-O aplicativo abre maximizado, no console clássico e no Windows Terminal. Não é capricho: a tela
-inicial tem cerca de 145 colunas, o desenho da ficha em texto tem 78, e o progresso do agente
-imprime chamadas de ferramenta longas — numa janela de 80x25 tudo isso quebra linha.
-
-Achar a janela é o problema todo, e `JanelaDoConsole` resolve de dois jeitos porque são dois
-mundos. No conhost, `GetConsoleWindow` já devolve a janela de verdade. No Windows Terminal (e
-em qualquer host via ConPTY) ele devolve uma `PseudoConsoleWindow`, que é um objeto interno do
-próprio processo, sem pixel na tela — mexer nela não maximiza nada e chega a travar o console.
-O terminal também não é processo ancestral nosso, então nem pela árvore de processos se chega
-até ele. O que liga os dois é o **título**: o terminal espelha no título da janela o título do
-console da aba ativa, então o aplicativo escreve um título único, acha a janela que passou a
-exibi-lo e maximiza aquela.
-
-Um pedido só não basta: o terminal ainda está se montando quando o aplicativo começa, e o
-tamanho de inicialização que ele aplica em seguida desfazia o nosso — daí a janela abrir
-maximizada e encolher logo depois, de forma intermitente. Por isso o pedido é reafirmado por
-cinco segundos, numa linha de execução em segundo plano (o menu aparece na hora). Passado esse
-prazo, o aplicativo não mexe mais na janela: quem quiser restaurá-la na mão manda.
-
-Duas consequências: rodando dentro de um terminal que já estava aberto com outras abas, é
-aquela janela inteira que é maximizada — a janela não é nossa, nós só pedimos; e
-`MAINFORGE_SEM_MAXIMIZAR=1` desliga tudo isso.
-

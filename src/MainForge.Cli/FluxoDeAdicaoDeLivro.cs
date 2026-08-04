@@ -28,7 +28,7 @@ internal static class FluxoDeAdicaoDeLivro
         }
 
         ConsoleUi.Titulo("Adicionar livro a um sistema");
-        ConsoleUi.Detalhe("Para compêndios, expansões e suplementos de um sistema que já existe aqui.");
+        ConsoleUi.Detalhe("Compêndios, expansões e suplementos — ou um livro que faltava no jogo base.");
 
         var escolhido = ConsoleUi.Escolher(
             "A qual sistema?",
@@ -42,7 +42,14 @@ internal static class FluxoDeAdicaoDeLivro
             return;
         }
 
-        var livros = EntradaDeArquivos.LerPdfs("compêndio/expansão");
+        var fonte = EscolherFonte(caminhos, escolhido);
+
+        if (fonte is null)
+        {
+            return;
+        }
+
+        var livros = EntradaDeArquivos.LerPdfs(fonte.EhBase ? "livro do jogo base" : $"livro de '{fonte.Id}'");
 
         if (livros.Count == 0)
         {
@@ -51,7 +58,7 @@ internal static class FluxoDeAdicaoDeLivro
         }
 
         ConsoleUi.Titulo($"Confirmar adição a '{escolhido.Id}'");
-        ConsoleUi.Info($"  Livros -> Systems/{escolhido.Id}/");
+        ConsoleUi.Info($"  {fonte.Rotulo} -> Systems/{escolhido.Id}/{fonte.Id}/");
 
         foreach (var livro in livros)
         {
@@ -67,7 +74,7 @@ internal static class FluxoDeAdicaoDeLivro
 
         try
         {
-            copiados = ImportadorDeSistema.AdicionarLivros(caminhos, escolhido.Id, livros);
+            copiados = ImportadorDeSistema.AdicionarLivros(caminhos, escolhido.Id, fonte, livros);
         }
         catch (Exception excecao) when (excecao is ArgumentException or InvalidOperationException or IOException)
         {
@@ -81,7 +88,7 @@ internal static class FluxoDeAdicaoDeLivro
         estado.SincronizarComDisco();
         estado.Salvar();
 
-        ConsoleUi.Sucesso($"\n{copiados.Count} livro(s) adicionado(s) a '{escolhido.Id}'.");
+        ConsoleUi.Sucesso($"\n{copiados.Count} livro(s) adicionado(s) ao {fonte.Rotulo} de '{escolhido.Id}'.");
 
         if (!escolhido.TemConhecimento(caminhos))
         {
@@ -105,4 +112,68 @@ internal static class FluxoDeAdicaoDeLivro
                 ModoDoConfigurador.Expansao);
         }
     }
+
+    /// <summary>
+    /// Pergunta a que parte do sistema o livro pertence. É a decisão que separa "isto vale
+    /// sempre" de "isto só vale se a mesa usar este compêndio": o que entra numa expansão fica
+    /// numa pasta própria e, na criação do personagem, pode ser deixado de fora.
+    ///
+    /// <para>Expansões já existentes aparecem na lista para um segundo volume do mesmo compêndio
+    /// cair na pasta certa em vez de virar uma expansão quase homônima.</para>
+    /// </summary>
+    private static FonteDoSistema? EscolherFonte(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        var expansoes = sistema.DescobrirFontes(caminhos).Where(fonte => !fonte.EhBase).ToList();
+
+        List<OpcaoDeFonte> opcoes =
+        [
+            new("Livro do jogo base (vale sempre, para todo personagem)", FonteDoSistema.Base),
+            .. expansoes.Select(fonte => new OpcaoDeFonte($"Expansão já existente: {fonte.Id}", fonte)),
+            new("Expansão nova (vou dar o nome)", null),
+        ];
+
+        var escolha = ConsoleUi.Escolher("Este livro é do jogo base ou de uma expansão?", opcoes, opcao => opcao.Rotulo);
+
+        if (escolha is null)
+        {
+            return null;
+        }
+
+        if (escolha.Fonte is not null)
+        {
+            return escolha.Fonte;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Detalhe("O nome vira pasta e é o que você vai ver na hora de criar personagem.");
+
+        while (true)
+        {
+            var nome = ConsoleUi.LerLinha("Nome da expansão (ex.: Compendio-Arcano): ");
+
+            if (nome.Length == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                var fonte = FonteDoSistema.Criar(nome);
+
+                if (fonte.EhBase)
+                {
+                    ConsoleUi.Erro($"'{FonteDoSistema.IdDaBase}' é o nome reservado do jogo base — escolha outro.");
+                    continue;
+                }
+
+                return fonte;
+            }
+            catch (ArgumentException excecao)
+            {
+                ConsoleUi.Erro(excecao.Message);
+            }
+        }
+    }
+
+    private sealed record OpcaoDeFonte(string Rotulo, FonteDoSistema? Fonte);
 }

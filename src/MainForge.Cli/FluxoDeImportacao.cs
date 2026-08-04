@@ -1,4 +1,5 @@
-﻿using MainForge.Tools;
+﻿using MainForge.Core;
+using MainForge.Tools;
 
 namespace MainForge.Cli;
 
@@ -7,6 +8,10 @@ namespace MainForge.Cli;
 /// dos livros e a ficha de personagem editável, e o programa valida e copia tudo para
 /// Systems/ e Templates/. É o passo que antecede o Agente Configurador — sem os arquivos
 /// aqui dentro, não há o que mapear.
+///
+/// <para>Aqui não se pergunta "base ou expansão?": importar um sistema <em>é</em> trazer o jogo
+/// base dele, e os livros vão para <c>Systems/&lt;Sistema&gt;/base/</c>. Expansão precisa de um
+/// sistema já existente para se somar, e entra pela opção de adicionar livro.</para>
 /// </summary>
 internal static class FluxoDeImportacao
 {
@@ -14,6 +19,7 @@ internal static class FluxoDeImportacao
     {
         ConsoleUi.Titulo("Importar um sistema de RPG");
         ConsoleUi.Detalhe("Arraste os arquivos para a janela do console para colar o caminho. Enter vazio cancela.");
+        ConsoleUi.Detalhe("São os livros do jogo base; compêndios e expansões entram depois, pela opção 3.");
 
         var nome = ConsoleUi.LerLinha("\nNome do sistema (ex.: Aventura&Cia): ");
 
@@ -22,7 +28,7 @@ internal static class FluxoDeImportacao
             return;
         }
 
-        var livros = EntradaDeArquivos.LerPdfs("livro do sistema");
+        var livros = EntradaDeArquivos.LerPdfs("livro do jogo base");
 
         if (livros.Count == 0)
         {
@@ -38,7 +44,7 @@ internal static class FluxoDeImportacao
         }
 
         ConsoleUi.Titulo($"Confirmar importação de '{nome}'");
-        ConsoleUi.Info($"  Livros  -> Systems/{nome}/");
+        ConsoleUi.Info($"  Livros  -> Systems/{nome}/{FonteDoSistema.IdDaBase}/   (jogo base)");
 
         foreach (var livro in livros)
         {
@@ -66,7 +72,7 @@ internal static class FluxoDeImportacao
         }
 
         ConsoleUi.Sucesso($"\nSistema '{resultado.Sistema.Id}' importado.");
-        ConsoleUi.Info($"  {resultado.Livros.Count} livro(s) e a ficha '{resultado.Ficha}'.");
+        ConsoleUi.Info($"  {resultado.Livros.Count} livro(s) no {resultado.Fonte.Rotulo} e a ficha '{resultado.Ficha}'.");
         ConsoleUi.Info($"  {resultado.CamposDaFicha.Count} campo(s) preenchível(is) na ficha:");
         ConsoleUi.Detalhe($"    {string.Join(", ", resultado.CamposDaFicha)}");
 
