@@ -14,6 +14,8 @@ internal static class ConsoleUi
     {
         Console.OutputEncoding = Encoding.UTF8;
         Console.InputEncoding = Encoding.UTF8;
+
+        JanelaDoConsole.Maximizar();
     }
 
     public static void Titulo(string texto)

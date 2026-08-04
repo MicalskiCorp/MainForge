@@ -214,3 +214,26 @@ construir a interface gráfica em WPF.
 
 > PDFs precisam estar marcados como binários no Git (`.gitattributes`): com
 > `core.autocrlf=true`, a conversão de fim de linha corrompe os offsets internos do arquivo.
+O aplicativo abre maximizado, no console clássico e no Windows Terminal. Não é capricho: a tela
+inicial tem cerca de 145 colunas, o desenho da ficha em texto tem 78, e o progresso do agente
+imprime chamadas de ferramenta longas — numa janela de 80x25 tudo isso quebra linha.
+
+Achar a janela é o problema todo, e `JanelaDoConsole` resolve de dois jeitos porque são dois
+mundos. No conhost, `GetConsoleWindow` já devolve a janela de verdade. No Windows Terminal (e
+em qualquer host via ConPTY) ele devolve uma `PseudoConsoleWindow`, que é um objeto interno do
+próprio processo, sem pixel na tela — mexer nela não maximiza nada e chega a travar o console.
+O terminal também não é processo ancestral nosso, então nem pela árvore de processos se chega
+até ele. O que liga os dois é o **título**: o terminal espelha no título da janela o título do
+console da aba ativa, então o aplicativo escreve um título único, acha a janela que passou a
+exibi-lo e maximiza aquela.
+
+Um pedido só não basta: o terminal ainda está se montando quando o aplicativo começa, e o
+tamanho de inicialização que ele aplica em seguida desfazia o nosso — daí a janela abrir
+maximizada e encolher logo depois, de forma intermitente. Por isso o pedido é reafirmado por
+cinco segundos, numa linha de execução em segundo plano (o menu aparece na hora). Passado esse
+prazo, o aplicativo não mexe mais na janela: quem quiser restaurá-la na mão manda.
+
+Duas consequências: rodando dentro de um terminal que já estava aberto com outras abas, é
+aquela janela inteira que é maximizada — a janela não é nossa, nós só pedimos; e
+`MAINFORGE_SEM_MAXIMIZAR=1` desliga tudo isso.
+
