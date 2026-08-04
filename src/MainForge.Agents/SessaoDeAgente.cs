@@ -85,6 +85,7 @@ public sealed class SessaoDeAgente : IDisposable
         CancellationToken cancelamento = default)
     {
         var esperas = 0;
+        var esperasAsCegas = 0;
         var jaRecomecouSessao = false;
 
         while (true)
@@ -114,7 +115,9 @@ public sealed class SessaoDeAgente : IDisposable
                 // evita reler o livro inteiro depois da espera.
                 _jaIniciada = _idDaSessao is not null;
 
-                await EsperarPelaProximaJanelaAsync(limite, aoAcontecer, cancelamento);
+                var alvo = QuandoAJanelaVira(limite, ref esperasAsCegas);
+
+                await EsperarPelaProximaJanelaAsync(limite, alvo, aoAcontecer, cancelamento);
                 continue;
             }
 
@@ -171,18 +174,45 @@ public sealed class SessaoDeAgente : IDisposable
     }
 
     /// <summary>
+    /// Quando vale a pena tentar de novo.
+    ///
+    /// <para>Com a hora informada pelo Claude Code, é ela mais uma margem. Sem ela — ou com uma
+    /// hora que já passou, o que acontece quando a mensagem anterior era de outra janela — a
+    /// espera é às cegas, e aí cada tentativa frustrada dobra a próxima até o teto da política.
+    /// Sem esse escalonamento, uma política que nunca desiste tentaria a cada 15 minutos por
+    /// dias, e cada tentativa é um Claude Code lançado à toa.</para>
+    /// </summary>
+    private DateTimeOffset QuandoAJanelaVira(LimiteDeUso limite, ref int esperasAsCegas)
+    {
+        var agora = _agora();
+
+        if (limite.Liberacao is { } liberacao && liberacao + _politica.Margem > agora)
+        {
+            esperasAsCegas = 0;
+
+            return liberacao + _politica.Margem;
+        }
+
+        // Deslocar mais de 20 vezes estouraria o long; e muito antes disso o teto já venceu.
+        var dobras = Math.Min(esperasAsCegas++, 20);
+
+        var ticks = Math.Min(
+            _politica.EsperaPadrao.Ticks * (1L << dobras),
+            _politica.EsperaPadraoMaxima.Ticks);
+
+        return agora + TimeSpan.FromTicks(Math.Max(ticks, _politica.EsperaPadrao.Ticks));
+    }
+
+    /// <summary>
     /// Dorme até a janela de uso virar, avisando de tempos em tempos. A espera é fatiada para
     /// que o Ctrl+C do usuário seja percebido em segundos, e não só no fim.
     /// </summary>
     private async Task EsperarPelaProximaJanelaAsync(
         LimiteDeUso limite,
+        DateTimeOffset alvo,
         Action<EventoDeAgente>? aoAcontecer,
         CancellationToken cancelamento)
     {
-        var alvo = limite.Liberacao is { } liberacao
-            ? liberacao + _politica.Margem
-            : _agora() + _politica.EsperaPadrao;
-
         var total = alvo - _agora();
 
         if (total > _politica.EsperaMaxima)
@@ -236,11 +266,16 @@ public sealed class SessaoDeAgente : IDisposable
         return fala && problema;
     }
 
+    /// <summary>
+    /// Tempo em português curto. O caso de dias existe porque uma cota semanal esgotada é
+    /// esperada de verdade agora: "6d13h" se lê; "157h30", não.
+    /// </summary>
     public static string Descrever(TimeSpan tempo) => tempo switch
     {
         { TotalMinutes: < 1 } => $"{Math.Max(1, (int)tempo.TotalSeconds)}s",
         { TotalHours: < 1 } => $"{(int)tempo.TotalMinutes}min",
-        _ => $"{(int)tempo.TotalHours}h{tempo.Minutes:00}",
+        { TotalDays: < 1 } => $"{(int)tempo.TotalHours}h{tempo.Minutes:00}",
+        _ => $"{(int)tempo.TotalDays}d{tempo.Hours:00}h",
     };
 
     public void Dispose() => _configuracaoMcp.Dispose();

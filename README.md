@@ -164,10 +164,20 @@ descobre quando a janela vira (o CLI manda o instante junto da mensagem), mostra
 regressiva e retoma a **mesma conversa** quando a hora chega — o livro já lido continua no
 contexto. Ctrl+C cancela a espera; o que já foi gerado fica salvo de qualquer forma.
 
-Os limites dessa espera estão em `PoliticaDeLimiteDeUso`: por padrão, até 3 esperas por turno
-e no máximo 6 horas cada uma (uma janela curta inteira, com folga). Uma cota semanal esgotada
-estoura esse teto de propósito — aí o aplicativo avisa e devolve o controle em vez de dormir
-por dias.
+Quanto o aplicativo se dispõe a esperar está em `PoliticaDeLimiteDeUso`, e depende de haver
+alguém esperando na frente do console:
+
+- **Processar um sistema** (opção 4) usa a política `ProcessamentoLongo`: espera **quantas
+  janelas forem necessárias, pelo tempo que for** — inclusive a semanal, que só libera dias
+  depois — e retoma sozinho. Não há o que perguntar ao usuário: o consumo sai de uma cota que
+  se renova sozinha, e devolver o controle jogaria fora o contexto da conversa, fazendo a
+  próxima execução pagar de novo pela leitura do livro. É só deixar o aplicativo aberto.
+- **Criar um personagem** (opção 5) segue a política padrão — até 3 esperas de no máximo 6
+  horas. Ali o usuário está na conversa, e prendê-lo por dias não faria sentido.
+
+Quando o Claude Code não informa a hora da liberação, a espera é às cegas e vai dobrando a
+cada tentativa frustrada (15min, 30min, 1h...) até o teto da política, para não ficar batendo
+no CLI de 15 em 15 minutos só para ouvir de novo que não há cota.
 
 ## Os dois arquivos da ficha
 
@@ -201,7 +211,7 @@ a cada criação de personagem.
 
 Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
 permissões por agente (verificado com o Dungeon Master tendo `Systems/` negado de fato), a
-importação de sistemas e a interface em console, com 50 testes automatizados. O Configurador
+importação de sistemas e a interface em console, com 102 testes automatizados. O Configurador
 foi validado ponta a ponta gerando `Knowledge/SistemaTeste/`.
 
 Falta: rodar a validação ponta a ponta completa incluindo o Dungeon Master

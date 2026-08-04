@@ -12,10 +12,10 @@ internal static class ProgressoDoAgente
 {
     public static Action<EventoDeAgente> Impressora()
     {
-        // A espera por cota é avisada a cada 30 segundos, mas repetir "faltam 42min" duas vezes
-        // por minuto durante horas viraria um paredão de texto. Só imprime quando o número que
-        // o usuário lê muda de fato.
-        var ultimoAviso = -1;
+        // A espera por cota é avisada a cada 30 segundos, mas uma janela semanal esgotada faz
+        // isso por dias: imprimir cada aviso encheria o console de milhares de linhas e o
+        // usuário perderia de vista o que o agente estava fazendo antes de parar.
+        var ultimoRestante = TimeSpan.MaxValue;
 
         return evento =>
         {
@@ -33,30 +33,46 @@ internal static class ProgressoDoAgente
                     break;
 
                 case AguardandoLimiteDeUso espera:
-                    var minutos = (int)Math.Ceiling(espera.Restante.TotalMinutes);
-
-                    if (minutos == ultimoAviso)
-                    {
-                        break;
-                    }
-
-                    if (ultimoAviso < 0)
+                    if (ultimoRestante == TimeSpan.MaxValue)
                     {
                         ConsoleUi.Aviso($"\n    · {espera.Mensagem}");
                         ConsoleUi.Info(
                             "      A cota da assinatura acabou. O trabalho já feito está salvo e a conversa");
                         ConsoleUi.Info(
-                            "      continua assim que a janela virar. Ctrl+C cancela a espera.");
+                            "      continua sozinha assim que a janela virar — não precisa fazer nada.");
+                        ConsoleUi.Info(
+                            "      Ctrl+C cancela a espera; o que já foi gerado fica salvo de qualquer forma.");
+                    }
+                    else if (ultimoRestante - espera.Restante < PassoDoAviso(espera.Restante))
+                    {
+                        break;
                     }
 
-                    ultimoAviso = minutos;
+                    ultimoRestante = espera.Restante;
 
-                    var ate = espera.Ate is { } momento ? $" (por volta de {momento:HH:mm})" : "";
+                    var ate = espera.Ate is { } momento ? $" (por volta de {Momento(momento)})" : "";
                     ConsoleUi.Detalhe($"    · aguardando {SessaoDeAgente.Descrever(espera.Restante)}{ate}...");
                     break;
             }
         };
     }
+
+    /// <summary>
+    /// De quanto em quanto tempo repetir a contagem regressiva. Quanto mais longa a espera,
+    /// mais raro o aviso: numa espera de dias, uma linha por hora basta para o usuário saber que
+    /// o aplicativo continua vivo, e é o que impede a espera de sepultar o histórico do console.
+    /// </summary>
+    private static TimeSpan PassoDoAviso(TimeSpan restante) => restante switch
+    {
+        { TotalHours: > 6 } => TimeSpan.FromHours(1),
+        { TotalHours: > 1 } => TimeSpan.FromMinutes(15),
+        { TotalMinutes: > 10 } => TimeSpan.FromMinutes(5),
+        _ => TimeSpan.FromMinutes(1),
+    };
+
+    /// <summary>A data só aparece quando a janela vira noutro dia — senão é ruído.</summary>
+    private static string Momento(DateTimeOffset quando) =>
+        quando.Date == DateTimeOffset.Now.Date ? $"{quando:HH:mm}" : $"{quando:dd/MM HH:mm}";
 
     public static void Pensando(string quem) => ConsoleUi.Detalhe($"    · {quem} está pensando...");
 

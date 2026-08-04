@@ -1,4 +1,5 @@
 using MainForge.Agents;
+using MainForge.ClaudeCode;
 using MainForge.Core;
 using MainForge.Tools;
 
@@ -100,9 +101,17 @@ internal static class FluxoDoConfigurador
 
         var livrosNovos = estado.LivrosPendentes.Select(livro => livro.Arquivo).ToList();
 
-        using var sessao = new SessaoDeAgente(opcoes, DefinicaoDeAgente.Configurador, caminhos);
+        // Processar é longo e não interativo: se a cota acabar no meio, o aplicativo espera a
+        // janela virar e retoma sozinho, por mais que ela demore. Devolver o controle ao usuário
+        // aqui só jogaria fora o contexto da conversa — e com ele o livro que o agente já leu.
+        using var sessao = new SessaoDeAgente(
+            opcoes,
+            DefinicaoDeAgente.Configurador,
+            caminhos,
+            PoliticaDeLimiteDeUso.ProcessamentoLongo);
 
         ConsoleUi.Titulo("Configurador trabalhando");
+        ConsoleUi.Detalhe("Se a cota acabar, a espera pela próxima janela é automática — pode deixar rodando.");
         ConsoleUi.Detalhe("Ctrl+C interrompe — o que já foi gerado fica salvo e a próxima execução continua daqui.");
         ProgressoDoAgente.Pensando("O Configurador");
 
@@ -233,8 +242,7 @@ internal static class FluxoDoConfigurador
                 ConsoleUi.Aviso(
                     "O agente vai ler esses PDFs inteiros. É a operação mais cara do aplicativo e ela " +
                     "consome a cota da sua assinatura do Claude Code — um livro grande pode esgotar a " +
-                    "janela de uso. Se a cota acabar no meio, o aplicativo espera a próxima janela e " +
-                    "continua sozinho.");
+                    "janela de uso.");
                 break;
         }
 
@@ -283,6 +291,13 @@ internal static class FluxoDoConfigurador
         }
 
         ConsoleUi.Detalhe($"  · mais um {IndiceDeConhecimento.NomeDoArquivo} por nível, gerado automaticamente.");
+        ConsoleUi.Info("");
+        ConsoleUi.Info(
+            "Se a cota acabar no meio, o aplicativo mostra a contagem regressiva, espera a próxima " +
+            "janela abrir — mesmo que seja a semanal, daqui a dias — e retoma a mesma conversa " +
+            "sozinho, sem reler o que já leu. Basta deixar a janela do aplicativo aberta; Ctrl+C " +
+            "cancela a espera a qualquer momento.");
+
 
         if (estado.Pendentes.Count > 0)
         {

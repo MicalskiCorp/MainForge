@@ -125,6 +125,95 @@ public sealed class SessaoDeAgenteTestes : IDisposable
         Assert.Contains("continua de onde parou", excecao.Message);
     }
 
+    /// <summary>
+    /// A mesma cota semanal, sob a política do processamento de sistema: aí esperar é o
+    /// comportamento certo. Devolver o controle ao usuário custaria o contexto da conversa — o
+    /// livro que o agente já leu — e a leitura seria cobrada de novo na próxima execução.
+    /// </summary>
+    [Fact]
+    public async Task CotaSemanal_NoProcessamentoLongo_EsperaOsDiasERetomaAConversa()
+    {
+        var executor = new ExecutorFalso(
+            CotaEsgotada(_relogio.AddDays(3)),
+            Sucesso("base gerada"));
+
+        using var sessao = Criar(executor, PoliticaDeLimiteDeUso.ProcessamentoLongo);
+
+        var resposta = await sessao.EnviarAsync("processe");
+
+        Assert.Equal("base gerada", resposta);
+        Assert.True(_dormido >= TimeSpan.FromDays(3));
+        Assert.True(executor.Pedidos[1].Retomar);
+    }
+
+    /// <summary>
+    /// Três esperas seguidas passariam do teto da política padrão. No processamento de sistema
+    /// não há teto: o usuário mandou processar e a única saída é esperar quantas janelas forem
+    /// precisas.
+    /// </summary>
+    [Fact]
+    public async Task VariasJanelasEsgotadasSeguidas_NoProcessamentoLongo_ContinuaEsperando()
+    {
+        var executor = new ExecutorFalso(
+            CotaEsgotada(_relogio.AddHours(5)),
+            CotaEsgotada(_relogio.AddHours(10)),
+            CotaEsgotada(_relogio.AddHours(15)),
+            CotaEsgotada(_relogio.AddHours(20)),
+            Sucesso("base gerada"));
+
+        using var sessao = Criar(executor, PoliticaDeLimiteDeUso.ProcessamentoLongo);
+
+        Assert.Equal("base gerada", await sessao.EnviarAsync("processe"));
+        Assert.Equal(5, executor.Pedidos.Count);
+    }
+
+    /// <summary>
+    /// Sem hora informada, uma política que nunca desiste tentaria a cada 15 minutos por dias —
+    /// e cada tentativa é um Claude Code lançado à toa. O intervalo dobra até o teto.
+    /// </summary>
+    [Fact]
+    public async Task CotaEsgotadaSemHoraInformada_DobraAEsperaACadaTentativaFrustrada()
+    {
+        var executor = new ExecutorFalso(
+            CotaEsgotada(null),
+            CotaEsgotada(null),
+            CotaEsgotada(null),
+            Sucesso("pronto"));
+
+        var politica = PoliticaDeLimiteDeUso.ProcessamentoLongo with
+        {
+            EsperaPadrao = TimeSpan.FromMinutes(10),
+            EsperaPadraoMaxima = TimeSpan.FromMinutes(30),
+        };
+
+        using var sessao = Criar(executor, politica);
+        await sessao.EnviarAsync("processe");
+
+        // 10min + 20min + 30min (o teto barra o terceiro, que dobrado seria 40min).
+        Assert.Equal(TimeSpan.FromMinutes(60), _dormido);
+    }
+
+    /// <summary>
+    /// Uma hora de liberação que já passou chega quando a mensagem é de uma janela anterior.
+    /// Sem tratar isso como espera às cegas, a política que nunca desiste viraria um laço
+    /// quente: alvo no passado, espera zero, tentativa imediata, para sempre.
+    /// </summary>
+    [Fact]
+    public async Task HoraDeLiberacaoNoPassado_EsperaEmVezDeTentarNaHora()
+    {
+        var executor = new ExecutorFalso(CotaEsgotada(_relogio.AddHours(-2)), Sucesso("pronto"));
+
+        var politica = PoliticaDeLimiteDeUso.ProcessamentoLongo with
+        {
+            EsperaPadrao = TimeSpan.FromMinutes(10),
+        };
+
+        using var sessao = Criar(executor, politica);
+        await sessao.EnviarAsync("processe");
+
+        Assert.Equal(TimeSpan.FromMinutes(10), _dormido);
+    }
+
     [Fact]
     public async Task CotaEsgotadaSempre_DesisteDepoisDoMaximoDeEsperas()
     {
