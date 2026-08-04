@@ -93,6 +93,113 @@ public class FerramentasTestes : IDisposable
             PreenchedorDeFicha.ListarCampos(_caminhos, "SistemaInexistente", arquivoModelo: null));
     }
 
+    /// <summary>
+    /// A ficha de fixture só tem campo de texto. As fichas reais de RPG são metade caixas de
+    /// marcação (proficiências, magias preparadas), então o template de teste ganha uma —
+    /// montada no dicionário do PDF na mão porque o PDFsharp 6.2 lê AcroForm, mas não oferece
+    /// API para criar campo.
+    /// </summary>
+    private string PrepararTemplateComCheckBox(string nomeDoCampo = "Check Box 12")
+    {
+        var caminho = PrepararTemplate();
+
+        using (var documento = PdfSharp.Pdf.IO.PdfReader.Open(caminho, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify))
+        {
+            var campo = new PdfSharp.Pdf.PdfDictionary(documento);
+            campo.Elements["/Type"] = new PdfSharp.Pdf.PdfName("/Annot");
+            campo.Elements["/Subtype"] = new PdfSharp.Pdf.PdfName("/Widget");
+            campo.Elements["/FT"] = new PdfSharp.Pdf.PdfName("/Btn");
+            campo.Elements["/T"] = new PdfSharp.Pdf.PdfString(nomeDoCampo);
+            campo.Elements["/V"] = new PdfSharp.Pdf.PdfName("/Off");
+            campo.Elements["/AS"] = new PdfSharp.Pdf.PdfName("/Off");
+            campo.Elements["/Rect"] = new PdfSharp.Pdf.PdfRectangle(new PdfSharp.Drawing.XRect(10, 10, 12, 12));
+
+            // O par de aparências é o que dá nome aos estados: é de "/Yes" aqui que sai o
+            // CheckedName que o preenchedor aceita como valor.
+            var aparencias = new PdfSharp.Pdf.PdfDictionary(documento);
+            aparencias.Elements["/Yes"] = new PdfSharp.Pdf.PdfDictionary(documento);
+            aparencias.Elements["/Off"] = new PdfSharp.Pdf.PdfDictionary(documento);
+            var aparencia = new PdfSharp.Pdf.PdfDictionary(documento);
+            aparencia.Elements["/N"] = aparencias;
+            campo.Elements["/AP"] = aparencia;
+
+            documento.Internals.AddObject(campo);
+            var referencia = PdfSharp.Pdf.Advanced.PdfInternals.GetReference(campo)!;
+
+            documento.AcroForm!.Elements.GetArray("/Fields")!.Elements.Add(referencia);
+
+            var anotacoes = documento.Pages[0].Elements.GetArray("/Annots");
+
+            if (anotacoes is null)
+            {
+                anotacoes = new PdfSharp.Pdf.PdfArray(documento);
+                documento.Pages[0].Elements["/Annots"] = anotacoes;
+            }
+
+            anotacoes.Elements.Add(referencia);
+
+            documento.Save(caminho);
+        }
+
+        return caminho;
+    }
+
+    private static bool LerMarcacao(string caminhoPdf, string nomeDoCampo)
+    {
+        using var documento = PdfSharp.Pdf.IO.PdfReader.Open(caminhoPdf, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        return ((PdfSharp.Pdf.AcroForms.PdfCheckBoxField)documento.AcroForm!.Fields[nomeDoCampo]!).Checked;
+    }
+
+    /// <summary>
+    /// O Ficha-Mapeamento.md que o Configurador escreve descreve as caixas com o vocabulário do
+    /// próprio PDF ("Yes"/"Off"), e é isso que o Dungeon Master manda de volta. Recusar esses
+    /// valores reprovava a ficha inteira por diferença de grafia.
+    /// </summary>
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("Yes", true)]
+    [InlineData("/Yes", true)]
+    [InlineData("on", true)]
+    [InlineData("Sim", true)]
+    [InlineData("1", true)]
+    [InlineData("false", false)]
+    [InlineData("Off", false)]
+    [InlineData("No", false)]
+    [InlineData("Não", false)]
+    [InlineData("0", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void PreencherFicha_CaixaDeMarcacao_AceitaOVocabularioDoPdfEODeTrueFalse(string valor, bool esperado)
+    {
+        PrepararTemplateComCheckBox();
+
+        PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["Check Box 12"] = valor },
+            "Saida.pdf");
+
+        Assert.Equal(esperado, LerMarcacao(Path.Combine(_caminhos.SaidaPersonagens, "Saida.pdf"), "Check Box 12"));
+    }
+
+    /// <summary>
+    /// A recusa continua existindo para valor sem sentido — e a mensagem precisa dizer o que
+    /// vale, senão o agente só tem como adivinhar de novo.
+    /// </summary>
+    [Fact]
+    public void PreencherFicha_CaixaDeMarcacao_ValorSemSentido_ErroDizOQueEAceito()
+    {
+        PrepararTemplateComCheckBox();
+
+        var excecao = Assert.Throws<ErroDeFerramenta>(() => PreenchedorDeFicha.Preencher(
+            _caminhos, "Aventura&Cia", null,
+            new Dictionary<string, string> { ["Check Box 12"] = "talvez" },
+            "Saida.pdf"));
+
+        Assert.Contains("talvez", excecao.Message);
+        Assert.Contains("true/false", excecao.Message);
+        Assert.Contains("Yes", excecao.Message);
+    }
+
     [Fact]
     public void PreencherFicha_PreencheCampoDeTextoESalvaEmOutput()
     {

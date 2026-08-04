@@ -443,8 +443,19 @@ public static class IndiceDeConhecimento
     private static string Escapar(string descricao) =>
         descricao.ReplaceLineEndings(" ").Replace("|", "\\|").Trim();
 
-    /// <summary>Espaço em nome de arquivo quebra o link Markdown se não for codificado.</summary>
-    private static string Link(string nome) => Uri.EscapeDataString(nome);
+    /// <summary>
+    /// Codifica só o que quebra a sintaxe do link Markdown: espaço e parênteses.
+    ///
+    /// <para>O resto fica literal de propósito. O agente não abre estes links num navegador —
+    /// ele os usa como caminho no <c>Read</c>. Uma codificação completa transformava o sistema
+    /// "D&amp;D5e" em <c>D%26D5e</c>, um diretório que não existe em disco, e cada navegação
+    /// pelo índice raiz começava com uma leitura recusada.</para>
+    /// </summary>
+    private static string Link(string nome) => nome
+        .Replace("%", "%25")
+        .Replace(" ", "%20")
+        .Replace("(", "%28")
+        .Replace(")", "%29");
 
     private static string RelativoNormalizado(string raiz, string caminho)
     {

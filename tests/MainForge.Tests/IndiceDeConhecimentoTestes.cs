@@ -143,6 +143,34 @@ public sealed class IndiceDeConhecimentoTestes : IDisposable
         Assert.Contains("Aventura & Cia, 1a edicao.", raiz);
     }
 
+    /// <summary>
+    /// O agente usa o destino do link como caminho de <c>Read</c>, não como URL. Codificar o
+    /// nome inteiro apontava "D&amp;D5e" para <c>D%26D5e/index.md</c> — um diretório que não
+    /// existe —, e a navegação pelo índice raiz começava com uma leitura recusada.
+    /// </summary>
+    [Fact]
+    public void AtualizarIndiceRaiz_LinkDoSistemaEOCaminhoRealEmDisco()
+    {
+        Gravar("Regras.md", "# Regras");
+        IndiceDeConhecimento.Reconstruir(_caminhos, "Aventura&Cia");
+
+        var raiz = File.ReadAllText(Path.Combine(_caminhos.Conhecimento, IndiceDeConhecimento.NomeDoArquivo));
+
+        Assert.Contains("(Aventura&Cia/index.md)", raiz);
+        Assert.DoesNotContain("%26", raiz);
+    }
+
+    /// <summary>Espaço e parêntese continuam codificados: crus, quebram a sintaxe do link.</summary>
+    [Fact]
+    public void Reconstruir_NomeComEspacoEParenteses_ContinuaCodificadoNoLink()
+    {
+        Gravar("Regras Basicas (PT-BR).md", "# Regras");
+
+        IndiceDeConhecimento.Reconstruir(_caminhos, "Aventura&Cia");
+
+        Assert.Contains("(Regras%20Basicas%20%28PT-BR%29.md)", LerIndice(""));
+    }
+
     [Fact]
     public void Reconstruir_SistemaInexistente_NaoFazNadaENaoQuebra()
     {

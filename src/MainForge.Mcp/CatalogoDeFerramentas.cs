@@ -126,7 +126,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                     "arquivoModelo": { "type": "string", "description": "Nome do PDF de template dentro de Templates/<sistema>/. Só é obrigatório se houver mais de um PDF nessa pasta." },
                     "campos": {
                       "type": "object",
-                      "description": "Mapa de nome do campo do formulário PDF para o valor (texto) a preencher.",
+                      "description": "Mapa de nome do campo do formulário PDF para o valor (texto) a preencher. Campo de marcação (checkbox) aceita \"true\"/\"false\", os nomes de estado do próprio PDF (\"Yes\"/\"Off\") ou texto vazio para deixar desmarcado.",
                       "additionalProperties": { "type": "string" }
                     },
                     "nomeArquivoSaida": { "type": "string", "description": "Nome do arquivo PDF de saída (sem caminho), ex.: \"Thoradin.pdf\". Salvo em Output/Personagens/." }

@@ -110,7 +110,7 @@ public static class PreenchedorDeFicha
                 texto.Text = valor;
                 break;
             case PdfCheckBoxField caixa:
-                caixa.Checked = InterpretarBooleano(caixa.Name, valor);
+                caixa.Checked = InterpretarMarcacao(caixa, valor);
                 break;
             default:
                 campo.Value = new PdfString(valor);
@@ -118,10 +118,49 @@ public static class PreenchedorDeFicha
         }
     }
 
-    private static bool InterpretarBooleano(string nomeCampo, string valor) => valor.Trim().ToLowerInvariant() switch
+    /// <summary>
+    /// Decide se uma caixa de marcação fica marcada.
+    ///
+    /// <para>Além de true/false, aceita os nomes dos estados do próprio campo no PDF —
+    /// tipicamente <c>Yes</c> e <c>Off</c>. É o vocabulário que aparece para quem inspeciona o
+    /// AcroForm de fora, então é o que o agente escreve no Ficha-Mapeamento.md do sistema e o
+    /// que ele manda de volta na hora de preencher; recusar isso reprovava a ficha inteira por
+    /// uma diferença de grafia.</para>
+    /// </summary>
+    private static bool InterpretarMarcacao(PdfCheckBoxField caixa, string valor)
     {
-        "true" or "1" or "sim" => true,
-        "false" or "0" or "nao" or "não" => false,
-        _ => throw new ErroDeFerramenta($"Valor '{valor}' inválido para o campo de marcação '{nomeCampo}' (use true/false)."),
-    };
+        var texto = valor.Trim().TrimStart('/');
+
+        // Campo mandado vazio é campo desmarcado: é assim que a ficha em branco já está, e é o
+        // que o agente quer dizer com "deixe em branco".
+        if (texto.Length == 0)
+        {
+            return false;
+        }
+
+        if (EstadoDoCampo(caixa.CheckedName, texto))
+        {
+            return true;
+        }
+
+        if (EstadoDoCampo(caixa.UncheckedName, texto))
+        {
+            return false;
+        }
+
+        return texto.ToLowerInvariant() switch
+        {
+            "true" or "1" or "sim" or "yes" or "on" or "x" or "marcado" => true,
+            "false" or "0" or "nao" or "não" or "no" or "off" or "desmarcado" => false,
+            _ => throw new ErroDeFerramenta(
+                $"Valor '{valor}' inválido para o campo de marcação '{caixa.Name}'. " +
+                $"Use true/false, vazio para desmarcar, ou os estados deste campo no PDF: " +
+                $"'{SemBarra(caixa.CheckedName)}' e '{SemBarra(caixa.UncheckedName)}'."),
+        };
+    }
+
+    private static bool EstadoDoCampo(string? estado, string texto) =>
+        SemBarra(estado) is { Length: > 0 } nome && nome.Equals(texto, StringComparison.OrdinalIgnoreCase);
+
+    private static string SemBarra(string? nomeDeEstado) => (nomeDeEstado ?? "").TrimStart('/');
 }
