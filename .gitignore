@@ -15,7 +15,9 @@ appsettings.Local.json
 *.secrets.json
 .env
 
-# Generated character sheets and ingested content stay local by default.
-# Remove these two lines if you want to version them.
+# Permissões do Claude Code de quem desenvolve: são da máquina, não do projeto.
+.claude/settings.local.json
+
+# Generated character sheets stay local by default.
 /Output/Personagens/*
 !/Output/Personagens/.gitkeep

@@ -51,9 +51,12 @@ delas suficiente sozinha:
 | MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
 | Negações próprias | `Read(Output/**)` | `Read(Systems/**)`, `Read(Templates/**)` |
 
-Negado para os dois, sempre: `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `WebFetch`,
-`WebSearch`, `Grep`, e a leitura do código do próprio aplicativo. Cada um desses é uma saída
-de emergência pela qual um agente contornaria todas as outras restrições.
+Negado para os dois, sempre: `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `Skill`,
+`WebFetch`, `WebSearch`, `Grep`, e a leitura do código do próprio aplicativo e de `.claude/`.
+Cada um desses é uma saída de emergência pela qual um agente contornaria todas as outras
+restrições. `Skill` e `.claude/` entram na lista porque o agente roda com a raiz do projeto
+como diretório de trabalho: sem a negação, ele enxergaria as skills de quem desenvolve o
+aplicativo, que descrevem justamente o código-fonte que ele não pode ler.
 
 ## Estrutura da solução
 
@@ -72,6 +75,10 @@ MainForge.sln
 ├── tests/MainForge.Tests
 ├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução), sobre o
 │                                 sistema fictício "SistemaTeste"
+├── .claude/skills/       -> skills do Claude Code de quem desenvolve o projeto (não dos agentes
+│                            do aplicativo, que têm `Skill` negada). `estrutura-do-projeto` é o
+│                            mapa de onde cada coisa mora e é obrigatória antes de mexer nele
+├── CLAUDE.md             -> instruções de projeto para o Claude Code de desenvolvimento
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
 ├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema
 ├── Templates/            -> fichas em PDF editável, um subdiretório por sistema
