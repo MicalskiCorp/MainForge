@@ -69,11 +69,20 @@ if (Test-Path $zip) {
 
 Compress-Archive -Path (Join-Path $pacote "*") -DestinationPath $zip
 
+# A soma de verificação vai junto do release. Enquanto o executável não for assinado, é ela que
+# permite a quem baixa provar que o arquivo é exatamente o que este script gerou — e ela cobre o
+# que a assinatura cobriria: adulteração no caminho entre o build e a máquina de quem usa.
+$hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
+$arquivoDoHash = "$zip.sha256"
+Set-Content -Path $arquivoDoHash -Value "$hash  $(Split-Path $zip -Leaf)" -Encoding ascii -NoNewline
+
 $tamanho = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 
 Write-Host ""
 Write-Host "Pronto: $zip ($tamanho MB)" -ForegroundColor Green
-Write-Host "Publique-o como asset de um release no GitHub — o README aponta para o release mais recente."
+Write-Host "SHA-256: $hash" -ForegroundColor Green
+Write-Host "Publique os dois arquivos (.zip e .sha256) como assets de um release no GitHub."
+
 
 
 

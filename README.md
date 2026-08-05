@@ -37,9 +37,34 @@ processamento também passa por essa conferência antes de gastar qualquer cota.
 
 **Requisitos e limites, sem letra miúda:** o pacote é **Windows x64** (em Windows ARM roda por
 emulação; não há build para macOS nem Linux, porque o aplicativo usa a API de console do Windows
-e as fontes de `C:\Windows\Fonts` para desenhar a ficha). Por ser um executável baixado da
-internet e ainda **sem assinatura digital**, o SmartScreen pode avisar na primeira execução —
-"Mais informações" › "Executar assim mesmo".
+e as fontes de `C:\Windows\Fonts` para desenhar a ficha).
+
+### O Windows vai avisar na primeira execução
+
+Vai aparecer *"O Windows protegeu o seu PC"*. Clique em **Mais informações** › **Executar assim
+mesmo**.
+
+O aviso não diz que o programa é malicioso — diz que o **publicador é desconhecido**. O
+SmartScreen acumula confiança por certificado de assinatura de código, e certificado custa
+algumas centenas de dólares por ano, com a chave obrigatoriamente em hardware. Este é um projeto
+livre e gratuito: preferimos manter assim e ser francos sobre o aviso a repassar esse custo de
+alguma forma.
+
+No lugar da assinatura, você tem como **verificar por conta própria** que o arquivo é exatamente
+o que a compilação pública gerou. Todo release traz o `.sha256` ao lado do `.zip`:
+
+```powershell
+Get-FileHash .\MainForge-0.1.0-win-x64.zip -Algorithm SHA256
+```
+
+O valor precisa bater com o do arquivo `.sha256` e com o que está nas notas do release. Se bater,
+o arquivo não foi adulterado entre o servidor do GitHub e o seu disco — que é justamente contra o
+que a assinatura protegeria.
+
+Se quiser desconfiar de tudo, o caminho mais forte é não baixar nada: **compile do código-fonte**
+(veja [Rodando](#rodando)). O binário do release sai do mesmo `publicar.ps1` que você roda na sua
+máquina, por um
+[workflow público](.github/workflows/release.yml) — não há passo manual entre o código e o `.zip`.
 
 Quem for compilar do código-fonte encontra as instruções em [Rodando](#rodando), e
 `./publicar.ps1` gera o mesmo pacote do release.

@@ -49,9 +49,19 @@ jobs:
         shell: pwsh
         run: ./publicar.ps1 -Versao ${{ steps.versao.outputs.valor }}
 
+      - name: Soma de verificação
+        id: hash
+        shell: pwsh
+        run: |
+          $arquivo = "publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip"
+          $hash = (Get-FileHash $arquivo -Algorithm SHA256).Hash.ToLower()
+          "valor=$hash" >> $env:GITHUB_OUTPUT
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip
+          files: |
+            publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip
+            publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip.sha256
           generate_release_notes: true
           body: |
             Baixe o `.zip`, descompacte onde quiser e rode `MainForge.Cli.exe`.
@@ -59,3 +69,16 @@ jobs:
             É preciso ter o [Claude Code](https://claude.com/product/claude-code) instalado e
             logado na sua conta — o aplicativo usa a **sua** assinatura e não guarda credencial
             nenhuma. A opção 7 do menu confere as dependências e ajuda a instalar o que faltar.
+
+            **O Windows vai avisar na primeira execução** ("Mais informações" › "Executar assim
+            mesmo"): o executável não é assinado digitalmente, e o SmartScreen avisa sobre
+            publicador desconhecido. Para conferir que o arquivo é exatamente o que este
+            workflow gerou, compare a soma de verificação:
+
+            ```
+            SHA-256: ${{ steps.hash.outputs.valor }}
+            ```
+
+            ```powershell
+            Get-FileHash .\MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip -Algorithm SHA256
+            ```
