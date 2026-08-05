@@ -30,3 +30,8 @@ appsettings.Local.json
 !/Systems/SistemaTeste/
 /Templates/*/
 !/Templates/SistemaTeste/
+
+# O texto extraído dos PDFs é derivado e regerável (e, vindo de um livro comercial, tem o mesmo
+# problema de direitos que o PDF). A regra acima já o exclui nos sistemas do usuário; esta cobre
+# o SistemaTeste, que é versionado.
+/Systems/**/_texto/

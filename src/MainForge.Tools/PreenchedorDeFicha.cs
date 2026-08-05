@@ -90,6 +90,8 @@ public static class PreenchedorDeFicha
                 $"Campos disponíveis: {string.Join(", ", formulario.Fields.Names)}.");
         }
 
+        ExigirRedesenhoDosCampos(formulario);
+
         Directory.CreateDirectory(caminhos.SaidaPersonagens);
         documento.Save(caminhoSaida);
 
@@ -102,12 +104,31 @@ public static class PreenchedorDeFicha
         return LocalizadorDeFichaModelo.Resolver(diretorioModelo, arquivoModelo);
     }
 
+    /// <summary>
+    /// Manda o leitor de PDF redesenhar os campos a partir do valor e da aparência declarada no
+    /// próprio formulário (<c>/DA</c>), em vez de exibir o desenho que o PdfSharp gerou.
+    ///
+    /// <para><b>Por que é preciso.</b> Ao gravar um campo, o PdfSharp monta um fluxo de aparência
+    /// (<c>/AP</c>) com o texto inteiro num único operador <c>Tj</c> — inclusive as quebras de
+    /// linha, que dentro de uma string de PDF não quebram nada. Num campo de várias linhas
+    /// (traços de personalidade, ideais, história) o resultado é tudo espremido numa linha só,
+    /// cortada na borda do quadro; e a cor e o corpo de letra pedidos pelo <c>/DA</c> do template
+    /// se perdem, porque o desenho gerado usa preto num tamanho fixo. Era isso que fazia o campo
+    /// aparecer errado até alguém clicar nele e editá-lo: o clique faz o leitor refazer o desenho,
+    /// que é justamente o que esta marca pede que ele faça na abertura.</para>
+    ///
+    /// <para>O <c>/AP</c> do PdfSharp continua no arquivo de propósito — é o que um visualizador
+    /// que ignore a marca vai mostrar, e um texto espremido ainda é melhor que campo vazio.</para>
+    /// </summary>
+    private static void ExigirRedesenhoDosCampos(PdfAcroForm formulario) =>
+        formulario.Elements.SetBoolean("/NeedAppearances", true);
+
     private static void PreencherCampo(PdfAcroField campo, string valor)
     {
         switch (campo)
         {
             case PdfTextField texto:
-                texto.Text = valor;
+                texto.Text = NormalizarQuebrasDeLinha(texto, valor);
                 break;
             case PdfCheckBoxField caixa:
                 caixa.Checked = InterpretarMarcacao(caixa, valor);
@@ -116,6 +137,22 @@ public static class PreenchedorDeFicha
                 campo.Value = new PdfString(valor);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Ajusta as quebras de linha ao tipo do campo.
+    ///
+    /// <para>Num campo de várias linhas elas viram <c>\r</c> sozinho, que é a forma canônica de
+    /// separador de linha num valor de AcroForm — a que o próprio Acrobat grava e a que todo
+    /// leitor entende ao redesenhar o campo. Num campo de uma linha só, quebra de linha não tem
+    /// como ser exibida: virar espaço deixa o texto legível, enquanto deixá-la passar renderiza um
+    /// caractere de controle ou corta o resto do valor.</para>
+    /// </summary>
+    private static string NormalizarQuebrasDeLinha(PdfTextField campo, string valor)
+    {
+        var linhas = valor.ReplaceLineEndings("\n");
+
+        return campo.MultiLine ? linhas.Replace("\n", "\r") : linhas.Replace('\n', ' ');
     }
 
     /// <summary>

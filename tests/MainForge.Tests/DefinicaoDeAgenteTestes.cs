@@ -55,17 +55,27 @@ public class DefinicaoDeAgenteTestes
 
     /// <summary>
     /// Estas são as saídas de emergência do guardrail: com qualquer uma delas concedida, um
-    /// agente contorna todas as outras restrições. Bash rodaria qualquer comando, Write/Edit
-    /// escreveriam fora do confinamento em C#, Task abriria um subagente sem nenhuma dessas
-    /// regras, e Skill carregaria instruções de <c>.claude/skills/</c> — que são do
+    /// agente contorna todas as outras restrições. Bash e PowerShell rodariam qualquer comando,
+    /// Write/Edit escreveriam fora do confinamento em C#, Task abriria um subagente sem nenhuma
+    /// dessas regras, e Skill carregaria instruções de <c>.claude/skills/</c> — que são do
     /// desenvolvimento do aplicativo e falam do código dele.
+    ///
+    /// <para><c>PowerShell</c> está na lista por ter acontecido: o Configurador rodando no
+    /// Windows recebeu essa ferramenta e usou <c>Get-ChildItem</c> e <c>Select-String</c> para
+    /// fazer o que a negação de <c>Bash</c> e de <c>Grep</c> proibia. Negar um shell só não nega
+    /// shell nenhum.</para>
     /// </summary>
     [Theory]
     [InlineData("Bash")]
+    [InlineData("PowerShell")]
+    [InlineData("BashOutput")]
+    [InlineData("KillShell")]
     [InlineData("Write")]
     [InlineData("Edit")]
     [InlineData("Task")]
     [InlineData("Skill")]
+    [InlineData("SlashCommand")]
+    [InlineData("Grep")]
     public void NenhumAgentePodeUsarFerramentaQueContornaOGuardrail(string ferramenta)
     {
         foreach (var agente in TodosOsAgentes)
@@ -101,6 +111,40 @@ public class DefinicaoDeAgenteTestes
         {
             Assert.Contains("Read(.claude/**)", agente.FerramentasNegadas());
         }
+    }
+
+    /// <summary>
+    /// Numa máquina sem o poppler, o <c>Read</c> do Claude Code não abre PDF nenhum — ele
+    /// rasteriza as páginas com o <c>pdftoppm</c>. Deixar a ferramenta disponível ali só faz o
+    /// agente gastar um turno por livro para receber "pdftoppm is not installed"; o texto já
+    /// convertido em <c>_texto/</c> é o caminho inteiro.
+    /// </summary>
+    [Fact]
+    public void ConfiguradorSemAbrirPdf_NegaOsLivrosMasNaoAFichaEmBranco()
+    {
+        var agente = DefinicaoDeAgente.ConfiguradorSemAbrirPdf(DefinicaoDeAgente.Configurador);
+
+        var negadas = agente.FerramentasNegadas();
+
+        Assert.Contains("Read(Systems/**/*.pdf)", negadas);
+
+        // A ficha em Templates/ não tem versão em texto e é lida justamente pelo leiaute.
+        Assert.DoesNotContain("Read(Templates/**)", negadas);
+
+        // O texto convertido mora dentro de Systems/, e continua legível.
+        Assert.DoesNotContain("Read(Systems/**)", negadas);
+
+        // E as negações de sempre continuam valendo.
+        Assert.Contains("Bash", negadas);
+        Assert.Contains("Read(Output/**)", negadas);
+    }
+
+    [Fact]
+    public void ConfiguradorSemAbrirPdf_NaoMexeNoAgentePadrao()
+    {
+        DefinicaoDeAgente.ConfiguradorSemAbrirPdf(DefinicaoDeAgente.Configurador);
+
+        Assert.DoesNotContain("Read(Systems/**/*.pdf)", DefinicaoDeAgente.Configurador.FerramentasNegadas());
     }
 
     /// <summary>

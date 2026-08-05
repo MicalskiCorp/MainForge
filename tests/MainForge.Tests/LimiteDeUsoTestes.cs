@@ -15,9 +15,30 @@ public class LimiteDeUsoTestes
     [InlineData("error_during_execution: 5-hour limit reached for your plan")]
     [InlineData("API Error: 429 rate limit exceeded")]
     [InlineData("Weekly limit reached — upgrade to increase your usage limit")]
+    [InlineData("success: You've hit your session limit · resets 4:10pm (America/Sao_Paulo)")]
     public void Detectar_ReconheceAsFormasConhecidasDeCotaEsgotada(string texto)
     {
         Assert.NotNull(DetectorDeLimiteDeUso.Detectar(texto));
+    }
+
+    /// <summary>
+    /// A forma que custou um processamento inteiro: o CLI mandou <c>is_error</c> com o subtipo
+    /// <c>success</c> e a frase "session limit", que a lista de sinais não reconhecia. O
+    /// aplicativo desistiu com "Falha ao processar" em vez de esperar a janela virar — e como o
+    /// turno morreu ali, os livros já lidos ficaram registrados como pendentes.
+    /// </summary>
+    [Fact]
+    public void Detectar_LimiteDeSessao_ViraEsperaComHoraDaLiberacao()
+    {
+        var limite = DetectorDeLimiteDeUso.Detectar(
+            "success: You've hit your session limit · resets 4:10pm (America/Sao_Paulo)");
+
+        Assert.NotNull(limite);
+        Assert.Equal(16, limite!.Liberacao!.Value.Hour);
+        Assert.Equal(10, limite.Liberacao!.Value.Minute);
+
+        // O subtipo do CLI não vai para a tela: "success" ao lado de "acabou a cota" só confunde.
+        Assert.StartsWith("You've hit your session limit", limite.Mensagem);
     }
 
     [Theory]

@@ -16,7 +16,8 @@ usuário.
   - Ler PDF é do `Read` embutido do Claude Code, que lê PDF nativamente. **Não dá para
     fazer isso por MCP**: uma ferramenta MCP que devolva o PDF faz o Claude Code gravar o
     binário em disco e passar só o caminho ao modelo, que não consegue lê-lo. Isso foi
-    verificado, não deduzido.
+    verificado, não deduzido. Mesmo assim, o caminho normal deixou de ser o PDF: veja
+    [Os livros viram texto antes](#os-livros-viram-texto-antes).
   - Manipular AcroForm (listar e preencher os campos da ficha) e escrever em `Knowledge/`
     ficam em C#, expostos por um servidor MCP local (`MainForge.Mcp`, stdio, lançado pelo
     próprio Claude Code).
@@ -48,15 +49,30 @@ delas suficiente sozinha:
 | | Configurador | Dungeon Master |
 | --- | --- | --- |
 | Embutidas | `Read`, `Glob` | `Read`, `Glob` |
-| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
+| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
 | Negações próprias | `Read(Output/**)` | `Read(Systems/**)`, `Read(Templates/**)` |
 
-Negado para os dois, sempre: `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `Skill`,
-`WebFetch`, `WebSearch`, `Grep`, e a leitura do código do próprio aplicativo e de `.claude/`.
-Cada um desses é uma saída de emergência pela qual um agente contornaria todas as outras
-restrições. `Skill` e `.claude/` entram na lista porque o agente roda com a raiz do projeto
-como diretório de trabalho: sem a negação, ele enxergaria as skills de quem desenvolve o
-aplicativo, que descrevem justamente o código-fonte que ele não pode ler.
+Negado para os dois, sempre: `Bash`, `PowerShell`, `BashOutput`, `KillShell`, `Write`, `Edit`,
+`NotebookEdit`, `Task`, `Agent`, `Skill`, `SlashCommand`, `WebFetch`, `WebSearch`, `Grep`, e a
+leitura do código do próprio aplicativo e de `.claude/`. Cada um desses é uma saída de
+emergência pela qual um agente contornaria todas as outras restrições. `Skill`, `SlashCommand` e
+`.claude/` entram na lista porque o agente roda com a raiz do projeto como diretório de
+trabalho: sem a negação, ele enxergaria as skills de quem desenvolve o aplicativo, que descrevem
+justamente o código-fonte que ele não pode ler.
+
+> `PowerShell` entrou na lista depois de acontecer: no Windows, o Configurador recebeu essa
+> ferramenta e usou `Get-ChildItem` e `Select-String` para listar pastas e procurar texto —
+> exatamente o que as negações de `Bash` e `Grep` existiam para impedir. **Negar um shell não
+> nega shell nenhum**: negação por nome é uma lista, e lista se esquece. É por isso que a camada
+> que realmente contém a escrita é o servidor MCP em C#, e não esta tabela.
+
+Buscar dentro dos livros continua sendo necessário, e é por isso que existe
+`procurar_no_texto_dos_livros`: ela faz o que a `Grep` faria, mas alcançando só
+`Systems/<Sistema>/**/_texto/`, com o confinamento aplicado em C#.
+
+Duas negações são **da execução**, não do agente, e existem para não oferecer caminho que não
+leva a lugar nenhum: as fontes que a mesa não usa (`DungeonMasterLimitadoA`) e, quando falta o
+poppler, os PDFs dos livros (`ConfiguradorSemAbrirPdf`).
 
 ## Estrutura da solução
 
@@ -81,7 +97,8 @@ MainForge.sln
 ├── CLAUDE.md             -> instruções de projeto para o Claude Code de desenvolvimento
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
 ├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema e, dentro
-│                            dele, um por fonte: base/ e uma pasta por expansão
+│                            dele, um por fonte: base/ e uma pasta por expansão. Cada fonte
+│                            ganha um _texto/ com a versão Markdown dos PDFs dela
 ├── Templates/            -> fichas em PDF editável, um subdiretório por sistema
 ├── Knowledge/            -> base de conhecimento em Markdown, gerada pelo Configurador,
 │                            com a mesma divisão por fonte, um index.md por nível e o
@@ -142,10 +159,11 @@ Menu do aplicativo:
 3. **Adicionar livro a um sistema** — pergunta se o livro é do jogo base ou de uma expansão (e,
    se for de uma expansão nova, o nome dela). O livro entra em `Systems/<Sistema>/<fonte>/` e o
    Configurador lê **só ele**, somando o conteúdo à base que já está pronta.
-4. **Processar um sistema** (Agente Configurador) — lê os livros **e a ficha em branco** e
-   gera `Knowledge/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais cara em
-   tokens; pede confirmação. Se já houver progresso, pergunta se é para continuar de onde parou
-   ou recomeçar do zero.
+4. **Processar um sistema** (Agente Configurador) — converte os livros para texto (veja
+   [Os livros viram texto antes](#os-livros-viram-texto-antes)), lê os livros **e a ficha em
+   branco** e gera `Knowledge/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais
+   cara em tokens; pede confirmação. Se já houver progresso, pergunta se é para continuar de
+   onde parou ou recomeçar do zero — e se não houver nada pendente, recusa e explica por quê.
 5. **Criar um personagem** (Agente Dungeon Master) — pergunta primeiro quais expansões aquela
    mesa usa e depois é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
    `/sair` encerra a conversa.
@@ -187,6 +205,65 @@ Um sistema importado por uma versão anterior do aplicativo tem tudo solto na pa
 A opção 1 do menu oferece movê-lo para `base/` (e o processamento exige isso antes de começar):
 é só mover arquivo, sem reler livro nenhum.
 
+## Os livros viram texto antes
+
+Ler PDF é a operação mais cara do aplicativo, e é cara duas vezes: o Claude Code **rasteriza**
+as páginas pedidas e manda imagens ao modelo. Um manual de 300 páginas esgota a janela da
+assinatura antes de o agente ter visto metade dele — e, quando o `pdftoppm` (do poppler) não
+está instalado, ler um intervalo de páginas nem funciona: falha com
+`pdftoppm is not installed`.
+
+Por isso, antes de o Configurador começar, o aplicativo converte cada PDF de `Systems/` em
+Markdown e grava o resultado em `Systems/<Sistema>/<fonte>/_texto/<Livro>.md`. O agente passa a
+ler o `.md`: é o mesmo conteúdo por uma fração dos tokens, e o livro inteiro cabe na janela.
+
+Quem converte são dois, nesta ordem:
+
+1. o [markitdown](https://github.com/microsoft/markitdown), da Microsoft, se estiver instalado —
+   sai melhor em tabelas e listas;
+2. o **extrator interno** ([ExtratorDeTextoDePdf](src/MainForge.Tools/ExtratorDeTextoDePdf.cs),
+   sobre [PdfPig](https://github.com/UglyToad/PdfPig)), que vem junto com o aplicativo e cobre a
+   maioria dos livros de regras. Ele também assume quando o markitdown falha num livro
+   específico.
+
+O segundo existe porque o primeiro não pode ser obrigatório: numa máquina sem Python **e** sem
+poppler — um Windows recém-instalado —, o agente ficava sem nenhum caminho até o livro, com o
+texto inexistente e o `Read` do PDF falhando. Uma dependência que o usuário precisa instalar não
+pode ser o único caminho para a operação central do produto. Na prática, os três livros de Aventura&Cia
+(19 MB de PDF) viraram 2,6 MB de texto em **6 segundos**, sem instalar nada.
+
+- A conversão roda **na máquina do usuário**, não gasta cota nenhuma, e fica em cache: só é
+  refeita quando o PDF muda (data e tamanho). Apagar o `.md` manda convertê-lo de novo.
+- O texto de uma fonte fica **dentro daquela fonte**, pela mesma razão de todo o resto: o
+  conteúdo de um compêndio não pode acabar valendo numa mesa que não o escolheu.
+- Achar uma regra no meio de dezenas de milhares de linhas é com `procurar_no_texto_dos_livros`
+  (arquivo, linha e seção), seguida de um `Read` com `offset` naquele ponto. Ler o arquivo de
+  ponta a ponta seria trocar um desperdício por outro.
+- O extrator interno marca cada página (`## Página 42`), o que dá à busca uma seção para mostrar
+  e permite ao agente citar de onde tirou a regra.
+- **Sem poppler, a leitura dos PDFs de `Systems/` é negada ao agente naquela execução**
+  (`Read(Systems/**/*.pdf)`), e o prompt diz por quê. Não é capricho: enquanto ela ficava
+  disponível, o agente tentava conferir no PDF a tabela que a conversão embaralhou — o que seria
+  o certo se funcionasse — e gastava um turno por livro para receber
+  `pdftoppm is not installed`. Negar o caminho quebrado é o que transforma isso numa recusa
+  imediata. Com poppler instalado, a leitura continua liberada como recurso extra.
+- Livro **digitalizado** (páginas que são só imagem) não tem texto para extrair; o aplicativo
+  diz isso em vez de gravar um arquivo vazio, e aí o PDF volta a ser o caminho (com poppler).
+- A ficha em branco de `Templates/` **não** é convertida: ali o que interessa é o leiaute, que é
+  justamente o que a conversão perde.
+
+**Instalar o markitdown é opcional**, e só melhora a qualidade da conversão:
+
+```
+pip install "markitdown[pdf]"        # precisa de Python 3.10+
+uv tool install "markitdown[pdf]"    # alternativa, se você usa uv
+```
+
+O aplicativo procura, nesta ordem: `MAINFORGE_MARKITDOWN` (caminho do executável), `markitdown`
+no PATH, `python -m markitdown` e, por último, `uvx markitdown`. Depois de instalar, apague a
+pasta `_texto/` do sistema para os livros serem convertidos de novo — o cache não sabe que
+apareceu um conversor melhor.
+
 ## A base de conhecimento é indexada
 
 Cada pasta de `Knowledge/` ganha um `index.md` com uma linha sobre cada arquivo e cada
@@ -209,11 +286,31 @@ e a execução seguinte pergunta o que falta em vez de reler o livro inteiro.
 
 Três consequências práticas:
 
+- **Sistema sem nada pendente não é processado de novo.** Quando todo arquivo do plano existe e
+  todo livro já foi incorporado, o menu deixa de oferecer "continuar de onde parou" — não há
+  onde parar, e aceitar isso mandaria o agente reler os livros para reescrever a base que já
+  estava pronta. Sobra o "recomeçar do zero", que é uma escolha explícita.
+- **Livro só conta como incorporado se a fonte dele ganhou conteúdo naquela execução.** Sem essa
+  condição, um compêndio que o agente não conseguiu nem abrir (PDF sem o poppler que o `Read` do
+  Claude Code exige) era marcado como lido por não haver mais nada pendente no plano antigo — e o
+  sistema ficava "pronto" com uma expansão que ninguém leu. Quando o registro já está nesse
+  estado, a tela de processamento avisa quais fontes constam como lidas sem nada em `Knowledge/`
+  e oferece relê-las. Ela **aponta** em vez de corrigir sozinha porque mover um livro de fonte
+  produz exatamente a mesma imagem, e nesse caso reler seria desperdício.
+- Um livro só é marcado como incorporado quando a execução **termina**. Se ela morrer no último
+  passo (era o que acontecia com a cota esgotada não reconhecida), o livro fica registrado como
+  pendente mesmo tendo sido lido inteiro. Nesse caso o menu oferece marcá-lo como incorporado
+  sem chamar agente nenhum — a decisão é do usuário porque, do lado do disco, "livro por ler" e
+  "livro lido cujo registro não fechou" são indistinguíveis.
 - Apagar um `.md` na mão basta para mandá-lo ser regerado: o disco é a verdade final, e o
   registro é reconciliado com ele antes de cada execução.
 - Trocar um PDF em `Systems/<Sistema>/<fonte>/` (mesmo nome, conteúdo diferente) marca aquele
-  livro como não lido de novo, porque tamanho e data de modificação mudaram. Só **mover** um
-  livro de fonte não: o conteúdo é o mesmo, muda apenas o destino dele em `Knowledge/`.
+  livro como não lido de novo. Quem decide isso é o **conteúdo**, por SHA-256, e não a data do
+  arquivo: copiar a pasta do projeto, restaurar um backup ou deixar uma sincronização de nuvem
+  passar por cima muda a data sem trocar nada dentro do livro, e isso já marcou como "não lidos"
+  os dois livros de uma base que estava inteira. O hash só é calculado quando data ou tamanho
+  mudam — no caso comum, nenhum arquivo chega a ser aberto. **Mover** um livro de fonte também
+  não obriga a relê-lo: o conteúdo é o mesmo, muda apenas o destino dele em `Knowledge/`.
 - Uma base que já existia antes de tudo isso é **adotada**: a opção 1 do menu oferece gerar
   índice e registro a partir do que está em disco (de graça, sem agente). Os `.md` presentes
   entram como prontos e os livros, como ainda não lidos — que é a leitura honesta de uma base
@@ -222,7 +319,15 @@ Três consequências práticas:
 
 ## Quando a cota da assinatura acaba
 
-Cota esgotada não é tratada como erro. O aplicativo reconhece a mensagem do Claude Code,
+Cota esgotada não é tratada como erro — desde que seja reconhecida. A detecção é por texto
+porque é o que o CLI oferece (não há código de erro dedicado), e cada forma nova que ele
+inventa precisa entrar em `DetectorDeLimiteDeUso.Sinais`. Foi o caso de
+`You've hit your session limit · resets 4:10pm`, que passava batido: o processamento morria com
+"Falha ao processar" no lugar da contagem regressiva, e o que o agente já tinha lido ia junto.
+Deixar de reconhecer um limite custa um processamento inteiro; reconhecer um que não existe
+custa uma espera que o Ctrl+C desfaz — por isso a lista é frouxa de propósito.
+
+O aplicativo reconhece a mensagem do Claude Code,
 descobre quando a janela vira (o CLI manda o instante junto da mensagem), mostra a contagem
 regressiva e retoma a **mesma conversa** quando a hora chega — o livro já lido continua no
 contexto. Ctrl+C cancela a espera; o que já foi gerado fica salvo de qualquer forma.
@@ -256,6 +361,32 @@ Antes de gerar o PDF, o Dungeon Master preenche esse desenho com os dados do per
 mostra na conversa, para o usuário conferir e confirmar. Assim o usuário vê a ficha como ela
 vai ficar sem precisar abrir o PDF, e o mapeamento fica registrado em vez de ser redescoberto
 a cada criação de personagem.
+
+### O PDF preenchido pede para ser redesenhado
+
+A ficha salva em `Output/Personagens/` sai com `/NeedAppearances` marcado, que manda o leitor de
+PDF desenhar cada campo a partir do valor e do `/DA` do próprio formulário.
+
+Sem isso, o que aparece é o desenho que o PdfSharp gera ao gravar o campo — e ele põe o valor
+inteiro num único operador de texto, quebras de linha incluídas, que dentro de uma string de PDF
+não quebram nada. Num campo de várias linhas (traços de personalidade, ideais, história) o
+resultado é tudo espremido numa linha só, cortada na borda do quadro, na cor errada. Era por
+isso que esses campos só ficavam certos depois de alguém clicar neles e editá-los: o clique faz
+o leitor refazer o desenho — que é exatamente o que a marca pede que ele faça ao abrir o
+arquivo.
+
+## Créditos
+
+- [markitdown](https://github.com/microsoft/markitdown) — Microsoft, licença MIT. Converte os
+  livros em PDF para Markdown antes do processamento. É uma dependência **externa e opcional**:
+  o aplicativo o executa se ele estiver instalado na máquina, e não redistribui nem embute
+  código dele.
+- [PdfPig](https://github.com/UglyToad/PdfPig) — licença Apache-2.0. Extrai o texto dos PDFs
+  quando o markitdown não está disponível.
+- [PDFsharp](https://www.pdfsharp.net/) — licença MIT. Lê e preenche os campos AcroForm das
+  fichas.
+- [Claude Code](https://claude.com/product/claude-code) — Anthropic. Executa os agentes com a
+  assinatura do usuário.
 
 ## Limitações desta abordagem
 

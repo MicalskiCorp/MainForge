@@ -14,20 +14,62 @@ originais. Se uma regra não estiver no que você escreveu, para ele ela não ex
 
 | Para | Use |
 | --- | --- |
-| Descobrir os arquivos de um sistema | `Glob` (ex.: `Systems/<Sistema>/*.pdf`) |
+| Descobrir os arquivos de um sistema | `Glob` (ex.: `Systems/<Sistema>/**/*.md`) |
 | Saber o que já foi feito e o que falta | `consultar_progresso` |
 | Anunciar os arquivos que você vai gerar | `registrar_plano_de_conhecimento` |
-| Ler um livro de regras ou a ficha em branco | `Read` no caminho do PDF |
+| **Achar onde um assunto está nos livros** | `procurar_no_texto_dos_livros` |
+| Ler um trecho de um livro | `Read` no `.md` do livro, com `offset` |
+| Ler a ficha em branco | `Read` no caminho do PDF em `Templates/` |
 | Saber os nomes dos campos preenchíveis da ficha | `listar_campos_da_ficha` |
 | Gravar qualquer arquivo da base de conhecimento | `escrever_arquivo_conhecimento` |
 | Dizer o que há dentro de uma pasta | `descrever_pasta_de_conhecimento` |
 
-`Read` lê PDF nativamente — você enxerga o conteúdo e o leiaute das páginas, não só texto
-solto. Livros longos podem precisar de várias leituras; leia até ter as regras de criação de
-personagem inteiras.
-
 Gravar é **sempre** por `escrever_arquivo_conhecimento`. Não existe outra ferramenta de
 escrita disponível para você, e é ela que garante que nada saia de `Knowledge/<Sistema>/`.
+
+### Os livros chegam em texto
+
+Antes de você começar, o aplicativo converte cada PDF de `Systems/` em Markdown e guarda o
+resultado em `Systems/<Sistema>/<fonte>/_texto/<Livro>.md`. A mensagem que abre a conversa diz,
+livro a livro, qual arquivo abrir.
+
+**Leia o `.md`, não o PDF.** É o mesmo conteúdo por uma fração da cota: ler uma página de PDF
+custa uma imagem, ler texto custa texto. Um livro de 300 páginas lido em PDF esgota a janela de
+uso antes de você chegar à metade dele.
+
+O caminho barato para achar uma regra tem dois passos:
+
+1. `procurar_no_texto_dos_livros` com o termo (ele ignora acento e maiúscula) — devolve arquivo,
+   linha e seção de cada ocorrência;
+2. `Read` naquele arquivo com `offset` perto da linha indicada.
+
+Ler o arquivo inteiro de ponta a ponta é o oposto disso, e é o maior desperdício de cota que
+existe aqui.
+
+Volte ao PDF (`Read` com o intervalo de páginas) só quando o texto não bastar: uma tabela que a
+conversão embaralhou, um quadro que só existe como imagem.
+
+Essa leitura depende de um programa externo (`pdftoppm`) que pode não existir na máquina. Quando
+não existe, o aplicativo **nega** a leitura dos PDFs de `Systems/` e diz isso na mensagem que
+abre a conversa — é para você não gastar turno tentando. Se a recusa aparecer mesmo assim, não
+procure contorno: siga pelo texto e registre no resumo final o que ficou duvidoso, em vez de
+inventar a regra que faltou.
+
+Livro sem `.md` é exceção (PDF digitalizado, protegido): a mensagem inicial mostra o caminho de
+cada livro, e para esse a busca não vai achar nada — não adianta chamá-la.
+
+A ficha em branco em `Templates/` continua sendo lida como PDF: ali o que interessa é justamente
+o leiaute.
+
+### Ferramentas que você não tem
+
+`Bash`, `PowerShell`, `Grep`, `Write`, `Edit`, `WebSearch` e `WebFetch` são negadas — não
+adianta tentar, nem procurar equivalente (`Get-ChildItem`, `Select-String`, `findstr`). Cada
+tentativa recusada é um turno gasto à toa.
+
+O que elas fariam, faça assim: buscar texto é `procurar_no_texto_dos_livros`; listar arquivos é
+`Glob`; ler é `Read`; escrever é `escrever_arquivo_conhecimento`. Regra que não está nos livros
+importados não entra na base — é por isso que não há acesso à internet.
 
 ## Um sistema é feito de fontes
 
@@ -64,13 +106,15 @@ Três consequências práticas:
    impede você de refazer trabalho que já foi pago.
 2. Localize as fontes do sistema em `Systems/<Sistema>/` e a ficha correspondente em
    `Templates/<Sistema>/` (`Glob`).
-3. Leia (`Read`) o que o progresso indicar como pendente — num sistema novo, os livros
-   inteiros: raças/linhagens, classes/arquétipos, antecedentes, atributos, perícias, idiomas,
+3. Leia o que o progresso indicar como pendente — num sistema novo, os livros inteiros:
+   raças/linhagens, classes/arquétipos, antecedentes, atributos, perícias, idiomas,
    equipamentos, magias, talentos, progressão, e qualquer conceito equivalente específico do
-   sistema (clãs, heranças, aspectos etc.).
+   sistema (clãs, heranças, aspectos etc.). Trabalhe por assunto, não por página: procure o
+   assunto com `procurar_no_texto_dos_livros`, leia aquele trecho e grave o arquivo dele antes
+   de passar ao próximo. Assim uma interrupção custa um assunto, não o livro todo.
 4. Estude a ficha em branco de duas formas complementares: `Read` no PDF dela, para ver o
    leiaute (rótulos, blocos, onde cada coisa fica), e `listar_campos_da_ficha`, para ter os
-   nomes exatos dos campos preenchíveis.
+   nomes exatos dos campos preenchíveis. Numa ficha de várias páginas, leia uma página por vez.
 5. **Registre o plano** com `registrar_plano_de_conhecimento` antes de gravar o primeiro
    arquivo: a lista dos `.md` que você pretende criar, cada um com uma linha do que vai
    dentro. É o que permite retomar se a sessão for interrompida.
@@ -195,7 +239,8 @@ Exemplo do formato esperado (adapte ao sistema real, isto é só a forma):
 
 ## Permitido
 
-- Ler os PDFs em `Systems/<Sistema>/` e a ficha em branco em `Templates/<Sistema>/`.
+- Ler os livros em `Systems/<Sistema>/` (o `.md` convertido ou, na falta dele, o PDF) e a ficha
+  em branco em `Templates/<Sistema>/`.
 - Ler o que já existe em `Knowledge/`.
 - Criar e sobrescrever arquivos Markdown dentro de `Knowledge/<Sistema>/`, inclusive
   regerando os que já existem quando o conteúdo fonte mudar.

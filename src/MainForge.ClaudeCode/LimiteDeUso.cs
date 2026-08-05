@@ -27,18 +27,30 @@ public sealed record LimiteDeUso(string Mensagem, DateTimeOffset? Liberacao);
 /// </summary>
 public static partial class DetectorDeLimiteDeUso
 {
+    /// <summary>
+    /// As formas em que o Claude Code já disse "acabou a cota". A lista é frouxa de propósito:
+    /// deixar de reconhecer uma delas custa um processamento inteiro (o aplicativo desiste em
+    /// vez de esperar), enquanto reconhecer demais custa uma espera à toa que o Ctrl+C desfaz.
+    ///
+    /// <para><c>session limit</c> entrou depois de o CLI responder
+    /// <c>success: You've hit your session limit · resets 4:10pm</c> — sem ela o processamento
+    /// morria como erro comum, e o usuário via "Falha ao processar" no lugar da contagem
+    /// regressiva.</para>
+    /// </summary>
     private static readonly string[] Sinais =
     [
-        "usage limit reached",
-        "usage limit exceeded",
+        // Cobre "usage limit reached", "usage limit exceeded" e "upgrade to increase your usage limit".
+        "usage limit",
+        "session limit",
         "rate limit",
         "rate_limit",
         "quota exceeded",
         "limite de uso",
         "5-hour limit",
+        "5 hour limit",
         "weekly limit",
         "out of usage",
-        "upgrade to increase your usage limit",
+        "hit your limit",
     ];
 
     /// <summary>
@@ -137,6 +149,10 @@ public static partial class DetectorDeLimiteDeUso
             primeira = primeira[..barra].Trim();
         }
 
+        // O 'subtype' do CLI vem grudado na frente ("success: ", "error_during_execution: ") e
+        // não diz nada a quem está lendo — no caso do "success" chega a contradizer a mensagem.
+        primeira = Subtipo().Replace(primeira, "", 1);
+
         const int limite = 200;
 
         return primeira.Length <= limite ? primeira : string.Concat(primeira.AsSpan(0, limite), "...");
@@ -144,6 +160,9 @@ public static partial class DetectorDeLimiteDeUso
 
     [GeneratedRegex(@"\|\s*(\d{10,13})")]
     private static partial Regex Epoca();
+
+    [GeneratedRegex(@"^[a-z_]+:\s+", RegexOptions.IgnoreCase)]
+    private static partial Regex Subtipo();
 
     [GeneratedRegex(@"(?:resets?|try again|retry)\D{0,20}?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", RegexOptions.IgnoreCase)]
     private static partial Regex Horario();

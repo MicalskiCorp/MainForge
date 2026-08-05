@@ -9,6 +9,9 @@ Systems/
         base/               <- o jogo base; toda mesa usa
             Livro-Base.pdf
             Regras-Gerais.pdf
+            _texto/         <- gerado: os mesmos livros em Markdown
+                Livro-Base.md
+                Regras-Gerais.md
         Compendio-Arcano/           <- uma expansão; a mesa escolhe se usa
             Compendio-Arcano.pdf
     Cronicas-do-Norte/
@@ -42,3 +45,17 @@ sistemas oferece movê-los para `base/`. É só mover arquivo — nenhum livro �
 
 O Agente Configurador lê esta pasta e gera a estrutura correspondente em `Knowledge/<Sistema>/`.
 Ele nunca modifica os PDFs originais.
+
+## A pasta `_texto/`
+
+Antes de cada processamento, o aplicativo converte os PDFs daquela fonte para Markdown e grava o
+resultado em `_texto/`. É o que o Configurador lê: o mesmo conteúdo por uma fração da cota da
+assinatura, porque ler uma página de PDF custa uma imagem e ler texto custa texto.
+
+Converte quem estiver disponível: o [markitdown](https://github.com/microsoft/markitdown), se
+instalado, ou o extrator interno do aplicativo, que não exige instalação nenhuma.
+
+É conteúdo **derivado** — daí o underscore, como no `_estado-do-processamento.json`. Não edite e
+não se preocupe em versioná-lo: apagar um `.md` de lá só faz o próximo processamento convertê-lo
+de novo, e trocar o PDF já obriga a isso sozinho. Se você instalar o markitdown depois, apague a
+pasta para os livros serem reconvertidos por ele.

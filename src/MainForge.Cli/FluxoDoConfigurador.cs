@@ -77,12 +77,28 @@ internal static class FluxoDoConfigurador
         ConsoleUi.Titulo($"Processar '{escolhido.Id}'");
         MostrarSituacao(estado, pdfs, escolhido.DiretorioSistemas(caminhos));
 
-        var modo = EscolherModo(estado, modoSugerido);
+        var fontesSemConhecimento = estado.FontesSemConhecimento(caminhos);
+        var escolha = EscolherModo(estado, modoSugerido, fontesSemConhecimento);
 
-        if (modo is null)
+        if (escolha is null)
         {
             return;
         }
+
+        if (escolha.Acao == AcaoDoProcessamento.MarcarLivrosComoIncorporados)
+        {
+            MarcarLivrosComoIncorporados(estado);
+            return;
+        }
+
+        if (escolha.Acao == AcaoDoProcessamento.RelerFontesSemConhecimento)
+        {
+            var devolvidos = estado.MarcarFontesComoPendentes(fontesSemConhecimento);
+            ConsoleUi.Info("");
+            ConsoleUi.Info($"Marcados para releitura: {string.Join(", ", devolvidos)}.");
+        }
+
+        var modo = escolha.Modo;
 
         if (modo == ModoDoConfigurador.Completo && estado.TemHistorico)
         {
@@ -92,7 +108,7 @@ internal static class FluxoDoConfigurador
 
         estado.Salvar();
 
-        if (!Confirmar(modo.Value, estado))
+        if (!Confirmar(modo, estado))
         {
             return;
         }
@@ -104,15 +120,35 @@ internal static class FluxoDoConfigurador
             return;
         }
 
+        var todosOsLivrosTemTexto = await ConverterLivrosParaTextoAsync(caminhos, escolhido, cancelamento);
+
+        // Abrir PDF depende do poppler, que pode não existir aqui. Quando não existe e todo livro
+        // tem texto, a leitura do PDF é um caminho que só leva a erro: negá-la poupa do agente um
+        // turno por livro descobrindo isso na marra.
+        var podeAbrirPdf = LeituraDePdf.Disponivel();
+        var agente = podeAbrirPdf || !todosOsLivrosTemTexto
+            ? DefinicaoDeAgente.Configurador
+            : DefinicaoDeAgente.ConfiguradorSemAbrirPdf(DefinicaoDeAgente.Configurador);
+
+        if (!podeAbrirPdf)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Aviso($"O {LeituraDePdf.ProgramaNecessario} (poppler) não está instalado nesta máquina.");
+            ConsoleUi.Detalhe(LeituraDePdf.ComoInstalar);
+        }
+
         var livrosNovos = estado.LivrosPendentes.Select(livro => livro.Arquivo).ToList();
-        var mensagem = PromptDoConfigurador.Montar(modo.Value, escolhido, estado);
+        var conhecimentoAntes = ContarConhecimentoPorFonte(caminhos, escolhido);
+        // Depois da conversão, de propósito: o prompt manda ler o .md de cada livro que passou a
+        // ter um.
+        var mensagem = PromptDoConfigurador.Montar(modo, escolhido, estado, caminhos, podeAbrirPdf);
 
         // Processar é longo e não interativo: se a cota acabar no meio, o aplicativo espera a
         // janela virar e retoma sozinho, por mais que ela demore. Devolver o controle ao usuário
         // aqui só jogaria fora o contexto da conversa — e com ele o livro que o agente já leu.
         using var sessao = new SessaoDeAgente(
             opcoes,
-            DefinicaoDeAgente.Configurador,
+            agente,
             caminhos,
             PoliticaDeLimiteDeUso.ProcessamentoLongo);
 
@@ -142,7 +178,87 @@ internal static class FluxoDoConfigurador
         ConsoleUi.Info("");
         ConsoleUi.Info(resposta);
 
-        Concluir(caminhos, escolhido, livrosNovos);
+        Concluir(caminhos, escolhido, livrosNovos, conhecimentoAntes);
+    }
+
+    /// <summary>
+    /// Converte os livros em Markdown antes de o agente começar.
+    ///
+    /// <para><b>Por que aqui e não na importação.</b> É no início do processamento que a conversão
+    /// paga: o agente que vai ler os livros é o que começa logo a seguir, e converter tudo na
+    /// importação faria o usuário esperar por um livro que ele talvez nunca processe. Como o
+    /// resultado fica em cache, a segunda execução não paga de novo.</para>
+    ///
+    /// <para>Com markitdown instalado, é ele quem converte; sem ele, o extrator interno. O
+    /// aplicativo não depende de instalação nenhuma para chegar ao texto do livro — quando
+    /// dependia, uma máquina sem Python e sem poppler não conseguia processar coisa alguma.</para>
+    /// </summary>
+    /// <returns>
+    /// Se todos os livros do sistema têm texto utilizável — é o que decide se o agente ainda
+    /// precisa do PDF.
+    /// </returns>
+    private static async Task<bool> ConverterLivrosParaTextoAsync(
+        CaminhosDoProjeto caminhos,
+        SistemaRpg sistema,
+        CancellationToken cancelamento)
+    {
+        var programa = ConversorDeLivros.Localizar();
+
+        ConsoleUi.Titulo("Convertendo os livros para texto");
+        ConsoleUi.Info("Ler texto custa uma fração do que custa ler as páginas do PDF. Roda na sua máquina,");
+        ConsoleUi.Info("não gasta cota, e o resultado fica salvo para as próximas execuções.");
+
+        ConsoleUi.Detalhe(programa is null
+            ? $"Conversor: {ConversorDeLivros.ExtratorInterno} (markitdown não encontrado)."
+            : $"Conversor: markitdown ({programa.Descricao}).");
+
+        var resultados = await ConversorDeLivros.ConverterSistemaAsync(
+            caminhos,
+            sistema.Id,
+            programa,
+            livro => ConsoleUi.Detalhe($"  · convertendo {livro}... (pode levar alguns minutos)"),
+            cancelamento);
+
+        var algumPeloExtratorInterno = false;
+
+        foreach (var resultado in resultados)
+        {
+            switch (resultado.Situacao)
+            {
+                case SituacaoDaConversao.Convertido:
+                    algumPeloExtratorInterno |= resultado.Conversor == ConversorDeLivros.ExtratorInterno;
+                    ConsoleUi.Sucesso($"  · {resultado.Livro} -> {resultado.CaminhoDoTexto}");
+
+                    if (resultado.Detalhe is { Length: > 0 } aviso)
+                    {
+                        ConsoleUi.Detalhe($"    ({aviso}; o texto saiu pelo {resultado.Conversor})");
+                    }
+
+                    break;
+
+                case SituacaoDaConversao.JaEstavaPronto:
+                    ConsoleUi.Detalhe($"  · {resultado.Livro} — texto já em dia");
+                    break;
+
+                default:
+                    ConsoleUi.Aviso($"  · {resultado.Livro} — não deu para converter: {resultado.Detalhe}");
+                    ConsoleUi.Detalhe(
+                        "    O agente vai tentar ler o PDF deste livro, o que custa bem mais cota e " +
+                        "depende do poppler (pdftoppm) instalado.");
+                    break;
+            }
+        }
+
+        // O markitdown lida melhor com tabela e estrutura, e um livro de regras é cheio das duas.
+        // Só vale sugerir depois de a conversão ter funcionado: como um convite a melhorar, não
+        // como pré-requisito de algo que acabou de acontecer sem ele.
+        if (algumPeloExtratorInterno && programa is null)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Detalhe(ConversorDeLivros.ComoInstalar);
+        }
+
+        return resultados.Count > 0 && resultados.All(r => r.Situacao != SituacaoDaConversao.Falhou);
     }
 
     /// <summary>
@@ -233,19 +349,32 @@ internal static class FluxoDoConfigurador
     }
 
     /// <summary>
-    /// Decide entre continuar e recomeçar. Só pergunta quando as duas opções fazem sentido —
-    /// num sistema nunca processado não há o que continuar.
+    /// Decide entre continuar, recomeçar e as saídas que não chamam o agente. Só pergunta quando
+    /// mais de uma opção faz sentido — num sistema nunca processado não há o que continuar.
     /// </summary>
-    private static ModoDoConfigurador? EscolherModo(EstadoDoProcessamento estado, ModoDoConfigurador? sugerido)
+    private static OpcaoDeModo? EscolherModo(
+        EstadoDoProcessamento estado,
+        ModoDoConfigurador? sugerido,
+        IReadOnlyList<string> fontesSemConhecimento)
     {
         if (!estado.TemHistorico)
         {
-            return ModoDoConfigurador.Completo;
+            return new OpcaoDeModo("", ModoDoConfigurador.Completo);
+        }
+
+        AvisarSobreFontesSemConhecimento(fontesSemConhecimento);
+
+        // Sistema inteiro pronto: processar de novo só relê livro e regrava arquivo pronto. A
+        // única saída que continua fazendo sentido é a que o usuário pede de propósito — mais a
+        // releitura de uma fonte que consta como lida sem ter gerado nada.
+        if (estado.EstaCompleto)
+        {
+            return SoRecomecarDoZero(estado, fontesSemConhecimento);
         }
 
         if (sugerido == ModoDoConfigurador.Expansao && estado.LivrosPendentes.Count > 0)
         {
-            return ModoDoConfigurador.Expansao;
+            return new OpcaoDeModo("", ModoDoConfigurador.Expansao);
         }
 
         var opcoes = new List<OpcaoDeModo>
@@ -253,6 +382,11 @@ internal static class FluxoDoConfigurador
             new($"Continuar de onde parou ({estado.Resumo()})", ModoDoConfigurador.Retomada),
             new("Recomeçar do zero (relê os livros e regera tudo — caro)", ModoDoConfigurador.Completo),
         };
+
+        if (fontesSemConhecimento.Count > 0)
+        {
+            opcoes.Insert(0, OpcaoDeReler(fontesSemConhecimento));
+        }
 
         if (estado.LivrosPendentes.Count > 0)
         {
@@ -262,10 +396,111 @@ internal static class FluxoDoConfigurador
                 ModoDoConfigurador.Expansao));
         }
 
-        return ConsoleUi.Escolher("Como processar?", opcoes, opcao => opcao.Rotulo)?.Modo;
+        // Plano inteiro gerado e livro ainda marcado como pendente é ambíguo: tanto pode ser um
+        // compêndio recém-adicionado (ler) quanto uma execução que gerou tudo e morreu antes de
+        // fechar o registro (marcar). Quem sabe qual dos dois é o usuário, então a escolha é dele
+        // — e a segunda saída não custa cota nenhuma.
+        if (estado.LivrosPendentes.Count > 0 && estado.Pendentes.Count == 0)
+        {
+            opcoes.Insert(1, new OpcaoDeModo(
+                $"Marcar esses {estado.LivrosPendentes.Count} livro(s) como já incorporados — a base " +
+                "já cobre o conteúdo deles (não gasta cota)",
+                ModoDoConfigurador.Retomada,
+                AcaoDoProcessamento.MarcarLivrosComoIncorporados));
+        }
+
+        return ConsoleUi.Escolher("Como processar?", opcoes, opcao => opcao.Rotulo);
     }
 
-    private sealed record OpcaoDeModo(string Rotulo, ModoDoConfigurador Modo);
+    /// <summary>
+    /// A tela de um sistema que não tem mais nada pendente. Ela existe para dizer não: o menu
+    /// anterior oferecia "continuar de onde parou" mesmo sem haver onde parar, e aceitar isso
+    /// mandava o agente reler os livros para reescrever a base que já estava pronta.
+    /// </summary>
+    private static OpcaoDeModo? SoRecomecarDoZero(
+        EstadoDoProcessamento estado,
+        IReadOnlyList<string> fontesSemConhecimento)
+    {
+        ConsoleUi.Info("");
+        ConsoleUi.Sucesso($"Nada a processar: {estado.Resumo()}, e todos os livros já foram incorporados.");
+        ConsoleUi.Info("Rodar o Configurador agora só faria ele reler os livros e regravar o que já existe.");
+        ConsoleUi.Detalhe("Para acrescentar conteúdo, use a opção 3 do menu (adicionar livro ao sistema).");
+
+        var opcoes = new List<OpcaoDeModo>
+        {
+            new("Recomeçar do zero mesmo assim (apaga o registro, relê os livros — caro)",
+                ModoDoConfigurador.Completo),
+        };
+
+        if (fontesSemConhecimento.Count > 0)
+        {
+            opcoes.Insert(0, OpcaoDeReler(fontesSemConhecimento));
+        }
+
+        return ConsoleUi.Escolher("Mesmo assim?", opcoes, opcao => opcao.Rotulo);
+    }
+
+    /// <summary>
+    /// Uma fonte consta como lida e não tem nada em <c>Knowledge/</c>. É o rastro de um livro que
+    /// o agente não conseguiu abrir — em geral um PDF que o <c>Read</c> do Claude Code não
+    /// rasterizou por falta do poppler. Também é o que se vê depois de mover um livro de fonte,
+    /// e aí não há o que fazer; por isso o aplicativo aponta e deixa a decisão com quem sabe.
+    /// </summary>
+    private static void AvisarSobreFontesSemConhecimento(IReadOnlyList<string> fontes)
+    {
+        if (fontes.Count == 0)
+        {
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Aviso(
+            $"Fonte(s) marcada(s) como lida(s), mas sem nada em Knowledge/: {string.Join(", ", fontes)}.");
+        ConsoleUi.Info("Ou o livro não pôde ser lido na execução anterior, ou ele só mudou de pasta e o");
+        ConsoleUi.Info("conteúdo dele continua na fonte antiga — nesse segundo caso, não há o que fazer.");
+    }
+
+    private static OpcaoDeModo OpcaoDeReler(IReadOnlyList<string> fontes) => new(
+        $"Reler os livros de {string.Join(", ", fontes)} — a base não tem nada dessa(s) fonte(s)",
+        ModoDoConfigurador.Expansao,
+        AcaoDoProcessamento.RelerFontesSemConhecimento);
+
+    /// <summary>
+    /// Acerta o registro sem chamar agente: os livros passam a constar como já incorporados à
+    /// base. É a contrapartida de o registro só ser fechado no fim de uma execução — uma que
+    /// gerou tudo e morreu no último passo deixa livro pendente que já foi lido de fato.
+    /// </summary>
+    private static void MarcarLivrosComoIncorporados(EstadoDoProcessamento estado)
+    {
+        var livros = estado.LivrosPendentes.Select(livro => livro.Arquivo).ToList();
+
+        estado.MarcarLivrosConcluidos();
+        estado.Salvar();
+
+        ConsoleUi.Info("");
+        ConsoleUi.Sucesso($"{livros.Count} livro(s) marcado(s) como já incorporados:");
+
+        foreach (var livro in livros)
+        {
+            ConsoleUi.Detalhe($"  · {livro}");
+        }
+
+        ConsoleUi.Info("Nenhum token gasto. Se faltar conteúdo de algum deles, apague os .md correspondentes");
+        ConsoleUi.Info("em Knowledge/ ou recomece o sistema do zero.");
+    }
+
+    /// <summary>O que fazer com o sistema — nem toda escolha do menu chama o agente.</summary>
+    private enum AcaoDoProcessamento
+    {
+        Processar,
+        MarcarLivrosComoIncorporados,
+        RelerFontesSemConhecimento,
+    }
+
+    private sealed record OpcaoDeModo(
+        string Rotulo,
+        ModoDoConfigurador Modo,
+        AcaoDoProcessamento Acao = AcaoDoProcessamento.Processar);
 
     private static bool Confirmar(ModoDoConfigurador modo, EstadoDoProcessamento estado)
     {
@@ -305,7 +540,11 @@ internal static class FluxoDoConfigurador
     /// Fecha o ciclo: reindexa, atualiza o registro e conta ao usuário o que saiu — inclusive
     /// o que ficou faltando, que é o que ele vai retomar da próxima vez.
     /// </summary>
-    private static void Concluir(CaminhosDoProjeto caminhos, SistemaRpg sistema, IReadOnlyList<string> livrosLidos)
+    private static void Concluir(
+        CaminhosDoProjeto caminhos,
+        SistemaRpg sistema,
+        IReadOnlyList<string> livrosLidos,
+        IReadOnlyDictionary<string, int> conhecimentoAntes)
     {
         var diretorioConhecimento = sistema.DiretorioConhecimento(caminhos);
 
@@ -320,11 +559,16 @@ internal static class FluxoDoConfigurador
         var estado = EstadoDoProcessamento.Carregar(caminhos, sistema.Id);
         estado.SincronizarComDisco();
 
-        // Livro só conta como lido quando o agente terminou o turno sem deixar pendência: se
-        // parou no meio, ainda há conteúdo dele que não virou arquivo nenhum.
+        // Livro só conta como lido quando o agente terminou o turno sem deixar pendência **e** a
+        // fonte dele ganhou conteúdo nesta execução.
+        //
+        // A segunda condição existe porque a primeira, sozinha, já mentiu: com o plano antigo
+        // completo, um compêndio que o agente não conseguiu nem abrir (PDF sem o poppler que o
+        // Read do Claude Code exige) foi marcado como lido sem ter gerado um único arquivo. O
+        // sistema ficava "pronto" com uma expansão que ninguém leu.
         if (estado.Pendentes.Count == 0)
         {
-            estado.MarcarLivrosConcluidos(livrosLidos);
+            estado.MarcarLivrosConcluidos(LivrosQueRenderamConteudo(estado, livrosLidos, conhecimentoAntes, caminhos, sistema));
         }
 
         estado.Salvar();
@@ -364,6 +608,59 @@ internal static class FluxoDoConfigurador
                 $"Falta a ficha editável em Templates/{sistema.Id}/ — sem ela o Dungeon Master " +
                 "consegue criar o personagem, mas não gerar o PDF final.");
         }
+    }
+
+    /// <summary>
+    /// Dos livros que esta execução ia ler, quais deixaram rastro: os de uma fonte cuja pasta em
+    /// <c>Knowledge/</c> tem mais arquivos agora do que tinha antes de o agente começar.
+    ///
+    /// <para>Contar por fonte, e não por arquivo, é o que dá para afirmar sem depender de o modelo
+    /// dizer de qual livro veio cada gravação. Erra para o lado seguro: quando dois livros da
+    /// mesma fonte são lidos juntos, os dois contam; quando nada saiu, nenhum conta.</para>
+    /// </summary>
+    private static IReadOnlyList<string> LivrosQueRenderamConteudo(
+        EstadoDoProcessamento estado,
+        IReadOnlyList<string> livrosLidos,
+        IReadOnlyDictionary<string, int> conhecimentoAntes,
+        CaminhosDoProjeto caminhos,
+        SistemaRpg sistema)
+    {
+        var depois = ContarConhecimentoPorFonte(caminhos, sistema);
+
+        return
+        [
+            .. livrosLidos.Where(nome =>
+            {
+                var fonte = estado.Livros
+                    .FirstOrDefault(livro => livro.Arquivo.Equals(nome, StringComparison.OrdinalIgnoreCase))
+                    ?.Fonte ?? FonteDoSistema.IdDaBase;
+
+                return depois.GetValueOrDefault(fonte) > conhecimentoAntes.GetValueOrDefault(fonte);
+            }),
+        ];
+    }
+
+    /// <summary>Quantos arquivos de conhecimento cada fonte tem agora (o índice não conta).</summary>
+    private static IReadOnlyDictionary<string, int> ContarConhecimentoPorFonte(
+        CaminhosDoProjeto caminhos,
+        SistemaRpg sistema)
+    {
+        var raiz = sistema.DiretorioConhecimento(caminhos);
+
+        if (!Directory.Exists(raiz))
+        {
+            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return Directory
+            .EnumerateDirectories(raiz)
+            .ToDictionary(
+                pasta => new DirectoryInfo(pasta).Name,
+                pasta => Directory
+                    .EnumerateFiles(pasta, "*.md", SearchOption.AllDirectories)
+                    .Count(arquivo => !Path.GetFileName(arquivo)
+                        .Equals(IndiceDeConhecimento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase)),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private static void RelatarInterrupcao(CaminhosDoProjeto caminhos, SistemaRpg sistema)

@@ -37,29 +37,60 @@ internal enum ModoDoConfigurador
 /// </summary>
 internal static class PromptDoConfigurador
 {
+    /// <param name="podeAbrirPdf">
+    /// Se o <c>Read</c> consegue abrir PDF nesta máquina (depende do poppler). Quando não
+    /// consegue, o prompt diz isso: sem o aviso, o agente gasta um turno por livro descobrindo
+    /// sozinho que o caminho não existe.
+    /// </param>
     public static string Montar(
         ModoDoConfigurador modo,
         SistemaRpg sistema,
-        EstadoDoProcessamento estado) => modo switch
+        EstadoDoProcessamento estado,
+        CaminhosDoProjeto caminhos,
+        bool podeAbrirPdf = true)
+    {
+        var mensagem = modo switch
         {
-            ModoDoConfigurador.Retomada => Retomada(sistema, estado),
-            ModoDoConfigurador.Expansao => Expansao(sistema, estado),
-            _ => Completo(sistema, estado),
+            ModoDoConfigurador.Retomada => Retomada(sistema, estado, caminhos),
+            ModoDoConfigurador.Expansao => Expansao(sistema, estado, caminhos),
+            _ => Completo(sistema, estado, caminhos),
         };
 
-    private static string Completo(SistemaRpg sistema, EstadoDoProcessamento estado) => new StringBuilder()
+        return podeAbrirPdf ? mensagem : mensagem + SemLeituraDePdf();
+    }
+
+    /// <summary>
+    /// O aviso de que o PDF está fora de alcance nesta execução. Vem no fim da mensagem, depois
+    /// das instruções, porque é uma restrição do ambiente e não parte da tarefa.
+    /// </summary>
+    private static string SemLeituraDePdf() => new StringBuilder()
+        .AppendLine()
+        .AppendLine("IMPORTANTE — nesta máquina o Read NÃO abre PDF: falta o programa que o Claude Code usa")
+        .AppendLine("para rasterizar as páginas (pdftoppm, do poppler). A leitura dos PDFs de Systems/ está")
+        .AppendLine("negada por isso, e vai ser recusada se você tentar.")
+        .AppendLine()
+        .AppendLine("O texto convertido é o caminho completo, não um atalho: trabalhe só por ele. Se uma")
+        .AppendLine("tabela vier embaralhada na conversão, reconstitua o que der pelo texto ao redor e diga")
+        .AppendLine("no resumo final o que ficou duvidoso — não é para tentar o PDF, e não é para inventar")
+        .AppendLine("a regra que faltou.")
+        .ToString();
+
+    private static string Completo(SistemaRpg sistema, EstadoDoProcessamento estado, CaminhosDoProjeto caminhos) =>
+        new StringBuilder()
         .AppendLine($"Processe o sistema '{sistema.Id}' do zero.")
         .AppendLine()
-        .AppendLine($"1. Leia os livros em Systems/{sistema.Id}/ e a ficha em branco em Templates/{sistema.Id}/.")
+        .AppendLine($"1. Leia os livros do sistema (lista abaixo) e a ficha em branco em Templates/{sistema.Id}/.")
         .AppendLine("2. Registre o plano de arquivos com registrar_plano_de_conhecimento antes de gravar o primeiro.")
         .AppendLine($"3. Gere a base em Knowledge/{sistema.Id}/, respeitando a separação por fonte descrita abaixo,")
         .AppendLine("   e descreva cada pasta com descrever_pasta_de_conhecimento.")
         .AppendLine()
+        .Append(OndeLerCadaLivro(sistema, estado, caminhos))
         .Append(SeparacaoPorFonte(sistema, estado))
         .AppendLine("Ao terminar, resuma o que criou e o que ficou de fora.")
         .ToString();
 
-    private static string Retomada(SistemaRpg sistema, EstadoDoProcessamento estado) => new StringBuilder()
+    private static string Retomada(SistemaRpg sistema, EstadoDoProcessamento estado, CaminhosDoProjeto caminhos) =>
+        new StringBuilder()
         .AppendLine($"Continue o processamento do sistema '{sistema.Id}', que foi interrompido.")
         .AppendLine()
         .AppendLine("NÃO recomece do zero e NÃO regrave arquivos que já estão prontos: reescrever o que já")
@@ -69,6 +100,7 @@ internal static class PromptDoConfigurador
         .AppendLine("Situação registrada:")
         .AppendLine()
         .AppendLine(estado.DescreverParaOAgente())
+        .Append(OndeLerCadaLivro(sistema, estado, caminhos))
         .Append(SeparacaoPorFonte(sistema, estado))
         .AppendLine("Passos:")
         .AppendLine($"1. Comece pelos index.md em Knowledge/{sistema.Id}/ para ver o que a base já cobre.")
@@ -80,7 +112,7 @@ internal static class PromptDoConfigurador
         .AppendLine("Ao terminar, resuma o que completou e o que ainda ficou faltando.")
         .ToString();
 
-    private static string Expansao(SistemaRpg sistema, EstadoDoProcessamento estado)
+    private static string Expansao(SistemaRpg sistema, EstadoDoProcessamento estado, CaminhosDoProjeto caminhos)
     {
         var texto = new StringBuilder()
             .AppendLine($"O sistema '{sistema.Id}' já tem base de conhecimento, e há livros dele que ainda")
@@ -99,12 +131,13 @@ internal static class PromptDoConfigurador
 
             foreach (var livro in livros)
             {
-                texto.AppendLine($"    - Systems/{sistema.Id}/{fonte.Id}/{livro}");
+                texto.AppendLine($"    - {CaminhoDeLeitura(sistema, fonte.Id, livro, caminhos)}");
             }
         }
 
         return texto
             .AppendLine()
+            .Append(OndeLerCadaLivro(sistema, estado, caminhos))
             .Append(SeparacaoPorFonte(sistema, estado))
             .AppendLine("Regras desta operação:")
             .AppendLine($"- Comece pelos index.md de Knowledge/{sistema.Id}/: eles dizem o que a base já cobre.")
@@ -123,6 +156,77 @@ internal static class PromptDoConfigurador
             .AppendLine(estado.DescreverParaOAgente())
             .AppendLine("Ao terminar, resuma o que foi acrescentado e de qual fonte veio cada coisa.")
             .ToString();
+    }
+
+    /// <summary>
+    /// Diz, livro a livro, qual arquivo abrir: o Markdown extraído do PDF quando ele existe, o
+    /// próprio PDF quando não.
+    ///
+    /// <para>É o bloco que faz a conversão valer alguma coisa. O agente não tem como adivinhar
+    /// que existe uma versão em texto do livro — <c>Glob</c> em <c>*.pdf</c> não a mostra — e ler
+    /// o PDF quando há Markdown ao lado é pagar em cota por páginas rasterizadas para chegar ao
+    /// mesmo conteúdo.</para>
+    ///
+    /// <para>A lista vem do registro de livros, e não do disco, porque é ela que o resto do prompt
+    /// usa: livro que o progresso não conhece não seria lido de qualquer forma.</para>
+    /// </summary>
+    private static string OndeLerCadaLivro(
+        SistemaRpg sistema,
+        EstadoDoProcessamento estado,
+        CaminhosDoProjeto caminhos)
+    {
+        if (estado.Livros.Count == 0)
+        {
+            return "";
+        }
+
+        var texto = new StringBuilder()
+            .AppendLine("Onde ler cada livro:")
+            .AppendLine();
+
+        var algumTexto = false;
+
+        foreach (var livro in estado.Livros)
+        {
+            var caminho = CaminhoDeLeitura(sistema, livro.Fonte, livro.Arquivo, caminhos);
+
+            algumTexto |= caminho.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+            texto.AppendLine($"- [{livro.Fonte}] {caminho}");
+        }
+
+        texto.AppendLine();
+
+        if (algumTexto)
+        {
+            texto
+                .AppendLine("Os arquivos .md acima são o texto extraído dos PDFs. Leia sempre o .md em vez do PDF:")
+                .AppendLine("é o mesmo conteúdo por uma fração da cota, e é o que permite ler o livro inteiro sem")
+                .AppendLine("esgotar a janela de uso. Use procurar_no_texto_dos_livros para achar em que linha está")
+                .AppendLine("o assunto e depois Read com offset naquele ponto, em vez de ler o arquivo de ponta a")
+                .AppendLine("ponta. Só volte ao PDF quando precisar do leiaute (uma tabela que o texto embaralhou,")
+                .AppendLine("uma ilustração) — e aí leia apenas as páginas daquele trecho.")
+                .AppendLine();
+        }
+
+        return texto.ToString();
+    }
+
+    /// <summary>
+    /// O caminho que o agente deve abrir para um livro: o texto convertido, se estiver em dia com
+    /// o PDF, ou o PDF.
+    /// </summary>
+    private static string CaminhoDeLeitura(
+        SistemaRpg sistema,
+        string fonte,
+        string livro,
+        CaminhosDoProjeto caminhos)
+    {
+        var pdf = Path.Combine(sistema.DiretorioSistemas(caminhos), fonte, livro);
+        var convertido = ConversorDeLivros.TextoAtualizadoDe(pdf);
+
+        return convertido is null
+            ? $"Systems/{sistema.Id}/{fonte}/{livro}"
+            : Path.GetRelativePath(caminhos.Raiz, convertido).Replace('\\', '/');
     }
 
     /// <summary>

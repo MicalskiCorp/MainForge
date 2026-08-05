@@ -29,6 +29,7 @@ As pastas de topo com nome em inglês e inicial maiúscula (`Agents/`, `Systems/
 | `tools/ValidacaoPontaAPonta` | harness manual do fluxo completo, **fora da .sln** de propósito (gasta cota real) | pessoas | `dotnet run` manual |
 | `Agents/` | prompt de sistema de cada agente, em Markdown (`Configurador.md`, `DungeonMaster.md`) | pessoas | `DefinicaoDeAgente.CarregarPromptDeSistema` |
 | `Systems/<Sistema>/<fonte>/` | livros oficiais em PDF, um subdiretório por sistema e, dentro, um por fonte | `ImportadorDeSistema` | agente Configurador (`Read`) |
+| `Systems/<Sistema>/<fonte>/_texto/` | os mesmos livros em Markdown — é o que o Configurador lê de verdade | `ConversorDeLivros` | Configurador (`Read`, `procurar_no_texto_dos_livros`) |
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
 | `Knowledge/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
@@ -49,6 +50,12 @@ mesa usa, e `DefinicaoDeAgente.DungeonMasterLimitadoA` transforma as recusadas e
 `Read(Knowledge/<Sistema>/<fonte>/**)` negado. Conteúdo na pasta errada vira regra que vale numa
 mesa que não a escolheu.
 
+O `_texto/` de cada fonte segue a mesma regra, e por isso fica **dentro** da fonte: é o livro
+daquela fonte, só que em Markdown. O underscore marca derivado (como o
+`_estado-do-processamento.json`) e mantém a pasta fora de qualquer `Glob(*.pdf)`. Quem escreve
+ali é o `ConversorDeLivros`, nunca o agente; apagar um `.md` de lá manda convertê-lo de novo no
+próximo processamento.
+
 Duas exceções ficam na **raiz** de `Knowledge/<Sistema>/`, listadas em
 `SistemaRpg.ArquivosDaFicha`: `Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`. A ficha em PDF é
 do sistema inteiro e precisa valer com qualquer expansão selecionada.
@@ -66,7 +73,9 @@ MainForge.Core        modelos de domínio (SistemaRpg) e CaminhosDoProjeto. Não
   │                         EventoDeAgente, reconhece cota esgotada (LimiteDeUso) e a política
   │                         de espera (PoliticaDeLimiteDeUso). Nada de RPG aqui dentro.
   ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp, escrita em Knowledge/,
-  │                         IndiceDeConhecimento, EstadoDoProcessamento, ImportadorDeSistema.
+  │                         IndiceDeConhecimento, EstadoDoProcessamento, ImportadorDeSistema,
+  │                         BuscaNosLivros e a conversão dos livros para texto
+  │                         (ConversorDeLivros -> markitdown, ExtratorDeTextoDePdf -> PdfPig).
   │                         Sem dependência de agente nem de interface.
   │    └─ MainForge.Mcp     servidor MCP stdio (executável próprio) que expõe MainForge.Tools
   │                         ao Claude Code. Só adapta: a regra mora em Tools.
@@ -105,9 +114,11 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    métodos, variáveis, comentários, textos de UI — em **português (pt-BR)**, com acento.
 2. **Caminho sempre por `CaminhosDoProjeto`.** É o único ponto onde "não sair da raiz do
    projeto" é aplicado; qualquer caminho vindo do modelo passa por `ResolverDentroDe`.
-3. **Escrita do agente só pelo MCP.** As ferramentas `Write`/`Edit`/`Bash` são negadas a todo
-   agente em `DefinicaoDeAgente.NegacoesComuns`. Mexer nessa lista é mexer no guardrail —
-   `DefinicaoDeAgenteTestes` trava as negações críticas.
+3. **Escrita do agente só pelo MCP.** As ferramentas `Write`/`Edit`/`Bash`/`PowerShell` são
+   negadas a todo agente em `DefinicaoDeAgente.NegacoesComuns`. Mexer nessa lista é mexer no
+   guardrail — `DefinicaoDeAgenteTestes` trava as negações críticas. Ferramenta nova do Claude
+   Code que execute comando ou leia arquivo entra nessa lista: negar `Bash` sem negar
+   `PowerShell` já deixou um agente listar pastas e procurar texto à vontade.
 4. **`index.md` é derivado, nunca escrito à mão** (nem pelo agente, nem por você): quem o gera
    é `IndiceDeConhecimento`, a cada gravação.
 5. **`.claude/` não é para os agentes do aplicativo.** Eles rodam com a raiz do projeto como

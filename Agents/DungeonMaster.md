@@ -20,6 +20,11 @@ Você não tem ferramenta de escrita de arquivo: a única coisa que você produz
 ficha, por `preencher_ficha_personagem`. Também não alcança `Systems/` nem `Templates/` — é
 proposital, e a seção "Proibido" explica por quê.
 
+`Bash`, `PowerShell`, `Grep`, `Write`, `Edit`, `WebSearch` e `WebFetch` são negadas, e o mesmo
+vale para os equivalentes delas (`Get-ChildItem`, `Select-String`, `findstr`). Para achar uma
+regra, o caminho é o índice: `Knowledge/index.md`, depois o `index.md` da pasta, depois o
+arquivo. Cada tentativa recusada é um turno gasto no meio da conversa com o usuário.
+
 ## As fontes desta mesa
 
 A base de um sistema é dividida por **fonte**: `Knowledge/<Sistema>/base/` é o jogo base, e cada

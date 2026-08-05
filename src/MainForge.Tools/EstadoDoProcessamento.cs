@@ -40,8 +40,24 @@ public sealed record LivroDoSistema
 
     public long Tamanho { get; init; }
 
-    /// <summary>Data de modificação em ticks UTC — junto do tamanho, detecta troca do arquivo.</summary>
+    /// <summary>
+    /// Data de modificação em ticks UTC. Serve para <em>evitar</em> trabalho: data igual dispensa
+    /// abrir o arquivo. Sozinha ela não decide nada — veja <see cref="Hash"/>.
+    /// </summary>
     public long ModificadoEm { get; init; }
+
+    /// <summary>
+    /// SHA-256 do arquivo, em hexadecimal. É o que diz se o livro é o mesmo.
+    ///
+    /// <para><b>Por que não basta tamanho e data.</b> Copiar a pasta, restaurar um backup ou
+    /// deixar uma sincronização de nuvem passar por cima muda a data de modificação sem trocar
+    /// uma vírgula do livro. Enquanto a data mandava, isso marcava o livro como "trocado" e a
+    /// próxima execução oferecia relê-lo inteiro — a leitura mais cara do aplicativo, refeita
+    /// para chegar exatamente ao mesmo conteúdo.</para>
+    ///
+    /// <para>Vazio nos registros gravados antes deste campo existir.</para>
+    /// </summary>
+    public string Hash { get; init; } = "";
 
     public EstadoDoItem Estado { get; init; } = EstadoDoItem.Pendente;
 }
@@ -102,6 +118,18 @@ public sealed class EstadoDoProcessamento
     /// <summary>Há algo registrado de uma execução anterior a que valha a pena voltar.</summary>
     [JsonIgnore]
     public bool TemHistorico => Plano.Count > 0 || Livros.Any(livro => livro.Estado == EstadoDoItem.Concluido);
+
+    /// <summary>
+    /// Não sobrou nada a fazer: todo arquivo planejado existe em disco e todo livro já foi
+    /// incorporado à base.
+    ///
+    /// <para>Serve para <em>impedir</em> um processamento, não para oferecer um: mandar o agente
+    /// trabalhar nessa situação faz ele reler livro e regravar arquivo pronto, gastando a cota da
+    /// assinatura para chegar ao mesmo lugar. Quem quiser refazer assim mesmo tem o "recomeçar do
+    /// zero", que é uma escolha explícita.</para>
+    /// </summary>
+    [JsonIgnore]
+    public bool EstaCompleto => TemHistorico && Pendentes.Count == 0 && LivrosPendentes.Count == 0;
 
     /// <summary>
     /// Os livros ainda não lidos agrupados pela fonte a que pertencem, base primeiro. O
@@ -195,6 +223,88 @@ public sealed class EstadoDoProcessamento
         AdotarArquivosSoltos(raizDoSistema);
         RecensearLivros(caminhos);
     }
+
+    /// <summary>
+    /// Fontes que têm livro marcado como incorporado mas nenhum conhecimento gerado — o conteúdo
+    /// que aquele livro teria produzido não existe em lugar nenhum.
+    ///
+    /// <para><b>Por que isso acontece.</b> O Configurador não conseguiu abrir o PDF de um compêndio
+    /// recém-adicionado (a leitura de PDF do Claude Code depende do <c>pdftoppm</c>, que pode não
+    /// estar instalado), terminou o turno sem gerar arquivo algum e, como o plano antigo já estava
+    /// completo, o livro foi registrado como lido. O sistema fica "pronto" com uma expansão que
+    /// ninguém leu.</para>
+    ///
+    /// <para><b>Por que isto só aponta, em vez de corrigir.</b> Mover um livro de fonte produz a
+    /// mesma imagem — fonte nova sem conhecimento — e nesse caso o certo é justamente <em>não</em>
+    /// reler, porque o conteúdo já está na base, na pasta da fonte antiga. Só quem sabe qual dos
+    /// dois casos é o seu é o usuário; ao aplicativo cabe mostrar a inconsistência em vez de
+    /// escondê-la ou de decidir por ele.</para>
+    /// </summary>
+    public IReadOnlyList<string> FontesSemConhecimento(CaminhosDoProjeto caminhos)
+    {
+        var raizDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Conhecimento, Sistema);
+
+        return
+        [
+            .. Livros
+                .Where(livro => livro.Estado == EstadoDoItem.Concluido)
+                .Select(livro => livro.Fonte)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(fonte => !TemConhecimentoDaFonte(raizDoSistema, fonte))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+    }
+
+    /// <summary>Devolve os livros daquelas fontes ao estado de não lidos, para serem relidos.</summary>
+    public IReadOnlyList<string> MarcarFontesComoPendentes(IReadOnlyList<string> fontes)
+    {
+        var afetados = new List<string>();
+
+        for (var indice = 0; indice < Livros.Count; indice++)
+        {
+            if (!fontes.Contains(Livros[indice].Fonte, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            Livros[indice] = Livros[indice] with { Estado = EstadoDoItem.Pendente };
+            afetados.Add(Livros[indice].Arquivo);
+        }
+
+        return afetados;
+    }
+
+    /// <summary>
+    /// Numa base do layout antigo o conhecimento fica solto na raiz do sistema, sem pasta de
+    /// fonte — e ele conta como conhecimento da base, senão a migração pendente pareceria uma
+    /// base vazia.
+    /// </summary>
+    private static bool TemConhecimentoDaFonte(string raizDoSistema, string fonte)
+    {
+        if (!Directory.Exists(raizDoSistema))
+        {
+            return false;
+        }
+
+        var diretorio = Path.Combine(raizDoSistema, fonte);
+
+        if (!Directory.Exists(diretorio))
+        {
+            diretorio = Directory.Exists(Path.Combine(raizDoSistema, FonteDoSistema.IdDaBase))
+                ? diretorio
+                : raizDoSistema; // layout antigo: tudo solto na raiz
+        }
+
+        return Directory.Exists(diretorio) &&
+               Directory
+                   .EnumerateFiles(diretorio, "*.md", SearchOption.AllDirectories)
+                   .Any(arquivo => EhConteudo(Path.GetFileName(arquivo)));
+    }
+
+    /// <summary>O índice é derivado e os arquivos da ficha valem para o sistema inteiro.</summary>
+    private static bool EhConteudo(string nome) =>
+        !nome.Equals(IndiceDeConhecimento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase) &&
+        !SistemaRpg.ArquivosDaFicha.Contains(nome, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Acrescenta ao plano o que o agente prometeu gerar, preservando o estado do que já está
@@ -410,17 +520,66 @@ public sealed class EstadoDoProcessamento
 
             if (indice < 0)
             {
-                Livros.Add(atual);
+                Livros.Add(atual with { Hash = HashDoArquivo(caminho) });
                 continue;
             }
 
             var registrado = Livros[indice];
 
-            // Mesmo nome, conteúdo diferente: o livro foi trocado e precisa ser lido de novo.
+            // Nada mudou nem na data nem no tamanho: não há por que abrir um arquivo de 15 MB.
             // A fonte é recensada sempre — mover o livro de pasta não deve obrigar a relê-lo.
-            Livros[indice] = registrado.Tamanho == atual.Tamanho && registrado.ModificadoEm == atual.ModificadoEm
-                ? registrado with { Fonte = atual.Fonte }
-                : atual;
+            if (registrado.ModificadoEm == atual.ModificadoEm && registrado.Tamanho == atual.Tamanho)
+            {
+                Livros[indice] = registrado with { Fonte = atual.Fonte };
+                continue;
+            }
+
+            // Tamanho diferente é outro arquivo, e nem vale o hash. Igual, com data diferente, é
+            // quase sempre uma cópia ou uma sincronização de nuvem: aí o conteúdo decide.
+            var hash = "";
+            var mesmoLivro = registrado.Tamanho == atual.Tamanho &&
+                             ContinuaSendoOMesmoLivro(registrado, caminho, out hash);
+
+            Livros[indice] = mesmoLivro
+                ? registrado with { Fonte = atual.Fonte, ModificadoEm = atual.ModificadoEm, Hash = hash }
+                : atual with { Hash = HashDoArquivo(caminho) };
+        }
+    }
+
+    /// <summary>
+    /// O arquivo em disco ainda é o livro que foi lido?
+    ///
+    /// <para>Com hash registrado, a resposta é exata. Sem ele — registro gravado por uma versão
+    /// anterior do aplicativo —, o tamanho idêntico já basta: um livro trocado por outra edição
+    /// não tem o mesmo tamanho em bytes, e o custo de errar para o lado do "mudou" é reler o
+    /// livro inteiro, que é a operação mais cara que existe aqui.</para>
+    /// </summary>
+    private static bool ContinuaSendoOMesmoLivro(LivroDoSistema registrado, string caminho, out string hash)
+    {
+        hash = HashDoArquivo(caminho);
+
+        return registrado.Hash.Length == 0 || registrado.Hash.Equals(hash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// SHA-256 do arquivo. Um livro que não abre não derruba o recenseamento: sem hash, ele cai
+    /// na regra do tamanho.
+    /// </summary>
+    private static string HashDoArquivo(string caminho)
+    {
+        try
+        {
+            using var fluxo = File.OpenRead(caminho);
+
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(fluxo));
+        }
+        catch (IOException)
+        {
+            return "";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return "";
         }
     }
 

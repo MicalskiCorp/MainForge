@@ -102,6 +102,22 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                 """),
 
             Ferramenta(
+                "procurar_no_texto_dos_livros",
+                "Procura um termo no texto extraído dos livros do sistema (a versão Markdown dos PDFs, em Systems/<sistema>/<fonte>/_texto/) e devolve arquivo, linha e seção de cada ocorrência. Use para achar onde uma regra está antes de abrir o arquivo com Read: ler o livro inteiro para achar uma tabela é o maior desperdício de cota que existe aqui. A busca ignora acentos e maiúsculas.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Systems/)." },
+                    "termo": { "type": "string", "description": "Texto a procurar, ex.: \"Pontos de Vida\". Ignora acentos e maiúsculas." },
+                    "livro": { "type": "string", "description": "Nome do PDF a que restringir a busca. Sem ele, procura em todos os livros do sistema." },
+                    "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." }
+                  },
+                  "required": ["sistema", "termo"]
+                }
+                """),
+
+            Ferramenta(
                 "listar_campos_da_ficha",
                 "Lista os nomes exatos dos campos preenchíveis (AcroForm) da ficha em Templates/<sistema>/, exatamente como devem ser informados a preencher_ficha_personagem.",
                 """
@@ -150,6 +166,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                 "descrever_pasta_de_conhecimento" => DescreverPasta(argumentos),
                 "registrar_plano_de_conhecimento" => RegistrarPlano(argumentos),
                 "consultar_progresso" => ConsultarProgresso(argumentos),
+                "procurar_no_texto_dos_livros" => ProcurarNosLivros(argumentos),
                 "listar_campos_da_ficha" => ListarCamposDaFicha(argumentos),
                 "preencher_ficha_personagem" => PreencherFicha(argumentos),
                 _ => new ResultadoDaFerramenta($"Ferramenta desconhecida: '{nome}'.", Erro: true),
@@ -260,6 +277,21 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
         return new ResultadoDaFerramenta(estado.DescreverParaOAgente());
     }
 
+    private ResultadoDaFerramenta ProcurarNosLivros(JsonObject argumentos)
+    {
+        var termo = Obrigatorio(argumentos, "termo");
+        var maximo = Inteiro(argumentos, "maximo") ?? BuscaNosLivros.MaximoPadraoDeOcorrencias;
+
+        var ocorrencias = BuscaNosLivros.Procurar(
+            caminhos,
+            Obrigatorio(argumentos, "sistema"),
+            termo,
+            Opcional(argumentos, "livro"),
+            Math.Clamp(maximo, 1, 200));
+
+        return new ResultadoDaFerramenta(BuscaNosLivros.Descrever(ocorrencias, termo, maximo));
+    }
+
     private ResultadoDaFerramenta ListarCamposDaFicha(JsonObject argumentos)
     {
         var campos = PreenchedorDeFicha.ListarCampos(
@@ -305,6 +337,17 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
             ? conteudo
             : null;
     }
+
+    /// <summary>
+    /// Número opcional. O modelo tanto manda <c>30</c> quanto <c>"30"</c>, e recusar a segunda
+    /// forma só custaria uma chamada perdida para o usuário.
+    /// </summary>
+    private static int? Inteiro(JsonObject argumentos, string campo) => argumentos[campo] switch
+    {
+        JsonValue valor when valor.TryGetValue<int>(out var numero) => numero,
+        JsonValue valor when valor.TryGetValue<string>(out var texto) && int.TryParse(texto, out var numero) => numero,
+        _ => null,
+    };
 
     private static IReadOnlyDictionary<string, string> MapaDeTexto(JsonObject argumentos, string campo)
     {

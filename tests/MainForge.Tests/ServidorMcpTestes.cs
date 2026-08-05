@@ -119,6 +119,7 @@ public class ServidorMcpTestes : IDisposable
                 "escrever_arquivo_conhecimento",
                 "listar_campos_da_ficha",
                 "preencher_ficha_personagem",
+                "procurar_no_texto_dos_livros",
                 "registrar_plano_de_conhecimento",
             ],
             nomes);

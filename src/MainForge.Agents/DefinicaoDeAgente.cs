@@ -47,7 +47,12 @@ public sealed record DefinicaoDeAgente(
     /// Negado para todos os agentes, sem exceção. Cada item fecha um caminho pelo qual um
     /// agente contornaria o próprio allowlist:
     /// <list type="bullet">
-    ///   <item><c>Bash</c> faria qualquer coisa que as outras negações proíbem;</item>
+    ///   <item><c>Bash</c> e <c>PowerShell</c> fariam qualquer coisa que as outras negações
+    ///   proíbem. São dois nomes de ferramenta diferentes, e negar só um não fecha nada: o
+    ///   Configurador rodando no Windows recebeu <c>PowerShell</c> e listou pastas e procurou
+    ///   texto em arquivo com <c>Get-ChildItem</c> e <c>Select-String</c> — exatamente o que a
+    ///   negação de <c>Bash</c> e <c>Grep</c> existia para impedir. <c>BashOutput</c> e
+    ///   <c>KillShell</c> vão junto por serem a continuação de um shell já aberto;</item>
     ///   <item><c>Write</c>/<c>Edit</c>/<c>NotebookEdit</c> escreveriam fora do MCP, sem o
     ///   confinamento de diretório em C#;</item>
     ///   <item><c>Task</c> abriria um subagente sem estas restrições;</item>
@@ -55,20 +60,30 @@ public sealed record DefinicaoDeAgente(
     ///   responder a partir dos livros importados, não de outra fonte;</item>
     ///   <item><c>Grep</c> leria conteúdo de arquivo por um caminho que não confirmei
     ///   respeitar as negações por diretório (o <c>Read</c> respeita);</item>
-    ///   <item><c>Skill</c> carregaria instruções de <c>.claude/skills/</c>, que existem para
-    ///   quem desenvolve o aplicativo e falam do código dele — o agente roda com a raiz do
-    ///   projeto como diretório de trabalho, então enxergaria essas skills sem esta negação;</item>
+    ///   <item><c>Skill</c> e <c>SlashCommand</c> carregariam instruções de <c>.claude/</c>, que
+    ///   existem para quem desenvolve o aplicativo e falam do código dele — o agente roda com a
+    ///   raiz do projeto como diretório de trabalho, então enxergaria isso sem esta negação;</item>
     ///   <item>o código do próprio aplicativo não interessa a nenhum agente de RPG.</item>
     /// </list>
+    ///
+    /// <para><b>Negar por nome é uma lista, e lista se esquece.</b> Por isso a camada que
+    /// realmente contém a escrita é o servidor MCP em C#; esta lista é a que evita o desperdício
+    /// e os caminhos laterais de <em>leitura</em>. Ferramenta nova do Claude Code que execute
+    /// comando ou leia arquivo entra aqui.</para>
     /// </summary>
     public static readonly IReadOnlyList<string> NegacoesComuns =
     [
         "Bash",
+        "PowerShell",
+        "BashOutput",
+        "KillShell",
         "Write",
         "Edit",
         "NotebookEdit",
         "Task",
+        "Agent",
         "Skill",
+        "SlashCommand",
         "WebFetch",
         "WebSearch",
         "Grep",
@@ -143,9 +158,33 @@ public sealed record DefinicaoDeAgente(
             "descrever_pasta_de_conhecimento",
             "registrar_plano_de_conhecimento",
             "consultar_progresso",
+            "procurar_no_texto_dos_livros",
             "listar_campos_da_ficha",
         ],
         NegacoesEspecificas: ["Read(Output/**)"]);
+
+    /// <summary>
+    /// O Configurador numa máquina em que abrir PDF não funciona: a leitura dos livros em
+    /// <c>Systems/</c> fica negada, e sobra o texto já convertido em <c>_texto/</c>.
+    ///
+    /// <para><b>Por que negar em vez de só pedir.</b> O <c>Read</c> do Claude Code rasteriza as
+    /// páginas do PDF com o <c>pdftoppm</c>; sem o poppler instalado, toda tentativa termina em
+    /// <c>pdftoppm is not installed</c>. O prompt já manda ler o Markdown, mas "manda" é um
+    /// pedido: o agente esbarra numa tabela que a conversão embaralhou, tenta conferir no PDF
+    /// original — que é o que ele deveria fazer se aquilo funcionasse — e queima um turno para
+    /// descobrir o que o aplicativo já sabia. Negar o caminho quebrado transforma isso numa
+    /// recusa imediata, com o agente seguindo pelo texto.</para>
+    ///
+    /// <para>A negação vale só para <c>Systems/</c>. A ficha em branco de <c>Templates/</c>
+    /// continua sendo lida como PDF: ali o que interessa é o leiaute, não há versão em texto, e
+    /// se essa leitura também falhar o usuário precisa ver a falha — é sinal de que falta o
+    /// poppler para gerar os arquivos da ficha.</para>
+    /// </summary>
+    public static DefinicaoDeAgente ConfiguradorSemAbrirPdf(DefinicaoDeAgente configurador) =>
+        configurador with
+        {
+            NegacoesEspecificas = [.. configurador.NegacoesEspecificas, "Read(Systems/**/*.pdf)"],
+        };
 
     /// <summary>
     /// Só lê Knowledge/ e só escreve em Output/Personagens/, pela ferramenta MCP de

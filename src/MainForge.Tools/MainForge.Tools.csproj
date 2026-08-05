@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="PdfPig" Version="0.1.15" />
     <PackageReference Include="PDFsharp" Version="6.2.4" />
   </ItemGroup>
 
