@@ -50,6 +50,14 @@ algumas centenas de dólares por ano, com a chave obrigatoriamente em hardware. 
 livre e gratuito: preferimos manter assim e ser francos sobre o aviso a repassar esse custo de
 alguma forma.
 
+O caminho para fazer o aviso desaparecer **sem custo** é a
+[SignPath Foundation](https://signpath.org/), que fornece certificado e infraestrutura de
+assinatura a projetos de código aberto. O passo já está no
+[workflow de release](.github/workflows/release.yml), desligado enquanto não houver os segredos
+da conta — quando houver, os pacotes passam a sair assinados sem mais nenhuma mudança. Como o
+certificado é OV, a confiança se acumula com os downloads em vez de existir desde o primeiro; o
+que remove o aviso de imediato é o certificado EV, e esse é pago.
+
 No lugar da assinatura, você tem como **verificar por conta própria** que o arquivo é exatamente
 o que a compilação pública gerou. Todo release traz o `.sha256` ao lado do `.zip`:
 
@@ -487,6 +495,15 @@ dos livros que você importou; se esses livros são comerciais, o conteúdo é d
 `.gitignore` mantém as bases fora do Git — a única versionada é a do `SistemaTeste`, que é
 fictício. Cada pessoa gera a sua a partir dos próprios livros, o que também é o motivo de o
 aplicativo ser distribuído sem base nenhuma pronta.
+
+## Licença
+
+[MIT](LICENSE) — use, modifique e redistribua à vontade, inclusive comercialmente, mantendo o
+aviso de copyright. É a mesma licença do PDFsharp, e compatível com a Apache-2.0 do PdfPig.
+
+A licença cobre **o código deste repositório**. Ela não alcança os livros de RPG que você
+importar nem as bases geradas a partir deles: esse conteúdo continua sendo de quem o publicou, e
+é por isso que ele nunca entra no Git (veja [Privacidade e segurança](#privacidade-e-segurança)).
 
 ## Créditos
 

@@ -49,12 +49,65 @@ jobs:
         shell: pwsh
         run: ./publicar.ps1 -Versao ${{ steps.versao.outputs.valor }}
 
+      # ---------------------------------------------------------------------
+      # Assinatura de código — opcional, e desligada enquanto não houver segredo.
+      #
+      # O executável sem assinatura faz o Windows mostrar "O Windows protegeu o seu PC" na
+      # primeira execução: o SmartScreen acumula confiança por certificado, e sem certificado
+      # ela se acumula por hash, o que zera a cada versão nova.
+      #
+      # Certificado custa centenas de dólares por ano — fora do que faz sentido para um projeto
+      # livre. A saída gratuita é a SignPath Foundation, que fornece certificado e infraestrutura
+      # de assinatura sem custo a projetos de código aberto (repositório público, licença OSI,
+      # build automatizado a partir do fonte).
+      #
+      # Para ligar, cadastre em Settings > Secrets and variables > Actions:
+      #   SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+      #   SIGNPATH_POLICY_SLUG
+      # Sem eles, os dois passos abaixo são pulados e o release sai sem assinatura, como hoje.
+      # Confira as entradas da action na documentação do SignPath ao ligar: elas mudam entre
+      # versões, e este bloco nunca chegou a rodar.
+      # ---------------------------------------------------------------------
+      - name: Há credencial de assinatura?
+        id: assinatura
+        shell: pwsh
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        run: |
+          $tem = -not [string]::IsNullOrWhiteSpace($env:TOKEN)
+          "disponivel=$($tem.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
+      - name: Enviar o pacote para assinatura
+        if: steps.assinatura.outputs.disponivel == 'true'
+        id: pacote
+        uses: actions/upload-artifact@v4
+        with:
+          name: MainForge-sem-assinatura
+          path: publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip
+
+      - name: Assinar (SignPath Foundation)
+        if: steps.assinatura.outputs.disponivel == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.pacote.outputs.artifact-id }}
+          wait-for-completion: true
+          # Volta por cima do pacote não assinado: o que vai para o release, e o que entra na
+          # soma de verificação, precisa ser o arquivo assinado.
+          output-artifact-directory: publicado
+
+      # Depois da assinatura, de propósito: assinar muda os bytes do arquivo, e um checksum
+      # calculado antes não conferiria com o que a pessoa baixou.
       - name: Soma de verificação
         id: hash
         shell: pwsh
         run: |
           $arquivo = "publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip"
           $hash = (Get-FileHash $arquivo -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $arquivo -Leaf)" | Set-Content "$arquivo.sha256" -Encoding ascii -NoNewline
           "valor=$hash" >> $env:GITHUB_OUTPUT
 
       - uses: softprops/action-gh-release@v2

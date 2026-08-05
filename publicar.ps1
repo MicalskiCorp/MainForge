@@ -61,6 +61,10 @@ foreach ($pasta in @("Input", "Templates", "Sistemas", "Output\Personagens")) {
 
 Copy-Item (Join-Path $raiz "README.md") $pacote
 
+# A licença viaja com o binário: quem recebe o programa precisa receber junto os termos sob os
+# quais pode usá-lo, redistribuí-lo e modificá-lo.
+Copy-Item (Join-Path $raiz "LICENSE") $pacote
+
 $zip = Join-Path $saida "MainForge-$Versao-win-x64.zip"
 
 if (Test-Path $zip) {
@@ -82,6 +86,7 @@ Write-Host ""
 Write-Host "Pronto: $zip ($tamanho MB)" -ForegroundColor Green
 Write-Host "SHA-256: $hash" -ForegroundColor Green
 Write-Host "Publique os dois arquivos (.zip e .sha256) como assets de um release no GitHub."
+
 
 
 
