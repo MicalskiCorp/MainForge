@@ -35,3 +35,15 @@ appsettings.Local.json
 # problema de direitos que o PDF). A regra acima já o exclui nos sistemas do usuário; esta cobre
 # o SistemaTeste, que é versionado.
 /Systems/**/_texto/
+
+# As bases de conhecimento ficam locais. Elas são as regras dos livros importados reescritas em
+# Markdown: quando o livro é comercial, o conteúdo continua sendo dele, e um repositório público
+# não é lugar para isso. Cada pessoa gera a sua a partir dos livros que tem.
+#
+# A exceção é SistemaTeste: sistema fictício, escrito para o harness de validação, sem dono a
+# quem prestar contas.
+/Knowledge/*/
+!/Knowledge/SistemaTeste/
+
+# Pacote gerado por publicar.ps1.
+/publicado/

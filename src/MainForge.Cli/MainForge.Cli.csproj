@@ -11,6 +11,13 @@
     <ProjectReference Include="..\MainForge.Mcp\MainForge.Mcp.csproj" />
   </ItemGroup>
 
+  <!-- Os prompts dos agentes viajam com o binário: sem eles o aplicativo baixado não tem o que
+       mandar ao Claude Code. Continuam sendo os mesmos arquivos de Agents/ do repositório — a
+       regra "prompt nunca embutido em C#" segue valendo, o que muda é só a cópia para a saída. -->
+  <ItemGroup>
+    <Content Include="..\..\Agents\*.md" Link="Agents\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <!-- TFM com sufixo -windows por causa do resolvedor de fontes do PdfSharp, que lê
@@ -19,6 +26,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>MainForge.Cli</RootNamespace>
+    <!-- Publicação: um executável só, com o runtime .NET dentro. É o que permite baixar o
+         aplicativo e usá-lo sem instalar nada além do Claude Code. -->
+    <RuntimeIdentifier Condition="'$(PublishSingleFile)' == 'true'">win-x64</RuntimeIdentifier>
+    <SelfContained Condition="'$(PublishSingleFile)' == 'true'">true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>pt-BR;en</SatelliteResourceLanguages>
+    <AssemblyTitle>MainForge</AssemblyTitle>
+    <Product>MainForge</Product>
   </PropertyGroup>
 
 </Project>

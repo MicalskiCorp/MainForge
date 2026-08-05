@@ -17,7 +17,7 @@ public sealed class ConfiguracaoDoServidorMcp : IDisposable
 
     public static ConfiguracaoDoServidorMcp Criar(CaminhosDoProjeto caminhos)
     {
-        var executavel = LocalizarServidor();
+        var (executavel, argumentos) = LocalizarServidor();
 
         var configuracao = new JsonObject
         {
@@ -26,7 +26,7 @@ public sealed class ConfiguracaoDoServidorMcp : IDisposable
                 [DefinicaoDeAgente.NomeDoServidorMcp] = new JsonObject
                 {
                     ["command"] = executavel,
-                    ["args"] = new JsonArray(caminhos.Raiz),
+                    ["args"] = new JsonArray([.. argumentos.Select(argumento => (JsonNode)argumento), caminhos.Raiz]),
                 },
             },
         };
@@ -38,20 +38,48 @@ public sealed class ConfiguracaoDoServidorMcp : IDisposable
     }
 
     /// <summary>
-    /// O servidor MCP é um executável irmão: MainForge.Mcp é referenciado pelo projeto da
-    /// interface só para o binário dele parar na mesma pasta de saída.
+    /// Como lançar o servidor MCP, em duas formas — e a ordem importa.
+    ///
+    /// <list type="number">
+    ///   <item>O executável irmão <c>MainForge.Mcp</c>, quando existe. É o que a compilação de
+    ///   desenvolvimento produz, e o que o harness de validação usa.</item>
+    ///   <item>O <b>próprio processo</b>, com <c>--mcp</c>. É o caminho do aplicativo publicado
+    ///   como binário único: ali não há executável irmão, e é justamente por não haver que o
+    ///   download é um arquivo só.</item>
+    /// </list>
+    ///
+    /// <para>Rodando por <c>dotnet MainForge.Cli.dll</c>, o processo é o <c>dotnet</c> — aí o que
+    /// vai na linha de comando é a DLL antes do <c>--mcp</c>, senão o servidor nunca subiria.</para>
     /// </summary>
-    private static string LocalizarServidor()
+    private static (string Executavel, IReadOnlyList<string> Argumentos) LocalizarServidor()
     {
         var nome = OperatingSystem.IsWindows() ? "MainForge.Mcp.exe" : "MainForge.Mcp";
-        var caminho = Path.Combine(AppContext.BaseDirectory, nome);
+        var irmao = Path.Combine(AppContext.BaseDirectory, nome);
 
-        return File.Exists(caminho)
-            ? caminho
-            : throw new FileNotFoundException(
-                $"Servidor MCP '{nome}' não encontrado em '{AppContext.BaseDirectory}'. " +
-                "Rode 'dotnet build MainForge.sln' — ele precisa estar na mesma pasta do aplicativo.",
-                caminho);
+        if (File.Exists(irmao))
+        {
+            return (irmao, []);
+        }
+
+        var processo = Environment.ProcessPath
+            ?? throw new FileNotFoundException(
+                $"Servidor MCP '{nome}' não encontrado em '{AppContext.BaseDirectory}' e não foi " +
+                "possível descobrir o executável em execução. Rode 'dotnet build MainForge.sln'.",
+                irmao);
+
+        var nomeDoProcesso = Path.GetFileNameWithoutExtension(processo);
+
+        if (nomeDoProcesso.Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            var dll = Path.Combine(AppContext.BaseDirectory, "MainForge.Cli.dll");
+
+            if (File.Exists(dll))
+            {
+                return (processo, [dll, "--mcp"]);
+            }
+        }
+
+        return (processo, ["--mcp"]);
     }
 
     public void Dispose()

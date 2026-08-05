@@ -74,6 +74,14 @@ internal static class FluxoDoConfigurador
         var estado = EstadoDoProcessamento.Carregar(caminhos, escolhido.Id);
         estado.SincronizarComDisco();
 
+        // Antes de qualquer pergunta cara: conferir o que esta máquina tem. Descobrir que falta o
+        // Claude Code depois de o usuário confirmar a operação mais cara do aplicativo é o pior
+        // momento possível para essa notícia.
+        if (!await FluxoDeDependencias.GarantirAsync(cancelamento))
+        {
+            return;
+        }
+
         ConsoleUi.Titulo($"Processar '{escolhido.Id}'");
         MostrarSituacao(estado, pdfs, escolhido.DiretorioSistemas(caminhos));
 

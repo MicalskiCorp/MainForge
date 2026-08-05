@@ -4,6 +4,45 @@ Aplicativo desktop em C#/.NET que entende livros de RPG em PDF e conduz a criaç
 personagens, terminando num PDF de ficha preenchido. Tudo roda localmente na máquina do
 usuário.
 
+## Baixar e usar
+
+**[Baixar a versão mais recente](https://github.com/MicalskiCorp/MainForge/releases/latest)**
+(Windows x64) — descompacte o `.zip` onde quiser e rode `MainForge.Cli.exe`.
+
+O download é **um executável só**, com o runtime .NET e as bibliotecas de PDF dentro dele: não
+há instalador, não escreve no registro e não precisa de administrador. Ao lado dele vão os
+prompts dos agentes (`Agents/`) e as pastas de dados, que o aplicativo cria vazias no primeiro
+uso. Para desinstalar, apague a pasta.
+
+A única coisa que você precisa instalar é o
+**[Claude Code](https://claude.com/product/claude-code)**, autenticado na sua conta — é ele que
+roda os agentes, com a **sua** assinatura:
+
+```
+winget install --id Anthropic.ClaudeCode
+```
+
+Não precisa decorar: a **opção 7** do menu confere todas as dependências e oferece rodar esse
+comando por você, e a **opção 6** abre a janela do Claude Code para o `/login`. O primeiro
+processamento também passa por essa conferência antes de gastar qualquer cota.
+
+| | Precisa instalar? | Para quê |
+| --- | --- | --- |
+| .NET 10 | não — vai embutido | rodar o aplicativo |
+| PdfPig, PDFsharp | não — compiladas junto | extrair texto dos livros e preencher a ficha |
+| **Claude Code** | **sim** | rodar os agentes com a sua assinatura |
+| poppler (`pdftoppm`) | recomendado | o agente abrir PDF — em especial a ficha em branco |
+| markitdown | opcional | conversão dos livros com mais qualidade em tabelas |
+
+**Requisitos e limites, sem letra miúda:** o pacote é **Windows x64** (em Windows ARM roda por
+emulação; não há build para macOS nem Linux, porque o aplicativo usa a API de console do Windows
+e as fontes de `C:\Windows\Fonts` para desenhar a ficha). Por ser um executável baixado da
+internet e ainda **sem assinatura digital**, o SmartScreen pode avisar na primeira execução —
+"Mais informações" › "Executar assim mesmo".
+
+Quem for compilar do código-fonte encontra as instruções em [Rodando](#rodando), e
+`./publicar.ps1` gera o mesmo pacote do release.
+
 ## Decisões de arquitetura
 
 - **Autenticação**: nenhuma. O aplicativo não tem, não pede e não guarda credencial —
@@ -123,7 +162,14 @@ padrão de instalação; se estiver em outro lugar, aponte a variável de ambien
 dotnet build MainForge.sln
 dotnet test MainForge.sln
 dotnet run --project src/MainForge.Cli    # o aplicativo
+./publicar.ps1 -Versao 0.1.0              # gera o .zip do release (win-x64, executável único)
 ```
+
+O `publicar.ps1` roda o mesmo publish do fluxo de release
+([`.github/workflows/release.yml`](.github/workflows/release.yml)), que empacota e anexa o `.zip`
+quando uma tag `v*` é empurrada. Um detalhe da distribuição vale saber: **o servidor MCP é o
+próprio executável**, lançado com `--mcp <raiz>`. Enquanto ele era um segundo programa, um
+pacote self-contained levaria dois runtimes .NET inteiros e duas versões que podiam divergir.
 
 O aplicativo abre maximizado, no console clássico e no Windows Terminal. Não é capricho: a tela
 inicial tem cerca de 145 colunas, o desenho da ficha em texto tem 78, e o progresso do agente
@@ -168,7 +214,12 @@ Menu do aplicativo:
    mesa usa e depois é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
    `/sair` encerra a conversa.
 6. **Verificar o Claude Code** — mostra o executável, o modelo e as permissões de cada
-   agente, e faz um turno de teste para confirmar que a assinatura está ativa.
+   agente, abre a janela de login da sua conta Claude e faz um turno de teste para confirmar que
+   a assinatura está ativa.
+7. **Dependências do aplicativo** — o que esta máquina tem, o que falta, para que serve cada
+   coisa e o comando exato para instalar o que faltar. O processamento de sistema também passa
+   por aqui antes de começar: descobrir que falta o Claude Code depois de confirmar a operação
+   mais cara do aplicativo é o pior momento possível para essa notícia.
 
 Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 4
 (ou copiar as pastas na mão para `Systems/` e `Templates/`).
@@ -374,6 +425,42 @@ resultado é tudo espremido numa linha só, cortada na borda do quadro, na cor e
 isso que esses campos só ficavam certos depois de alguém clicar neles e editá-los: o clique faz
 o leitor refazer o desenho — que é exatamente o que a marca pede que ele faça ao abrir o
 arquivo.
+
+## Privacidade e segurança
+
+O aplicativo roda inteiro na máquina de quem o usa. Não há servidor do MainForge, não há conta
+do MainForge e não há telemetria: as únicas conexões que saem daqui são as que o Claude Code faz
+com a Anthropic, com a assinatura de quem está usando.
+
+**Credenciais.** O MainForge não pede, não guarda, não lê e não copia credencial nenhuma. O login
+é do Claude Code e fica onde ele o guarda, fora do projeto — por isso ele não viaja no `.zip` e
+não vai junto se você levar a pasta para outra máquina. A opção 6 do menu abre uma janela do
+próprio Claude Code para o `/login`, em vez de mostrar um formulário de usuário e senha: pedir a
+senha da sua conta a um programa que não tem por que vê-la é a forma de um golpe de phishing, não
+de um login legítimo. Nenhuma versão do aplicativo guarda chave de API — a que existia foi
+removida quando ele passou a usar o Claude Code.
+
+**Seus arquivos.** Livros (`Systems/`), fichas em branco (`Templates/`), o texto extraído
+(`_texto/`) e os personagens gerados (`Output/`) ficam só no seu disco, e estão todos no
+`.gitignore` — não vão para o Git nem por acidente. Os agentes rodam confinados à pasta do
+projeto, e toda escrita passa pelo servidor MCP em C#, onde `ResolverDentroDe` rejeita qualquer
+caminho que escape do diretório permitido.
+
+**O que os agentes não alcançam.** `Bash`, `PowerShell`, `Write`, `Edit`, `WebFetch`, `WebSearch`
+e a leitura de `.claude/` e do código-fonte estão negados a todos eles — cada um é uma saída pela
+qual um agente contornaria as demais restrições. O Dungeon Master ainda perde `Systems/` e
+`Templates/`, e o Configurador perde `Output/`. Isso é verificado por testes automatizados, não
+só escrito aqui.
+
+**Instalação de programas.** O aplicativo nunca instala nada sozinho: ele mostra o comando exato,
+pergunta, e só então roda — e não instala o Claude Code por você, porque isso significaria baixar
+e executar um script da internet em seu nome.
+
+**A base de conhecimento é sua e fica na sua máquina.** `Knowledge/` guarda as regras destiladas
+dos livros que você importou; se esses livros são comerciais, o conteúdo é deles. Por isso o
+`.gitignore` mantém as bases fora do Git — a única versionada é a do `SistemaTeste`, que é
+fictício. Cada pessoa gera a sua a partir dos próprios livros, o que também é o motivo de o
+aplicativo ser distribuído sem base nenhuma pronta.
 
 ## Créditos
 

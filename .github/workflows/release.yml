@@ -1,0 +1,61 @@
+# Publica o binário do MainForge como asset de um release do GitHub.
+#
+# Dispara ao empurrar uma tag "v*" (ex.: git tag v0.1.0 && git push origin v0.1.0), ou à mão
+# pela aba Actions. É o que faz o link "baixar o aplicativo" do README existir de verdade: sem
+# isto, o link aponta para uma página de releases vazia.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão a carimbar no executável (ex.: 0.1.0)"
+        required: true
+        default: "0.1.0"
+
+permissions:
+  contents: write # necessário para criar o release e anexar o .zip
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Versão
+        id: versao
+        shell: pwsh
+        run: |
+          $versao = if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $env:GITHUB_REF -replace "refs/tags/v", ""
+          } else {
+            "${{ github.event.inputs.versao }}"
+          }
+          "valor=$versao" >> $env:GITHUB_OUTPUT
+
+      # Os testes são a condição para publicar: binário que sai daqui vai para a máquina de
+      # outras pessoas, e o guardrail de permissões dos agentes é testado justamente aqui.
+      - name: Testes
+        run: dotnet test MainForge.sln -c Release
+
+      - name: Publicar
+        shell: pwsh
+        run: ./publicar.ps1 -Versao ${{ steps.versao.outputs.valor }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: publicado/MainForge-${{ steps.versao.outputs.valor }}-win-x64.zip
+          generate_release_notes: true
+          body: |
+            Baixe o `.zip`, descompacte onde quiser e rode `MainForge.Cli.exe`.
+
+            É preciso ter o [Claude Code](https://claude.com/product/claude-code) instalado e
+            logado na sua conta — o aplicativo usa a **sua** assinatura e não guarda credencial
+            nenhuma. A opção 7 do menu confere as dependências e ajuda a instalar o que faltar.

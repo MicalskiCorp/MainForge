@@ -34,6 +34,8 @@ As pastas de topo com nome em inglês e inicial maiúscula (`Agents/`, `Systems/
 | `Knowledge/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
+| `.github/workflows/` | fluxo que publica o binário como release | pessoas | GitHub Actions |
+| `publicar.ps1` | empacota o aplicativo (executável único, self-contained) em `publicado/` | pessoas | `./publicar.ps1` |
 
 `Systems/`, `Templates/`, `Knowledge/` e `Output/` têm um `README.md` explicando a convenção
 daquela pasta — se você criar uma pasta de topo nova, ela também precisa de um.
@@ -84,9 +86,15 @@ MainForge.Core        modelos de domínio (SistemaRpg) e CaminhosDoProjeto. Não
        └─ MainForge.App     WPF, ainda um shell vazio.
 ```
 
-`MainForge.Cli` e `MainForge.App` referenciam `MainForge.Mcp` **só para o executável dele cair
-na mesma pasta de saída** — `ConfiguracaoDoServidorMcp` o procura lá. Não chame classes de
-`MainForge.Mcp` a partir da interface.
+`MainForge.Cli` e `MainForge.App` referenciam `MainForge.Mcp` por dois motivos: o executável dele
+cai na mesma pasta de saída (`ConfiguracaoDoServidorMcp` o procura lá) e o próprio aplicativo
+sabe ser o servidor, quando lançado com `--mcp <raiz>` — é o que permite distribuir tudo num
+executável só. Essa passagem mora inteira em [ModoServidorMcp.cs](src/MainForge.Cli/ModoServidorMcp.cs);
+fora dela, não chame classes de `MainForge.Mcp` a partir da interface.
+
+`Agents/*.md` são copiados para a pasta de saída de `MainForge.Cli` (item `Content` no `.csproj`):
+sem eles ao lado do executável, o aplicativo baixado não tem prompt para mandar ao agente. O
+arquivo de verdade continua sendo o de `Agents/` — nada de prompt embutido em C#.
 
 TFMs: `net10.0` na maioria; `net10.0-windows` em `Cli`, `Tests` e `ValidacaoPontaAPonta` (o
 resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`); `net10.0-windows10.0.19041.0` no WPF.
@@ -113,7 +121,9 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
 1. **Idioma.** Solução, projetos e namespaces em inglês (padrão .NET). Todo o resto — classes,
    métodos, variáveis, comentários, textos de UI — em **português (pt-BR)**, com acento.
 2. **Caminho sempre por `CaminhosDoProjeto`.** É o único ponto onde "não sair da raiz do
-   projeto" é aplicado; qualquer caminho vindo do modelo passa por `ResolverDentroDe`.
+   projeto" é aplicado; qualquer caminho vindo do modelo passa por `ResolverDentroDe`. A raiz é
+   descoberta pela presença de `Agents/` com prompts — no repositório e também numa instalação
+   baixada, onde as outras pastas nascem vazias em `GarantirEstrutura`.
 3. **Escrita do agente só pelo MCP.** As ferramentas `Write`/`Edit`/`Bash`/`PowerShell` são
    negadas a todo agente em `DefinicaoDeAgente.NegacoesComuns`. Mexer nessa lista é mexer no
    guardrail — `DefinicaoDeAgenteTestes` trava as negações críticas. Ferramenta nova do Claude
