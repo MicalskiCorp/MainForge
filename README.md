@@ -6,8 +6,9 @@ usuário.
 
 ## Baixar e usar
 
-**[Baixar a versão mais recente](https://github.com/MicalskiCorp/MainForge/releases/latest)**
-(Windows x64) — descompacte o `.zip` onde quiser e rode `MainForge.Cli.exe`.
+**[Baixar o MainForge 0.1.0](https://github.com/MicalskiCorp/MainForge/releases/download/v0.1.0/MainForge-0.1.0-win-x64.zip)**
+(Windows x64, 34 MB) — descompacte o `.zip` onde quiser e rode `MainForge.Cli.exe`.
+As demais versões ficam em [releases](https://github.com/MicalskiCorp/MainForge/releases/latest).
 
 O download é **um executável só**, com o runtime .NET e as bibliotecas de PDF dentro dele: não
 há instalador, não escreve no registro e não precisa de administrador. Ao lado dele vão os
