@@ -1,6 +1,6 @@
 # Indice — base
 
-Caminho: `Knowledge/SistemaTeste/base/`
+Caminho: `Sistemas/SistemaTeste/base/`
 
 Jogo base do SistemaTeste. Um personagem é definido por nome, classe, nível, três atributos (Forca, Destreza, Constituicao), Pontos de Vida e equipamento. Não existem raças, antecedentes, perícias, idiomas ou magias.
 

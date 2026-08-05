@@ -1,7 +1,7 @@
 # Templates
 
 Coloque aqui a ficha de personagem em PDF editável (com campos AcroForm) de cada sistema,
-usando o mesmo nome de subpasta usado em `Systems/`:
+usando o mesmo nome de subpasta usado em `Input/`:
 
 ```
 Templates/

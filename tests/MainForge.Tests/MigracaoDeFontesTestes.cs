@@ -28,7 +28,7 @@ public sealed class MigracaoDeFontesTestes : IDisposable
     /// <summary>Monta um sistema no layout antigo: tudo solto na pasta do sistema.</summary>
     private void MontarLayoutAntigo()
     {
-        Gravar(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Livro Base.pdf"), "%PDF-falso");
+        Gravar(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "Livro Base.pdf"), "%PDF-falso");
         Gravar(Path.Combine(_caminhos.Conhecimento, "Aventura&Cia", "Regras-Fundamentais.md"), "# Regras\n\nO d20.\n");
         Gravar(Path.Combine(_caminhos.Conhecimento, "Aventura&Cia", "Classes", "Monge.md"), "# Monge\n\nDado de vida d8.\n");
         Gravar(Path.Combine(_caminhos.Conhecimento, "Aventura&Cia", "Ficha-Mapeamento.md"), "# Mapeamento\n");
@@ -52,11 +52,11 @@ public sealed class MigracaoDeFontesTestes : IDisposable
         var resultado = MigracaoDeFontes.Migrar(_caminhos, "Aventura&Cia");
 
         Assert.True(resultado.MoveuAlgo);
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Livro Base.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "base", "Livro Base.pdf")));
         Assert.True(File.Exists(NoConhecimento("base", "Regras-Fundamentais.md")));
         Assert.True(File.Exists(NoConhecimento("base", "Classes", "Monge.md")));
 
-        Assert.False(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Livro Base.pdf")));
+        Assert.False(File.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "Livro Base.pdf")));
         Assert.False(Directory.Exists(NoConhecimento("Classes")));
     }
 

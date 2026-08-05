@@ -53,7 +53,7 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         Assert.Equal("Ficha.pdf", resultado.Ficha);
         Assert.Contains("Nome", resultado.CamposDaFicha);
 
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Livro Basico.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "base", "Livro Basico.pdf")));
         Assert.True(File.Exists(Path.Combine(_caminhos.Modelos, "Aventura&Cia", "Ficha.pdf")));
     }
 
@@ -85,7 +85,7 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         var resultado = ImportadorDeSistema.Importar(_caminhos, "Tormenta20", [primeiro, segundo], ficha);
 
         Assert.Equal(2, resultado.Livros.Count);
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Tormenta20", "base", "Livro2.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Entrada, "Tormenta20", "base", "Livro2.pdf")));
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
             () => ImportadorDeSistema.Importar(_caminhos, "Sistema", [livro], fichaSemCampos));
 
         Assert.Contains("AcroForm", excecao.Message);
-        Assert.False(Directory.Exists(Path.Combine(_caminhos.Sistemas, "Sistema")));
+        Assert.False(Directory.Exists(Path.Combine(_caminhos.Entrada, "Sistema")));
     }
 
     [Fact]
@@ -163,8 +163,8 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
             _caminhos, "Aventura&Cia", FonteDoSistema.Criar("Compendio-Arcano"), [compendio]);
 
         Assert.Equal(["Compendio.pdf"], adicionados);
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Compendio-Arcano", "Compendio.pdf")));
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Livro Basico.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "Compendio-Arcano", "Compendio.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "base", "Livro Basico.pdf")));
 
         Assert.Equal(
             [FonteDoSistema.Base, new FonteDoSistema("Compendio-Arcano")],
@@ -185,7 +185,7 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         var segundo = CriarArquivoDeOrigem("Guia do Mestre.pdf");
         ImportadorDeSistema.AdicionarLivros(_caminhos, "Aventura&Cia", FonteDoSistema.Base, [segundo]);
 
-        Assert.True(File.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "base", "Guia do Mestre.pdf")));
+        Assert.True(File.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "base", "Guia do Mestre.pdf")));
         Assert.Single(new SistemaRpg("Aventura&Cia").DescobrirFontes(_caminhos));
     }
 
@@ -227,7 +227,7 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
         Assert.Throws<ArgumentException>(() => ImportadorDeSistema.AdicionarLivros(
             _caminhos, "Aventura&Cia", FonteDoSistema.Criar("Compendio-Arcano"), [naoPdf]));
 
-        Assert.False(Directory.Exists(Path.Combine(_caminhos.Sistemas, "Aventura&Cia", "Compendio-Arcano")));
+        Assert.False(Directory.Exists(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "Compendio-Arcano")));
     }
 
     [Fact]

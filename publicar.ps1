@@ -53,7 +53,7 @@ Get-ChildItem -Path $pacote -Filter "*.pdb" -ErrorAction SilentlyContinue | Remo
 
 # Pastas de dados vazias, para quem abrir o zip entender onde as coisas vão. O aplicativo as
 # cria sozinho se não existirem, mas um zip que já mostra a estrutura explica o produto.
-foreach ($pasta in @("Systems", "Templates", "Knowledge", "Output\Personagens")) {
+foreach ($pasta in @("Input", "Templates", "Sistemas", "Output\Personagens")) {
     $caminho = Join-Path $pacote $pasta
     New-Item -ItemType Directory -Force $caminho | Out-Null
     Set-Content -Path (Join-Path $caminho ".gitkeep") -Value "" -Encoding utf8

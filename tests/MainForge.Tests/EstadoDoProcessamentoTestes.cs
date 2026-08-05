@@ -33,7 +33,7 @@ public sealed class EstadoDoProcessamentoTestes : IDisposable
 
     private string GravarLivro(string nome, string conteudo = "pdf")
     {
-        var completo = Path.Combine(_caminhos.Sistemas, "Aventura&Cia", nome);
+        var completo = Path.Combine(_caminhos.Entrada, "Aventura&Cia", nome);
         Directory.CreateDirectory(Path.GetDirectoryName(completo)!);
         File.WriteAllText(completo, conteudo);
         return completo;

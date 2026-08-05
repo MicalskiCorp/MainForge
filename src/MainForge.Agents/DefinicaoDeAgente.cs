@@ -17,7 +17,7 @@ namespace MainForge.Agents;
 ///   <item><b>Negações por ferramenta e por caminho</b> (<see cref="FerramentasNegadas"/>).
 ///   Este é o mecanismo que de fato bloqueia. <c>--allowedTools</c> apenas <em>concede</em>:
 ///   ferramentas de leitura já são aprovadas por padrão, então listar
-///   <c>Read(Knowledge/**)</c> não impede leituras fora de Knowledge/ — só uma negação
+///   <c>Read(Sistemas/**)</c> não impede leituras fora de Sistemas/ — só uma negação
 ///   explícita faz isso.</item>
 ///   <item><b>Confinamento em código.</b> Toda <em>escrita</em> passa pelo servidor MCP em
 ///   C#, onde <see cref="CaminhosDoProjeto.ResolverDentroDe"/> rejeita qualquer caminho que
@@ -144,8 +144,8 @@ public sealed record DefinicaoDeAgente(
         };
 
     /// <summary>
-    /// Lê os livros em Systems/ e a ficha em branco em Templates/, e escreve a base de
-    /// conhecimento em Knowledge/. Nunca conversa com o usuário final e nunca olha as fichas
+    /// Lê os livros em Input/ e a ficha em branco em Templates/, e escreve a base de
+    /// conhecimento em Sistemas/. Nunca conversa com o usuário final e nunca olha as fichas
     /// de personagens já criadas em Output/.
     /// </summary>
     public static readonly DefinicaoDeAgente Configurador = new(
@@ -165,7 +165,7 @@ public sealed record DefinicaoDeAgente(
 
     /// <summary>
     /// O Configurador numa máquina em que abrir PDF não funciona: a leitura dos livros em
-    /// <c>Systems/</c> fica negada, e sobra o texto já convertido em <c>_texto/</c>.
+    /// <c>Input/</c> fica negada, e sobra o texto já convertido em <c>_texto/</c>.
     ///
     /// <para><b>Por que negar em vez de só pedir.</b> O <c>Read</c> do Claude Code rasteriza as
     /// páginas do PDF com o <c>pdftoppm</c>; sem o poppler instalado, toda tentativa termina em
@@ -175,7 +175,7 @@ public sealed record DefinicaoDeAgente(
     /// descobrir o que o aplicativo já sabia. Negar o caminho quebrado transforma isso numa
     /// recusa imediata, com o agente seguindo pelo texto.</para>
     ///
-    /// <para>A negação vale só para <c>Systems/</c>. A ficha em branco de <c>Templates/</c>
+    /// <para>A negação vale só para <c>Input/</c>. A ficha em branco de <c>Templates/</c>
     /// continua sendo lida como PDF: ali o que interessa é o leiaute, não há versão em texto, e
     /// se essa leitura também falhar o usuário precisa ver a falha — é sinal de que falta o
     /// poppler para gerar os arquivos da ficha.</para>
@@ -183,12 +183,12 @@ public sealed record DefinicaoDeAgente(
     public static DefinicaoDeAgente ConfiguradorSemAbrirPdf(DefinicaoDeAgente configurador) =>
         configurador with
         {
-            NegacoesEspecificas = [.. configurador.NegacoesEspecificas, "Read(Systems/**/*.pdf)"],
+            NegacoesEspecificas = [.. configurador.NegacoesEspecificas, "Read(Input/**/*.pdf)"],
         };
 
     /// <summary>
-    /// Só lê Knowledge/ e só escreve em Output/Personagens/, pela ferramenta MCP de
-    /// preenchimento. Nunca lê os PDFs originais em Systems/ (caros em tokens, e é justamente
+    /// Só lê Sistemas/ e só escreve em Output/Personagens/, pela ferramenta MCP de
+    /// preenchimento. Nunca lê os PDFs originais em Input/ (caros em tokens, e é justamente
     /// para isso que o Configurador destilou o conhecimento) nem o template em Templates/ —
     /// para ver a ficha ele usa o Ficha-ModeloEmTexto.md, e para saber os nomes dos campos,
     /// o Ficha-Mapeamento.md.
@@ -198,7 +198,7 @@ public sealed record DefinicaoDeAgente(
         NomeArquivoPrompt: "DungeonMaster.md",
         FerramentasNativasPermitidas: ["Read", "Glob"],
         FerramentasMcpPermitidas: ["preencher_ficha_personagem"],
-        NegacoesEspecificas: ["Read(Systems/**)", "Read(Templates/**)"]);
+        NegacoesEspecificas: ["Read(Input/**)", "Read(Templates/**)"]);
 
     /// <summary>
     /// O Dungeon Master de uma mesa que não usa todas as expansões: as fontes que o usuário não
@@ -220,7 +220,7 @@ public sealed record DefinicaoDeAgente(
             NegacoesEspecificas =
             [
                 .. DungeonMaster.NegacoesEspecificas,
-                .. fontesRecusadas.Select(fonte => $"Read(Knowledge/{sistema.Id}/{fonte.Id}/**)"),
+                .. fontesRecusadas.Select(fonte => $"Read(Sistemas/{sistema.Id}/{fonte.Id}/**)"),
             ],
         };
 }

@@ -6,7 +6,7 @@ using PdfSharp.Pdf.AcroForms;
 using PdfSharp.Pdf.IO;
 
 // Harness de validação ponta a ponta do fluxo completo:
-//   Configurador -> Knowledge/*.md -> Dungeon Master -> Output/Personagens/*.pdf
+//   Configurador -> Sistemas/*.md -> Dungeon Master -> Output/Personagens/*.pdf
 // Usa o sistema fictício "SistemaTeste" (PDF pequeno) para manter o consumo baixo.
 //
 // Uso:
@@ -30,7 +30,7 @@ Titulo($"Sistema alvo: {sistema}");
 // ---------------------------------------------------------------------------
 Titulo("Etapa 1 — validando os PDFs de entrada");
 
-var caminhoRegras = Path.Combine(caminhos.Sistemas, sistema, FonteDoSistema.IdDaBase, "Regras.pdf");
+var caminhoRegras = Path.Combine(caminhos.Entrada, sistema, FonteDoSistema.IdDaBase, "Regras.pdf");
 var caminhoFicha = Path.Combine(caminhos.Modelos, sistema, "Ficha.pdf");
 
 if (!File.Exists(caminhoRegras) || !File.Exists(caminhoFicha))
@@ -102,10 +102,10 @@ using var configurador = new SessaoDeAgente(opcoes, DefinicaoDeAgente.Configurad
 
 var respostaConfigurador = await configurador.EnviarAsync(
     $"Processe o sistema '{sistema}' do zero: leia o(s) PDF(s) em " +
-    $"Systems/{sistema}/{FonteDoSistema.IdDaBase}/ e a ficha em branco, registre o plano de " +
-    $"arquivos e gere a base de conhecimento completa em Knowledge/{sistema}/{FonteDoSistema.IdDaBase}/. " +
+    $"Input/{sistema}/{FonteDoSistema.IdDaBase}/ e a ficha em branco, registre o plano de " +
+    $"arquivos e gere a base de conhecimento completa em Sistemas/{sistema}/{FonteDoSistema.IdDaBase}/. " +
     $"Os dois arquivos da ficha ({string.Join(" e ", SistemaRpg.ArquivosDaFicha)}) ficam na raiz " +
-    $"de Knowledge/{sistema}/, fora da pasta de fonte. Quando terminar, resuma os arquivos que criou.",
+    $"de Sistemas/{sistema}/, fora da pasta de fonte. Quando terminar, resuma os arquivos que criou.",
     Progresso);
 
 Console.WriteLine(respostaConfigurador);
@@ -179,7 +179,7 @@ using var dungeonMaster = new SessaoDeAgente(opcoes, DefinicaoDeAgente.DungeonMa
 var roteiro = new[]
 {
     $"Quero criar um personagem no sistema '{sistema}'. Esta mesa usa só o jogo base: " +
-    $"Knowledge/{sistema}/{FonteDoSistema.IdDaBase}/index.md. Já decidi tudo: classe Guerreiro, " +
+    $"Sistemas/{sistema}/{FonteDoSistema.IdDaBase}/index.md. Já decidi tudo: classe Guerreiro, " +
     "nome 'Thoradin', e pode distribuir os 3 pontos livres de atributo como achar melhor " +
     "pelas regras. Calcule o resto conforme as regras do sistema, me mostre a ficha final " +
     "e peça minha confirmação antes de gerar o PDF.",

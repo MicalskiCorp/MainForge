@@ -1,7 +1,7 @@
-# Knowledge
+# Sistemas
 
 Base de conhecimento gerada automaticamente pelo Agente Configurador a partir dos livros em
-`Systems/`. Cada sistema tem sua própria subpasta, com uma estrutura de diretórios em
+`Input/`. Cada sistema tem sua própria subpasta, com uma estrutura de diretórios em
 Markdown que reflete o fluxo de criação de personagens daquele sistema especificamente —
 não existe um esqueleto fixo imposto pelo código.
 
@@ -11,10 +11,10 @@ a conversa com o usuário. Ele nunca é modificado por esse agente; apenas pelo 
 ## Dividido por fonte
 
 Dentro do sistema, o conteúdo é separado pela fonte de onde veio — a mesma divisão de
-`Systems/<Sistema>/`:
+`Input/<Sistema>/`:
 
 ```
-Knowledge/Aventura&Cia/
+Sistemas/Aventura&Cia/
     Ficha-Mapeamento.md      <- do sistema inteiro, vale com qualquer expansão
     Ficha-ModeloEmTexto.md   <- idem
     base/                    <- o jogo base
@@ -35,7 +35,7 @@ sistema inteiro e não muda com a expansão em uso.
 
 ## Índices
 
-Cada nível tem um `index.md` gerado automaticamente: `Knowledge/index.md` lista os sistemas, e
+Cada nível tem um `index.md` gerado automaticamente: `Sistemas/index.md` lista os sistemas, e
 o `index.md` de cada pasta lista os arquivos e subpastas dela com uma linha sobre cada um. É
 por eles que o Dungeon Master navega — ler um índice de 2 KB para decidir abrir três arquivos
 custa uma fração do que custaria varrer a base inteira, e a conta sai da cota da assinatura do

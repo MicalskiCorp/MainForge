@@ -31,7 +31,7 @@ public sealed class FonteDoSistemaTestes : IDisposable
         File.WriteAllText(caminho, conteudo);
     }
 
-    private string EmSystems(params string[] partes) => Path.Combine([_caminhos.Sistemas, "Aventura&Cia", .. partes]);
+    private string EmSystems(params string[] partes) => Path.Combine([_caminhos.Entrada, "Aventura&Cia", .. partes]);
 
     private string EmKnowledge(params string[] partes) => Path.Combine([_caminhos.Conhecimento, "Aventura&Cia", .. partes]);
 
@@ -84,7 +84,7 @@ public sealed class FonteDoSistemaTestes : IDisposable
     }
 
     /// <summary>
-    /// O recenseamento é o que diz ao Configurador em qual pasta de Knowledge/ o conteúdo de
+    /// O recenseamento é o que diz ao Configurador em qual pasta de Sistemas/ o conteúdo de
     /// cada livro deve cair — errar aqui é gravar regra de compêndio como se fosse do básico.
     /// </summary>
     [Fact]
@@ -117,7 +117,7 @@ public sealed class FonteDoSistemaTestes : IDisposable
 
     /// <summary>
     /// Mover um livro de fonte não pode obrigar a relê-lo: o conteúdo é o mesmo, só o destino
-    /// dele em Knowledge/ mudou.
+    /// dele em Sistemas/ mudou.
     /// </summary>
     [Fact]
     public void SincronizarComDisco_LivroQueMudouDeFonte_ContinuaMarcadoComoLido()

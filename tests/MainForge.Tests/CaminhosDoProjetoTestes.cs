@@ -28,7 +28,7 @@ public class CaminhosDoProjetoTestes
 
     /// <summary>
     /// Quem baixa o aplicativo pronto tem o executável e os prompts dos agentes, e nada mais. Se
-    /// a descoberta continuasse exigindo <c>Systems/</c>, essa instalação cairia no diretório
+    /// a descoberta continuasse exigindo <c>Input/</c>, essa instalação cairia no diretório
     /// atual — que é de onde o programa foi chamado e não tem relação com onde ele está.
     /// </summary>
     [Fact]
@@ -69,7 +69,7 @@ public class CaminhosDoProjetoTestes
 
         var criadas = caminhos.GarantirEstrutura();
 
-        Assert.True(Directory.Exists(caminhos.Sistemas));
+        Assert.True(Directory.Exists(caminhos.Entrada));
         Assert.True(Directory.Exists(caminhos.Modelos));
         Assert.True(Directory.Exists(caminhos.Conhecimento));
         Assert.True(Directory.Exists(caminhos.SaidaPersonagens));

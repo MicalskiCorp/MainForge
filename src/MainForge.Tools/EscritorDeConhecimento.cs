@@ -3,11 +3,11 @@ using MainForge.Core;
 namespace MainForge.Tools;
 
 /// <summary>
-/// Grava os arquivos Markdown da base de conhecimento em Knowledge/&lt;sistema&gt;/.
+/// Grava os arquivos Markdown da base de conhecimento em Sistemas/&lt;sistema&gt;/.
 ///
 /// Existe como ferramenta MCP, e não como a ferramenta <c>Write</c> embutida do Claude Code,
 /// justamente para o confinamento ser aplicado em C#: a regra "o Configurador só escreve
-/// dentro de Knowledge/" é imposta por <see cref="CaminhosDoProjeto.ResolverDentroDe"/> aqui,
+/// dentro de Sistemas/" é imposta por <see cref="CaminhosDoProjeto.ResolverDentroDe"/> aqui,
 /// em vez de depender de uma lista de negação por caminho que precisaria antecipar todo
 /// diretório que o agente poderia inventar.
 ///
@@ -20,7 +20,7 @@ namespace MainForge.Tools;
 public static class EscritorDeConhecimento
 {
     /// <summary>
-    /// Cria ou sobrescreve um .md dentro de Knowledge/&lt;sistema&gt;/, criando os diretórios
+    /// Cria ou sobrescreve um .md dentro de Sistemas/&lt;sistema&gt;/, criando os diretórios
     /// intermediários. Devolve o caminho gravado, relativo à raiz do projeto.
     /// </summary>
     /// <param name="resumo">
@@ -86,7 +86,7 @@ public static class EscritorDeConhecimento
         if (!Directory.Exists(diretorio))
         {
             throw new ErroDeFerramenta(
-                $"A pasta '{pastaRelativa}' ainda não existe em Knowledge/{sistema}/ — " +
+                $"A pasta '{pastaRelativa}' ainda não existe em Sistemas/{sistema}/ — " +
                 "grave um arquivo dentro dela antes de descrevê-la.");
         }
 

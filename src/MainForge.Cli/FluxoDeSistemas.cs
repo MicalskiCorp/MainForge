@@ -20,8 +20,8 @@ internal static class FluxoDeSistemas
 
         if (sistemas.Count == 0)
         {
-            ConsoleUi.Aviso($"\nNenhum sistema em {caminhos.Sistemas}.");
-            ConsoleUi.Info("Para adicionar um: crie Systems/<NomeDoSistema>/ com o PDF do livro,");
+            ConsoleUi.Aviso($"\nNenhum sistema em {caminhos.Entrada}.");
+            ConsoleUi.Info("Para adicionar um: crie Input/<NomeDoSistema>/ com o PDF do livro,");
             ConsoleUi.Info("e Templates/<NomeDoSistema>/ com a ficha em PDF editável (AcroForm).");
             return;
         }
@@ -34,7 +34,7 @@ internal static class FluxoDeSistemas
 
         foreach (var sistema in sistemas)
         {
-            var livros = Contar(sistema.DiretorioSistemas(caminhos), "*.pdf");
+            var livros = Contar(sistema.DiretorioEntrada(caminhos), "*.pdf");
             var fichas = Contar(sistema.DiretorioModelo(caminhos), "*.pdf");
 
             var descricaoConhecimento = "não gerado";
@@ -155,7 +155,7 @@ internal static class FluxoDeSistemas
     /// morreu antes de registrar qualquer coisa.
     ///
     /// <para>Nada aqui chama agente: os índices saem do conteúdo das pastas e o registro sai da
-    /// comparação entre o que está em <c>Knowledge/</c> e os PDFs em <c>Systems/</c>. Como é de
+    /// comparação entre o que está em <c>Sistemas/</c> e os PDFs em <c>Input/</c>. Como é de
     /// graça, vale oferecer sempre que faltar — é o que faz a próxima execução continuar em vez
     /// de recomeçar.</para>
     /// </summary>

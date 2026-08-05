@@ -1,10 +1,10 @@
-# Systems
+# Input
 
 Os livros oficiais (PDF) de cada sistema de RPG, um subdiretório por sistema e, **dentro dele,
 um subdiretório por fonte**:
 
 ```
-Systems/
+Input/
     Aventura&Cia/
         base/               <- o jogo base; toda mesa usa
             Livro-Base.pdf
@@ -29,7 +29,7 @@ Dungeon Master a leitura das que ficaram de fora**. Essa negação é por pasta,
 aqui é o que faz a escolha valer: um compêndio guardado dentro de `base/` viraria regra
 obrigatória em toda mesa, sem como recusá-lo.
 
-A divisão se repete em `Knowledge/<Sistema>/`: o conteúdo destilado dos livros de uma fonte vai
+A divisão se repete em `Sistemas/<Sistema>/`: o conteúdo destilado dos livros de uma fonte vai
 para a pasta de mesmo nome.
 
 ## Como os arquivos chegam aqui
@@ -43,7 +43,7 @@ Pelo menu do aplicativo, não na mão:
 Um sistema importado por uma versão anterior do aplicativo tem os PDFs soltos na raiz; a tela de
 sistemas oferece movê-los para `base/`. É só mover arquivo — nenhum livro é relido.
 
-O Agente Configurador lê esta pasta e gera a estrutura correspondente em `Knowledge/<Sistema>/`.
+O Agente Configurador lê esta pasta e gera a estrutura correspondente em `Sistemas/<Sistema>/`.
 Ele nunca modifica os PDFs originais.
 
 ## A pasta `_texto/`

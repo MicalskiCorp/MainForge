@@ -10,7 +10,7 @@ namespace MainForge.Tools;
 /// </summary>
 /// <param name="Sistema">O sistema criado ou atualizado.</param>
 /// <param name="Fonte">A fonte em que os livros entraram — sempre o jogo base, aqui.</param>
-/// <param name="Livros">Nomes dos arquivos de livro copiados para Systems/&lt;sistema&gt;/base/.</param>
+/// <param name="Livros">Nomes dos arquivos de livro copiados para Input/&lt;sistema&gt;/base/.</param>
 /// <param name="Ficha">Nome do arquivo de ficha copiado para Templates/&lt;sistema&gt;/.</param>
 /// <param name="CamposDaFicha">Campos de formulário encontrados na ficha.</param>
 public sealed record ResultadoDaImportacao(
@@ -38,7 +38,7 @@ public static class ImportadorDeSistema
 
     /// <summary>
     /// Cria o sistema a partir dos livros do jogo base e da ficha em branco. Os livros vão para
-    /// <c>Systems/&lt;sistema&gt;/base/</c>: quem importa um sistema está trazendo o jogo base
+    /// <c>Input/&lt;sistema&gt;/base/</c>: quem importa um sistema está trazendo o jogo base
     /// por definição — expansão entra depois, por <see cref="AdicionarLivros"/>, e precisa de um
     /// sistema já existente para se somar.
     /// </summary>
@@ -89,7 +89,7 @@ public static class ImportadorDeSistema
     /// <para>Cada expansão tem pasta própria — é ela que permite ao usuário dizer, na criação do
     /// personagem, que aquela mesa usa este compêndio e não aquele.</para>
     /// </summary>
-    /// <returns>Os nomes dos arquivos copiados para <c>Systems/&lt;sistema&gt;/&lt;fonte&gt;/</c>.</returns>
+    /// <returns>Os nomes dos arquivos copiados para <c>Input/&lt;sistema&gt;/&lt;fonte&gt;/</c>.</returns>
     public static IReadOnlyList<string> AdicionarLivros(
         CaminhosDoProjeto caminhos,
         string nomeDoSistema,
@@ -97,7 +97,7 @@ public static class ImportadorDeSistema
         IReadOnlyList<string> caminhosDosLivros)
     {
         var sistema = ValidarNome(nomeDoSistema);
-        var diretorioDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Sistemas, sistema.Id);
+        var diretorioDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Entrada, sistema.Id);
 
         if (!Directory.Exists(diretorioDoSistema))
         {
@@ -158,7 +158,7 @@ public static class ImportadorDeSistema
     }
 
     /// <summary>
-    /// O nome do sistema vira nome de pasta em Systems/, Templates/ e Knowledge/, então
+    /// O nome do sistema vira nome de pasta em Input/, Templates/ e Sistemas/, então
     /// precisa ser um nome de pasta simples — nada de barra, "..", nem caractere proibido.
     /// A regra é a mesma do nome de expansão, e por isso mora em <see cref="NomeDePasta"/>.
     /// </summary>

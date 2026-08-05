@@ -87,14 +87,14 @@ public class DefinicaoDeAgenteTestes
 
     /// <summary>
     /// O Dungeon Master nunca lê os PDFs originais: eles são caros em tokens e é justamente
-    /// para isso que o Configurador destilou o conhecimento em Knowledge/.
+    /// para isso que o Configurador destilou o conhecimento em Sistemas/.
     /// </summary>
     [Fact]
     public void DungeonMaster_NaoPodeLerOsPdfsOriginais()
     {
         var negadas = DefinicaoDeAgente.DungeonMaster.FerramentasNegadas();
 
-        Assert.Contains("Read(Systems/**)", negadas);
+        Assert.Contains("Read(Input/**)", negadas);
         Assert.Contains("Read(Templates/**)", negadas);
     }
 
@@ -126,13 +126,13 @@ public class DefinicaoDeAgenteTestes
 
         var negadas = agente.FerramentasNegadas();
 
-        Assert.Contains("Read(Systems/**/*.pdf)", negadas);
+        Assert.Contains("Read(Input/**/*.pdf)", negadas);
 
         // A ficha em Templates/ não tem versão em texto e é lida justamente pelo leiaute.
         Assert.DoesNotContain("Read(Templates/**)", negadas);
 
-        // O texto convertido mora dentro de Systems/, e continua legível.
-        Assert.DoesNotContain("Read(Systems/**)", negadas);
+        // O texto convertido mora dentro de Input/, e continua legível.
+        Assert.DoesNotContain("Read(Input/**)", negadas);
 
         // E as negações de sempre continuam valendo.
         Assert.Contains("Bash", negadas);
@@ -144,7 +144,7 @@ public class DefinicaoDeAgenteTestes
     {
         DefinicaoDeAgente.ConfiguradorSemAbrirPdf(DefinicaoDeAgente.Configurador);
 
-        Assert.DoesNotContain("Read(Systems/**/*.pdf)", DefinicaoDeAgente.Configurador.FerramentasNegadas());
+        Assert.DoesNotContain("Read(Input/**/*.pdf)", DefinicaoDeAgente.Configurador.FerramentasNegadas());
     }
 
     /// <summary>
@@ -162,12 +162,12 @@ public class DefinicaoDeAgenteTestes
 
         var negadas = agente.FerramentasNegadas();
 
-        Assert.Contains("Read(Knowledge/Aventura&Cia/Compendio-Arcano/**)", negadas);
-        Assert.Contains("Read(Knowledge/Aventura&Cia/Compendio-Sombrio/**)", negadas);
+        Assert.Contains("Read(Sistemas/Aventura&Cia/Compendio-Arcano/**)", negadas);
+        Assert.Contains("Read(Sistemas/Aventura&Cia/Compendio-Sombrio/**)", negadas);
 
         // O que a mesa usa continua acessível, e as negações de sempre seguem valendo.
-        Assert.DoesNotContain("Read(Knowledge/Aventura&Cia/base/**)", negadas);
-        Assert.Contains("Read(Systems/**)", negadas);
+        Assert.DoesNotContain("Read(Sistemas/Aventura&Cia/base/**)", negadas);
+        Assert.Contains("Read(Input/**)", negadas);
         Assert.Contains("Bash", negadas);
     }
 

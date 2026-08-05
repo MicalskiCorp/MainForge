@@ -35,7 +35,7 @@ public sealed class ConversorDeLivrosTestes : IDisposable
 
     private string GravarLivro(string nome = "Livro.pdf", string fonte = "base")
     {
-        var caminho = Path.Combine(_caminhos.Sistemas, "Aventura&Cia", fonte, nome);
+        var caminho = Path.Combine(_caminhos.Entrada, "Aventura&Cia", fonte, nome);
         Directory.CreateDirectory(Path.GetDirectoryName(caminho)!);
         File.WriteAllText(caminho, "conteudo do pdf");
         return caminho;
@@ -44,7 +44,7 @@ public sealed class ConversorDeLivrosTestes : IDisposable
     /// <summary>Um PDF de verdade, para os caminhos que passam pelo extrator interno.</summary>
     private string GravarLivroDeVerdade(string nome = "Regras.pdf", string fonte = "base")
     {
-        var caminho = Path.Combine(_caminhos.Sistemas, "Aventura&Cia", fonte, nome);
+        var caminho = Path.Combine(_caminhos.Entrada, "Aventura&Cia", fonte, nome);
         Directory.CreateDirectory(Path.GetDirectoryName(caminho)!);
         File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "RegrasTeste.pdf"), caminho);
         return caminho;
@@ -75,12 +75,12 @@ public sealed class ConversorDeLivrosTestes : IDisposable
     [Fact]
     public void CaminhoDoTexto_FicaNaPastaDerivadaAoLadoDoPdf()
     {
-        var pdf = Path.Combine("Systems", "Aventura&Cia", "base", "Livro Base.pdf");
+        var pdf = Path.Combine("Input", "Aventura&Cia", "base", "Livro Base.pdf");
 
         var texto = ConversorDeLivros.CaminhoDoTexto(pdf);
 
         Assert.Equal(
-            Path.Combine("Systems", "Aventura&Cia", "base", ConversorDeLivros.NomeDaPastaDeTexto, "Livro Base.md"),
+            Path.Combine("Input", "Aventura&Cia", "base", ConversorDeLivros.NomeDaPastaDeTexto, "Livro Base.md"),
             texto);
     }
 
@@ -92,7 +92,7 @@ public sealed class ConversorDeLivrosTestes : IDisposable
         var resultado = Assert.Single(await ConverterAsync(ProgramaFalso()));
 
         Assert.Equal(SituacaoDaConversao.Convertido, resultado.Situacao);
-        Assert.Equal("Systems/Aventura&Cia/base/_texto/Livro.md", resultado.CaminhoDoTexto);
+        Assert.Equal("Input/Aventura&Cia/base/_texto/Livro.md", resultado.CaminhoDoTexto);
         Assert.Equal("conteudo do pdf", File.ReadAllText(ConversorDeLivros.CaminhoDoTexto(pdf)).Trim());
     }
 
@@ -156,7 +156,7 @@ public sealed class ConversorDeLivrosTestes : IDisposable
             .ToList();
 
         Assert.Equal(
-            ["Systems/Aventura&Cia/base/_texto/Basico.md", "Systems/Aventura&Cia/Compendio-Arcano/_texto/Compendio-Arcano.md"],
+            ["Input/Aventura&Cia/base/_texto/Basico.md", "Input/Aventura&Cia/Compendio-Arcano/_texto/Compendio-Arcano.md"],
             caminhos);
     }
 

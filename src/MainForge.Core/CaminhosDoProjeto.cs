@@ -1,18 +1,30 @@
 namespace MainForge.Core;
 
 /// <summary>
-/// Resolve os diretórios de dados de topo do projeto (Agents, Systems, Templates,
-/// Knowledge, Output) a partir de uma única raiz. Toda ferramenta e agente que acessa o
-/// sistema de arquivos deve passar por aqui em vez de montar caminhos na mão, para que a
-/// regra "não ler/escrever fora do projeto" tenha um único ponto de aplicação.
+/// Resolve os diretórios de dados de topo do projeto (Agents, Input, Templates, Sistemas,
+/// Output) a partir de uma única raiz. Toda ferramenta e agente que acessa o sistema de
+/// arquivos deve passar por aqui em vez de montar caminhos na mão, para que a regra
+/// "não ler/escrever fora do projeto" tenha um único ponto de aplicação.
+///
+/// <para><b>Os nomes das propriedades e os das pastas não são os mesmos, de propósito.</b>
+/// <see cref="Entrada"/> é a pasta <c>Input/</c>, com os livros que o usuário fornece;
+/// <see cref="Conhecimento"/> é a pasta <c>Sistemas/</c>, com o que o Configurador destilou
+/// deles. Este é o único lugar do código onde essa correspondência é escrita — mudar o nome de
+/// uma pasta é mudar uma linha aqui.</para>
 /// </summary>
 public sealed class CaminhosDoProjeto
 {
     public string Raiz { get; }
     public string Agentes { get; }
-    public string Sistemas { get; }
+
+    /// <summary>Os livros em PDF fornecidos pelo usuário: a pasta <c>Input/</c>.</summary>
+    public string Entrada { get; }
+
     public string Modelos { get; }
+
+    /// <summary>As bases de conhecimento por sistema de RPG: a pasta <c>Sistemas/</c>.</summary>
     public string Conhecimento { get; }
+
     public string Saida { get; }
     public string SaidaPersonagens { get; }
 
@@ -20,9 +32,9 @@ public sealed class CaminhosDoProjeto
     {
         Raiz = Path.GetFullPath(raiz);
         Agentes = Path.Combine(Raiz, "Agents");
-        Sistemas = Path.Combine(Raiz, "Systems");
+        Entrada = Path.Combine(Raiz, "Input");
         Modelos = Path.Combine(Raiz, "Templates");
-        Conhecimento = Path.Combine(Raiz, "Knowledge");
+        Conhecimento = Path.Combine(Raiz, "Sistemas");
         Saida = Path.Combine(Raiz, "Output");
         SaidaPersonagens = Path.Combine(Saida, "Personagens");
     }
@@ -38,10 +50,10 @@ public sealed class CaminhosDoProjeto
     /// ancestral do executável que já tenha os prompts dos agentes, e o próprio diretório do
     /// executável.
     ///
-    /// <para><b>Por que basta a pasta Agents.</b> Antes era preciso ter também <c>Systems/</c>, o
+    /// <para><b>Por que basta a pasta Agents.</b> Antes era preciso ter também <c>Input/</c>, o
     /// que só é verdade num repositório já usado: quem baixa o aplicativo pronto tem o executável
     /// e os prompts, e nada mais — as outras pastas nascem vazias no primeiro uso
-    /// (<see cref="GarantirEstrutura"/>). Exigir <c>Systems/</c> fazia essa instalação cair no
+    /// (<see cref="GarantirEstrutura"/>). Exigir <c>Input/</c> fazia essa instalação cair no
     /// diretório atual, que é de onde o programa foi chamado e não tem relação nenhuma com onde
     /// ele está.</para>
     /// </summary>
@@ -79,7 +91,7 @@ public sealed class CaminhosDoProjeto
 
     /// <summary>
     /// Cria as pastas de dados que ainda não existem. Roda na abertura do aplicativo: numa
-    /// instalação recém-baixada não há <c>Systems/</c> nem <c>Output/</c>, e a alternativa a
+    /// instalação recém-baixada não há <c>Input/</c> nem <c>Output/</c>, e a alternativa a
     /// criá-las seria cada fluxo tratar a ausência por conta própria — ou, pior, o usuário ver
     /// "diretório não encontrado" antes de ter feito nada.
     /// </summary>
@@ -88,7 +100,7 @@ public sealed class CaminhosDoProjeto
     {
         var criadas = new List<string>();
 
-        foreach (var diretorio in new[] { Sistemas, Modelos, Conhecimento, SaidaPersonagens })
+        foreach (var diretorio in new[] { Entrada, Modelos, Conhecimento, SaidaPersonagens })
         {
             if (Directory.Exists(diretorio))
             {

@@ -23,7 +23,7 @@ public sealed class SistemaRpgTestes : IDisposable
 
     private void CriarSistema(string id)
     {
-        Directory.CreateDirectory(Path.Combine(_caminhos.Sistemas, id));
+        Directory.CreateDirectory(Path.Combine(_caminhos.Entrada, id));
 
         var conhecimento = Path.Combine(_caminhos.Conhecimento, id);
         Directory.CreateDirectory(conhecimento);
@@ -62,7 +62,7 @@ public sealed class SistemaRpgTestes : IDisposable
     [Fact]
     public void Descobrir_SistemaSemNenhumMarkdown_NaoContaComoPronto()
     {
-        Directory.CreateDirectory(Path.Combine(_caminhos.Sistemas, "Tormenta20"));
+        Directory.CreateDirectory(Path.Combine(_caminhos.Entrada, "Tormenta20"));
         Directory.CreateDirectory(Path.Combine(_caminhos.Conhecimento, "Tormenta20"));
 
         Assert.Empty(SistemaRpg.DescobrirProntos(_caminhos));

@@ -1,6 +1,6 @@
 # Indice — base/Equipamento
 
-Caminho: `Knowledge/SistemaTeste/base/Equipamento/`
+Caminho: `Sistemas/SistemaTeste/base/Equipamento/`
 
 ## Arquivos
 

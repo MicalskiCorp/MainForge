@@ -8,7 +8,7 @@ namespace MainForge.Tests;
 /// agente. Ela precisa achar apesar do acento (o agente escreve "Pontos de Vida", o livro traz
 /// "Pontos de Vida" com acento noutra palavra da linha), dizer em que seção o trecho está — é
 /// isso que evita a leitura do arquivo inteiro — e nunca alcançar arquivo fora de
-/// <c>Systems/&lt;sistema&gt;/</c>.
+/// <c>Input/&lt;sistema&gt;/</c>.
 /// </summary>
 public sealed class BuscaNosLivrosTestes : IDisposable
 {
@@ -44,7 +44,7 @@ public sealed class BuscaNosLivrosTestes : IDisposable
     private void GravarTexto(string livro, string conteudo, string fonte = "base")
     {
         var caminho = Path.Combine(
-            _caminhos.Sistemas, "Aventura&Cia", fonte, ConversorDeLivros.NomeDaPastaDeTexto, livro + ".md");
+            _caminhos.Entrada, "Aventura&Cia", fonte, ConversorDeLivros.NomeDaPastaDeTexto, livro + ".md");
 
         Directory.CreateDirectory(Path.GetDirectoryName(caminho)!);
         File.WriteAllText(caminho, conteudo);
@@ -58,7 +58,7 @@ public sealed class BuscaNosLivrosTestes : IDisposable
     {
         var ocorrencia = Assert.Single(Procurar("Bola de Fogo"));
 
-        Assert.Equal("Systems/Aventura&Cia/base/_texto/Livro Base.md", ocorrencia.Livro);
+        Assert.Equal("Input/Aventura&Cia/base/_texto/Livro Base.md", ocorrencia.Livro);
         Assert.Equal("Magias", ocorrencia.Secao);
         Assert.Contains("8d6", ocorrencia.Trecho);
         Assert.Equal(9, ocorrencia.Linha);
@@ -90,7 +90,7 @@ public sealed class BuscaNosLivrosTestes : IDisposable
     [Fact]
     public void Procurar_SemTextoConvertido_ExplicaOQueFazerEmVezDeDevolverVazio()
     {
-        Directory.CreateDirectory(Path.Combine(_caminhos.Sistemas, "Outro"));
+        Directory.CreateDirectory(Path.Combine(_caminhos.Entrada, "Outro"));
 
         var erro = Assert.Throws<ErroDeFerramenta>(
             () => BuscaNosLivros.Procurar(_caminhos, "Outro", "magia"));

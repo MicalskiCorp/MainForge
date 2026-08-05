@@ -1,6 +1,6 @@
 # Indice — base/Progressao
 
-Caminho: `Knowledge/SistemaTeste/base/Progressao/`
+Caminho: `Sistemas/SistemaTeste/base/Progressao/`
 
 ## Arquivos
 

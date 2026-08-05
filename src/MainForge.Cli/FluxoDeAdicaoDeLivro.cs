@@ -58,7 +58,7 @@ internal static class FluxoDeAdicaoDeLivro
         }
 
         ConsoleUi.Titulo($"Confirmar adição a '{escolhido.Id}'");
-        ConsoleUi.Info($"  {fonte.Rotulo} -> Systems/{escolhido.Id}/{fonte.Id}/");
+        ConsoleUi.Info($"  {fonte.Rotulo} -> Input/{escolhido.Id}/{fonte.Id}/");
 
         foreach (var livro in livros)
         {

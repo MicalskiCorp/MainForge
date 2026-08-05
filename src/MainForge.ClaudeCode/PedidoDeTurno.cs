@@ -35,7 +35,7 @@ public sealed record PedidoDeTurno
     /// <summary>
     /// Regras de negação (<c>--disallowedTools</c>). Negação vence concessão, e é o único
     /// mecanismo que de fato bloqueia uma ferramenta embutida — inclusive por caminho, como
-    /// em <c>Read(Systems/**)</c>.
+    /// em <c>Read(Input/**)</c>.
     /// </summary>
     public IReadOnlyList<string> FerramentasNegadas { get; init; } = [];
 

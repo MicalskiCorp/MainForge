@@ -63,7 +63,7 @@ public class FerramentasTestes : IDisposable
 
     /// <summary>
     /// O confinamento de diretório é a camada do guardrail que não depende de configuração
-    /// externa nenhuma — é o que garante que "o Configurador só escreve em Knowledge/" valha
+    /// externa nenhuma — é o que garante que "o Configurador só escreve em Sistemas/" valha
     /// mesmo que uma regra de permissão do Claude Code seja afrouxada por engano.
     /// </summary>
     [Theory]

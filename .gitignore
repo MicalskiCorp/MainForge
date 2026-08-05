@@ -24,17 +24,17 @@ appsettings.Local.json
 
 # Livros e fichas importados pelo usuário ficam locais: são PDFs comerciais, pesam dezenas de
 # MB e, uma vez no histórico do Git, só saem reescrevendo-o. O conhecimento destilado deles
-# (Knowledge/), esse sim é versionado — é Markdown pequeno e custou a leitura dos livros.
+# (Sistemas/) também fica local, pelo mesmo motivo — veja o bloco abaixo.
 # SistemaTeste é a exceção: os PDFs dele são fixtures minúsculos do harness de validação.
-/Systems/*/
-!/Systems/SistemaTeste/
+/Input/*/
+!/Input/SistemaTeste/
 /Templates/*/
 !/Templates/SistemaTeste/
 
 # O texto extraído dos PDFs é derivado e regerável (e, vindo de um livro comercial, tem o mesmo
 # problema de direitos que o PDF). A regra acima já o exclui nos sistemas do usuário; esta cobre
 # o SistemaTeste, que é versionado.
-/Systems/**/_texto/
+/Input/**/_texto/
 
 # As bases de conhecimento ficam locais. Elas são as regras dos livros importados reescritas em
 # Markdown: quando o livro é comercial, o conteúdo continua sendo dele, e um repositório público
@@ -42,13 +42,13 @@ appsettings.Local.json
 #
 # A exceção é SistemaTeste: sistema fictício, escrito para o harness de validação, sem dono a
 # quem prestar contas.
-/Knowledge/*/
-!/Knowledge/SistemaTeste/
+/Sistemas/*/
+!/Sistemas/SistemaTeste/
 
-# O índice da raiz de Knowledge/ é derivado e lista os sistemas que existem *nesta* máquina —
+# O índice da raiz de Sistemas/ é derivado e lista os sistemas que existem *nesta* máquina —
 # ou seja, descreve os livros de quem está usando o aplicativo. Ele é regerado a cada gravação,
 # então versioná-lo só serviria para vazar essa lista e sujar o diff a cada execução.
-/Knowledge/index.md
+/Sistemas/index.md
 
 # Pacote gerado por publicar.ps1.
 /publicado/

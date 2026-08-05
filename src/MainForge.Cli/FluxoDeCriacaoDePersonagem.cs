@@ -176,7 +176,7 @@ internal static class FluxoDeCriacaoDePersonagem
 
         foreach (var fonte in fontes.Escolhidas)
         {
-            texto.AppendLine($"- {fonte.Rotulo}: Knowledge/{sistema.Id}/{fonte.Id}/index.md");
+            texto.AppendLine($"- {fonte.Rotulo}: Sistemas/{sistema.Id}/{fonte.Id}/index.md");
         }
 
         if (fontes.Recusadas.Count > 0)
@@ -184,12 +184,12 @@ internal static class FluxoDeCriacaoDePersonagem
             texto
                 .AppendLine()
                 .AppendLine("Fora desta mesa (a leitura destas pastas está negada, não tente abri-las):")
-                .AppendLine(string.Join(", ", fontes.Recusadas.Select(fonte => $"Knowledge/{sistema.Id}/{fonte.Id}/")));
+                .AppendLine(string.Join(", ", fontes.Recusadas.Select(fonte => $"Sistemas/{sistema.Id}/{fonte.Id}/")));
         }
 
         return texto
             .AppendLine()
-            .AppendLine($"A ficha do sistema está em Knowledge/{sistema.Id}/, fora das pastas de fonte:")
+            .AppendLine($"A ficha do sistema está em Sistemas/{sistema.Id}/, fora das pastas de fonte:")
             .AppendLine($"{string.Join(" e ", SistemaRpg.ArquivosDaFicha)}.")
             .AppendLine()
             .AppendLine("Me conduza pelo processo, um passo de cada vez, seguindo as regras dessas fontes.")

@@ -2,8 +2,8 @@ namespace MainForge.Core;
 
 /// <summary>
 /// De onde vem um pedaço de um sistema de RPG: o <b>jogo base</b> ou uma <b>expansão</b>
-/// (compêndio, suplemento). É o nome de uma subpasta dentro de <c>Systems/&lt;Sistema&gt;/</c> e
-/// de <c>Knowledge/&lt;Sistema&gt;/</c> — os livros de uma fonte e o conhecimento destilado
+/// (compêndio, suplemento). É o nome de uma subpasta dentro de <c>Input/&lt;Sistema&gt;/</c> e
+/// de <c>Sistemas/&lt;Sistema&gt;/</c> — os livros de uma fonte e o conhecimento destilado
 /// deles ficam sempre com o mesmo nome nos dois lados.
 ///
 /// <para><b>Por que separar.</b> Numa mesa de RPG nem toda expansão está em jogo: o grupo
@@ -14,7 +14,7 @@ namespace MainForge.Core;
 /// </para>
 ///
 /// <para>A ficha do sistema é do sistema inteiro, não de uma fonte: <c>Ficha-Mapeamento.md</c> e
-/// <c>Ficha-ModeloEmTexto.md</c> ficam na raiz de <c>Knowledge/&lt;Sistema&gt;/</c>, fora das
+/// <c>Ficha-ModeloEmTexto.md</c> ficam na raiz de <c>Sistemas/&lt;Sistema&gt;/</c>, fora das
 /// pastas de fonte, porque o Dungeon Master precisa deles com qualquer expansão selecionada.</para>
 /// </summary>
 public sealed record FonteDoSistema(string Id)

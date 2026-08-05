@@ -6,8 +6,8 @@ using MainForge.Tools;
 namespace MainForge.Cli;
 
 /// <summary>
-/// Roda o Agente Configurador sobre um sistema importado em Systems/, gerando a base de
-/// conhecimento em Knowledge/. É a operação mais cara em tokens do aplicativo (o agente lê o
+/// Roda o Agente Configurador sobre um sistema importado em Input/, gerando a base de
+/// conhecimento em Sistemas/. É a operação mais cara em tokens do aplicativo (o agente lê o
 /// livro inteiro), por isso pede confirmação explícita antes de começar.
 ///
 /// <para><b>Retomar em vez de recomeçar.</b> Como a execução é longa e cara, ela tem chance
@@ -53,12 +53,12 @@ internal static class FluxoDoConfigurador
         }
 
         var pdfs = Directory
-            .EnumerateFiles(escolhido.DiretorioSistemas(caminhos), "*.pdf", SearchOption.AllDirectories)
+            .EnumerateFiles(escolhido.DiretorioEntrada(caminhos), "*.pdf", SearchOption.AllDirectories)
             .ToList();
 
         if (pdfs.Count == 0)
         {
-            ConsoleUi.Erro($"Nenhum PDF em {escolhido.DiretorioSistemas(caminhos)}.");
+            ConsoleUi.Erro($"Nenhum PDF em {escolhido.DiretorioEntrada(caminhos)}.");
             return;
         }
 
@@ -83,7 +83,7 @@ internal static class FluxoDoConfigurador
         }
 
         ConsoleUi.Titulo($"Processar '{escolhido.Id}'");
-        MostrarSituacao(estado, pdfs, escolhido.DiretorioSistemas(caminhos));
+        MostrarSituacao(estado, pdfs, escolhido.DiretorioEntrada(caminhos));
 
         var fontesSemConhecimento = estado.FontesSemConhecimento(caminhos);
         var escolha = EscolherModo(estado, modoSugerido, fontesSemConhecimento);
@@ -449,7 +449,7 @@ internal static class FluxoDoConfigurador
     }
 
     /// <summary>
-    /// Uma fonte consta como lida e não tem nada em <c>Knowledge/</c>. É o rastro de um livro que
+    /// Uma fonte consta como lida e não tem nada em <c>Sistemas/</c>. É o rastro de um livro que
     /// o agente não conseguiu abrir — em geral um PDF que o <c>Read</c> do Claude Code não
     /// rasterizou por falta do poppler. Também é o que se vê depois de mover um livro de fonte,
     /// e aí não há o que fazer; por isso o aplicativo aponta e deixa a decisão com quem sabe.
@@ -463,7 +463,7 @@ internal static class FluxoDoConfigurador
 
         ConsoleUi.Info("");
         ConsoleUi.Aviso(
-            $"Fonte(s) marcada(s) como lida(s), mas sem nada em Knowledge/: {string.Join(", ", fontes)}.");
+            $"Fonte(s) marcada(s) como lida(s), mas sem nada em Sistemas/: {string.Join(", ", fontes)}.");
         ConsoleUi.Info("Ou o livro não pôde ser lido na execução anterior, ou ele só mudou de pasta e o");
         ConsoleUi.Info("conteúdo dele continua na fonte antiga — nesse segundo caso, não há o que fazer.");
     }
@@ -494,7 +494,7 @@ internal static class FluxoDoConfigurador
         }
 
         ConsoleUi.Info("Nenhum token gasto. Se faltar conteúdo de algum deles, apague os .md correspondentes");
-        ConsoleUi.Info("em Knowledge/ ou recomece o sistema do zero.");
+        ConsoleUi.Info("em Sistemas/ ou recomece o sistema do zero.");
     }
 
     /// <summary>O que fazer com o sistema — nem toda escolha do menu chama o agente.</summary>
@@ -586,7 +586,7 @@ internal static class FluxoDoConfigurador
             .Where(arquivo => !Path.GetFileName(arquivo).Equals(IndiceDeConhecimento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        ConsoleUi.Sucesso($"\n{gerados.Count} arquivo(s) de conhecimento em Knowledge/{sistema.Id}/:");
+        ConsoleUi.Sucesso($"\n{gerados.Count} arquivo(s) de conhecimento em Sistemas/{sistema.Id}/:");
 
         foreach (var arquivo in gerados)
         {
@@ -620,7 +620,7 @@ internal static class FluxoDoConfigurador
 
     /// <summary>
     /// Dos livros que esta execução ia ler, quais deixaram rastro: os de uma fonte cuja pasta em
-    /// <c>Knowledge/</c> tem mais arquivos agora do que tinha antes de o agente começar.
+    /// <c>Sistemas/</c> tem mais arquivos agora do que tinha antes de o agente começar.
     ///
     /// <para>Contar por fonte, e não por arquivo, é o que dá para afirmar sem depender de o modelo
     /// dizer de qual livro veio cada gravação. Erra para o lado seguro: quando dois livros da

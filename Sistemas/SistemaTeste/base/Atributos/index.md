@@ -1,6 +1,6 @@
 # Indice — base/Atributos
 
-Caminho: `Knowledge/SistemaTeste/base/Atributos/`
+Caminho: `Sistemas/SistemaTeste/base/Atributos/`
 
 ## Arquivos
 

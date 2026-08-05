@@ -38,7 +38,7 @@ public sealed record ConversaoDeLivro(
     string Conversor = "");
 
 /// <summary>
-/// Converte os livros de <c>Systems/</c> em Markdown com o
+/// Converte os livros de <c>Input/</c> em Markdown com o
 /// <see href="https://github.com/microsoft/markitdown">markitdown</see>, da Microsoft (licença
 /// MIT), antes de o Configurador começar a trabalhar.
 ///
@@ -57,7 +57,7 @@ public sealed record ConversaoDeLivro(
 /// sem Python <em>e</em> sem poppler ficava sem nenhum caminho até o livro — o texto não existia
 /// e o <c>Read</c> do PDF falhava com "pdftoppm is not installed".</para>
 ///
-/// <para>O texto convertido fica em <c>Systems/&lt;Sistema&gt;/&lt;fonte&gt;/_texto/</c>: ao lado
+/// <para>O texto convertido fica em <c>Input/&lt;Sistema&gt;/&lt;fonte&gt;/_texto/</c>: ao lado
 /// do PDF de origem, dentro da mesma fonte, para que a regra "o conteúdo de um livro vai para a
 /// pasta da fonte dele" continue valendo sem exceção. O underscore marca que é derivado — como
 /// o <c>_estado-do-processamento.json</c> — e mantém a pasta fora de qualquer
@@ -167,7 +167,7 @@ public static class ConversorDeLivros
         Action<string>? aoComecar = null,
         CancellationToken cancelamento = default)
     {
-        var diretorio = CaminhosDoProjeto.ResolverDentroDe(caminhos.Sistemas, sistema);
+        var diretorio = CaminhosDoProjeto.ResolverDentroDe(caminhos.Entrada, sistema);
 
         if (!Directory.Exists(diretorio))
         {
@@ -318,8 +318,8 @@ public static class ConversorDeLivros
     ///
     /// <para><b>O desvio pelo cmd.exe não é firula.</b> O pip instala o markitdown no Windows
     /// como <c>.cmd</c> em algumas configurações, e o .NET não escapa <c>&amp;</c> ao lançar um
-    /// arquivo de lote: o caminho <c>Systems\D&amp;D5e\base\Livro.pdf</c> chega ao script cortado
-    /// em <c>Systems\D</c>, e o resto — <c>D5e\base\Livro.pdf</c> — o cmd tenta executar como
+    /// arquivo de lote: o caminho <c>Input\D&amp;D5e\base\Livro.pdf</c> chega ao script cortado
+    /// em <c>Input\D</c>, e o resto — <c>D5e\base\Livro.pdf</c> — o cmd tenta executar como
     /// comando. Como o nome da pasta vem do sistema de RPG que o usuário importou, isso não é
     /// hipótese: <c>D&amp;D5e</c> é o caso comum. Montando a linha de comando aqui, com cada
     /// argumento entre aspas e o <c>/s</c> que faz o cmd tratar o resto literalmente, o caminho

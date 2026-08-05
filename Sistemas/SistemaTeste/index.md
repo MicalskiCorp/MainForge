@@ -1,6 +1,6 @@
 # Indice — SistemaTeste
 
-Caminho: `Knowledge/SistemaTeste/`
+Caminho: `Sistemas/SistemaTeste/`
 
 Sistema de RPG minimalista usado para validar o fluxo do aplicativo ponta a ponta. As regras estão em base/; na raiz ficam só os dois arquivos da ficha.
 

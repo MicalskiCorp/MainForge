@@ -66,7 +66,7 @@ internal static class PromptDoConfigurador
     private static string SemLeituraDePdf() => new StringBuilder()
         .AppendLine()
         .AppendLine("IMPORTANTE — nesta máquina o Read NÃO abre PDF: falta o programa que o Claude Code usa")
-        .AppendLine("para rasterizar as páginas (pdftoppm, do poppler). A leitura dos PDFs de Systems/ está")
+        .AppendLine("para rasterizar as páginas (pdftoppm, do poppler). A leitura dos PDFs de Input/ está")
         .AppendLine("negada por isso, e vai ser recusada se você tentar.")
         .AppendLine()
         .AppendLine("O texto convertido é o caminho completo, não um atalho: trabalhe só por ele. Se uma")
@@ -81,7 +81,7 @@ internal static class PromptDoConfigurador
         .AppendLine()
         .AppendLine($"1. Leia os livros do sistema (lista abaixo) e a ficha em branco em Templates/{sistema.Id}/.")
         .AppendLine("2. Registre o plano de arquivos com registrar_plano_de_conhecimento antes de gravar o primeiro.")
-        .AppendLine($"3. Gere a base em Knowledge/{sistema.Id}/, respeitando a separação por fonte descrita abaixo,")
+        .AppendLine($"3. Gere a base em Sistemas/{sistema.Id}/, respeitando a separação por fonte descrita abaixo,")
         .AppendLine("   e descreva cada pasta com descrever_pasta_de_conhecimento.")
         .AppendLine()
         .Append(OndeLerCadaLivro(sistema, estado, caminhos))
@@ -103,7 +103,7 @@ internal static class PromptDoConfigurador
         .Append(OndeLerCadaLivro(sistema, estado, caminhos))
         .Append(SeparacaoPorFonte(sistema, estado))
         .AppendLine("Passos:")
-        .AppendLine($"1. Comece pelos index.md em Knowledge/{sistema.Id}/ para ver o que a base já cobre.")
+        .AppendLine($"1. Comece pelos index.md em Sistemas/{sistema.Id}/ para ver o que a base já cobre.")
         .AppendLine("2. Gere os arquivos pendentes listados acima.")
         .AppendLine("3. Se perceber que falta algo que não está no plano, acrescente com")
         .AppendLine("   registrar_plano_de_conhecimento e gere também — inclusive os arquivos da ficha,")
@@ -127,7 +127,7 @@ internal static class PromptDoConfigurador
         foreach (var (fonte, livros) in estado.PendentesPorFonte())
         {
             texto.AppendLine();
-            texto.AppendLine($"  {fonte.Rotulo} — o conteúdo vai para Knowledge/{sistema.Id}/{fonte.Id}/");
+            texto.AppendLine($"  {fonte.Rotulo} — o conteúdo vai para Sistemas/{sistema.Id}/{fonte.Id}/");
 
             foreach (var livro in livros)
             {
@@ -140,7 +140,7 @@ internal static class PromptDoConfigurador
             .Append(OndeLerCadaLivro(sistema, estado, caminhos))
             .Append(SeparacaoPorFonte(sistema, estado))
             .AppendLine("Regras desta operação:")
-            .AppendLine($"- Comece pelos index.md de Knowledge/{sistema.Id}/: eles dizem o que a base já cobre.")
+            .AppendLine($"- Comece pelos index.md de Sistemas/{sistema.Id}/: eles dizem o que a base já cobre.")
             .AppendLine("  Leia dos livros só as partes que preenchem as lacunas que você identificar.")
             .AppendLine("- NÃO releia os livros marcados como já lidos e NÃO regenere a base do zero.")
             .AppendLine("- Conteúdo de expansão NUNCA entra num arquivo de outra fonte. Se o compêndio muda")
@@ -221,11 +221,11 @@ internal static class PromptDoConfigurador
         string livro,
         CaminhosDoProjeto caminhos)
     {
-        var pdf = Path.Combine(sistema.DiretorioSistemas(caminhos), fonte, livro);
+        var pdf = Path.Combine(sistema.DiretorioEntrada(caminhos), fonte, livro);
         var convertido = ConversorDeLivros.TextoAtualizadoDe(pdf);
 
         return convertido is null
-            ? $"Systems/{sistema.Id}/{fonte}/{livro}"
+            ? $"Input/{sistema.Id}/{fonte}/{livro}"
             : Path.GetRelativePath(caminhos.Raiz, convertido).Replace('\\', '/');
     }
 
@@ -239,8 +239,8 @@ internal static class PromptDoConfigurador
         var texto = new StringBuilder()
             .AppendLine("Separação por fonte (obrigatória):")
             .AppendLine()
-            .AppendLine($"Cada pasta em Systems/{sistema.Id}/ é uma fonte — o jogo base ou uma expansão — e o")
-            .AppendLine($"conteúdo que sair dos livros dela vai para a pasta de mesmo nome em Knowledge/{sistema.Id}/.")
+            .AppendLine($"Cada pasta em Input/{sistema.Id}/ é uma fonte — o jogo base ou uma expansão — e o")
+            .AppendLine($"conteúdo que sair dos livros dela vai para a pasta de mesmo nome em Sistemas/{sistema.Id}/.")
             .AppendLine("O usuário escolhe, na hora de criar um personagem, quais expansões aquela mesa usa; o")
             .AppendLine("que estiver na pasta errada vai valer numa mesa que não deveria, ou sumir de uma que")
             .AppendLine("deveria. Um arquivo de uma fonte pode citar outro de outra fonte, mas nunca copiar o")
@@ -254,13 +254,13 @@ internal static class PromptDoConfigurador
 
         foreach (var fonte in FonteDoSistema.Ordenar(fontes))
         {
-            texto.AppendLine($"- Systems/{sistema.Id}/{fonte.Id}/  ->  Knowledge/{sistema.Id}/{fonte.Id}/");
+            texto.AppendLine($"- Input/{sistema.Id}/{fonte.Id}/  ->  Sistemas/{sistema.Id}/{fonte.Id}/");
         }
 
         return texto
             .AppendLine()
             .AppendLine($"As duas exceções são os arquivos da ficha, que valem para o sistema inteiro e ficam na")
-            .AppendLine($"raiz de Knowledge/{sistema.Id}/, fora de qualquer pasta de fonte:")
+            .AppendLine($"raiz de Sistemas/{sistema.Id}/, fora de qualquer pasta de fonte:")
             .AppendLine($"{string.Join(" e ", SistemaRpg.ArquivosDaFicha)}.")
             .AppendLine()
             .ToString();

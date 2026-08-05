@@ -11,11 +11,17 @@
     <ProjectReference Include="..\MainForge.Mcp\MainForge.Mcp.csproj" />
   </ItemGroup>
 
-  <!-- Os prompts dos agentes viajam com o binário: sem eles o aplicativo baixado não tem o que
-       mandar ao Claude Code. Continuam sendo os mesmos arquivos de Agents/ do repositório — a
-       regra "prompt nunca embutido em C#" segue valendo, o que muda é só a cópia para a saída. -->
+  <!-- Os prompts dos agentes viajam com o binário publicado: sem eles o aplicativo baixado não
+       tem o que mandar ao Claude Code. Continuam sendo os mesmos arquivos de Agents/ do
+       repositório — a regra "prompt nunca embutido em C#" segue valendo, o que muda é só a cópia.
+
+       Copiar na **publicação** e não no build é o que mantém o desenvolvimento funcionando: a
+       raiz do projeto é descoberta pela presença de Agents/ com prompts, então um Agents/ dentro
+       de bin/ faria o `dotnet run` tomar a pasta de saída como raiz e não enxergar os livros nem
+       as bases do repositório. -->
   <ItemGroup>
-    <Content Include="..\..\Agents\*.md" Link="Agents\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Agents\*.md" Link="Agents\%(Filename)%(Extension)"
+             CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

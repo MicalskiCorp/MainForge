@@ -57,7 +57,7 @@ Quem for compilar do código-fonte encontra as instruções em [Rodando](#rodand
     binário em disco e passar só o caminho ao modelo, que não consegue lê-lo. Isso foi
     verificado, não deduzido. Mesmo assim, o caminho normal deixou de ser o PDF: veja
     [Os livros viram texto antes](#os-livros-viram-texto-antes).
-  - Manipular AcroForm (listar e preencher os campos da ficha) e escrever em `Knowledge/`
+  - Manipular AcroForm (listar e preencher os campos da ficha) e escrever em `Sistemas/`
     ficam em C#, expostos por um servidor MCP local (`MainForge.Mcp`, stdio, lançado pelo
     próprio Claude Code).
 - **.NET 10** (LTS instalada na máquina), solução dividida em projetos por responsabilidade.
@@ -78,7 +78,7 @@ delas suficiente sozinha:
 2. **Negações por ferramenta e por caminho** (`--disallowedTools`, em
    `DefinicaoDeAgente.FerramentasNegadas`). ⚠️ **`--allowedTools` apenas concede, não
    restringe.** Ferramentas de leitura já são aprovadas por padrão, então listar
-   `Read(Knowledge/**)` *não* impede leituras fora de `Knowledge/` — só uma negação
+   `Read(Sistemas/**)` *não* impede leituras fora de `Sistemas/` — só uma negação
    explícita bloqueia. Negação vence concessão.
 3. **Confinamento em código.** Toda **escrita** passa pelo servidor MCP, onde
    `CaminhosDoProjeto.ResolverDentroDe` rejeita qualquer caminho que escape do diretório
@@ -89,7 +89,7 @@ delas suficiente sozinha:
 | --- | --- | --- |
 | Embutidas | `Read`, `Glob` | `Read`, `Glob` |
 | MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
-| Negações próprias | `Read(Output/**)` | `Read(Systems/**)`, `Read(Templates/**)` |
+| Negações próprias | `Read(Output/**)` | `Read(Input/**)`, `Read(Templates/**)` |
 
 Negado para os dois, sempre: `Bash`, `PowerShell`, `BashOutput`, `KillShell`, `Write`, `Edit`,
 `NotebookEdit`, `Task`, `Agent`, `Skill`, `SlashCommand`, `WebFetch`, `WebSearch`, `Grep`, e a
@@ -107,7 +107,7 @@ justamente o código-fonte que ele não pode ler.
 
 Buscar dentro dos livros continua sendo necessário, e é por isso que existe
 `procurar_no_texto_dos_livros`: ela faz o que a `Grep` faria, mas alcançando só
-`Systems/<Sistema>/**/_texto/`, com o confinamento aplicado em C#.
+`Input/<Sistema>/**/_texto/`, com o confinamento aplicado em C#.
 
 Duas negações são **da execução**, não do agente, e existem para não oferecer caminho que não
 leva a lugar nenhum: as fontes que a mesa não usa (`DungeonMasterLimitadoA`) e, quando falta o
@@ -121,7 +121,7 @@ MainForge.sln
 │   ├── MainForge.Core       -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
 │   ├── MainForge.ClaudeCode -> localiza e executa o Claude Code; traduz o stream-json em eventos;
 │   │                           reconhece cota esgotada (LimiteDeUso) para poder esperar a janela
-│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), escrita em Knowledge/,
+│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), escrita em Sistemas/,
 │   │                           os índices (IndiceDeConhecimento) e o progresso (EstadoDoProcessamento)
 │   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
 │   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
@@ -135,11 +135,11 @@ MainForge.sln
 │                            mapa de onde cada coisa mora e é obrigatória antes de mexer nele
 ├── CLAUDE.md             -> instruções de projeto para o Claude Code de desenvolvimento
 ├── Agents/               -> prompts dos agentes (Configurador.md, DungeonMaster.md)
-├── Systems/              -> livros oficiais em PDF, um subdiretório por sistema e, dentro
+├── Input/              -> livros oficiais em PDF, um subdiretório por sistema e, dentro
 │                            dele, um por fonte: base/ e uma pasta por expansão. Cada fonte
 │                            ganha um _texto/ com a versão Markdown dos PDFs dela
 ├── Templates/            -> fichas em PDF editável, um subdiretório por sistema
-├── Knowledge/            -> base de conhecimento em Markdown, gerada pelo Configurador,
+├── Sistemas/            -> base de conhecimento em Markdown, gerada pelo Configurador,
 │                            com a mesma divisão por fonte, um index.md por nível e o
 │                            registro de progresso do sistema
 └── Output/Personagens/   -> fichas finais preenchidas
@@ -200,14 +200,14 @@ Menu do aplicativo:
    que ficou pela metade.
 2. **Importar um sistema de RPG** — você informa o nome do sistema, os PDFs dos livros e a
    ficha de personagem editável; o programa valida (livro legível, ficha com campos
-   preenchíveis) e copia para `Systems/<Sistema>/base/` e `Templates/<Sistema>/`. Importar um
+   preenchíveis) e copia para `Input/<Sistema>/base/` e `Templates/<Sistema>/`. Importar um
    sistema é trazer o jogo base dele — expansão entra pela opção 3.
 3. **Adicionar livro a um sistema** — pergunta se o livro é do jogo base ou de uma expansão (e,
-   se for de uma expansão nova, o nome dela). O livro entra em `Systems/<Sistema>/<fonte>/` e o
+   se for de uma expansão nova, o nome dela). O livro entra em `Input/<Sistema>/<fonte>/` e o
    Configurador lê **só ele**, somando o conteúdo à base que já está pronta.
 4. **Processar um sistema** (Agente Configurador) — converte os livros para texto (veja
    [Os livros viram texto antes](#os-livros-viram-texto-antes)), lê os livros **e a ficha em
-   branco** e gera `Knowledge/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais
+   branco** e gera `Sistemas/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais
    cara em tokens; pede confirmação. Se já houver progresso, pergunta se é para continuar de
    onde parou ou recomeçar do zero — e se não houver nada pendente, recusa e explica por quê.
 5. **Criar um personagem** (Agente Dungeon Master) — pergunta primeiro quais expansões aquela
@@ -222,7 +222,7 @@ Menu do aplicativo:
    mais cara do aplicativo é o pior momento possível para essa notícia.
 
 Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 4
-(ou copiar as pastas na mão para `Systems/` e `Templates/`).
+(ou copiar as pastas na mão para `Input/` e `Templates/`).
 
 O sistema `SistemaTeste` não aparece em nenhuma dessas telas: ele existe só para o harness de
 validação, que o alcança pelo nome. Esconder é da interface, não do disco — quem abre o
@@ -233,7 +233,7 @@ usar.
 
 Um sistema é dividido por **fonte**: `base/` é o jogo base e cada outra pasta é uma expansão
 (compêndio, suplemento), com o nome que o usuário deu a ela. A divisão vale nos dois lados —
-`Systems/<Sistema>/<fonte>/` guarda os PDFs e `Knowledge/<Sistema>/<fonte>/` guarda o
+`Input/<Sistema>/<fonte>/` guarda os PDFs e `Sistemas/<Sistema>/<fonte>/` guarda o
 conhecimento destilado deles.
 
 Isso existe por causa de uma pergunta na criação de personagem: **quais expansões esta mesa
@@ -264,8 +264,8 @@ assinatura antes de o agente ter visto metade dele — e, quando o `pdftoppm` (d
 está instalado, ler um intervalo de páginas nem funciona: falha com
 `pdftoppm is not installed`.
 
-Por isso, antes de o Configurador começar, o aplicativo converte cada PDF de `Systems/` em
-Markdown e grava o resultado em `Systems/<Sistema>/<fonte>/_texto/<Livro>.md`. O agente passa a
+Por isso, antes de o Configurador começar, o aplicativo converte cada PDF de `Input/` em
+Markdown e grava o resultado em `Input/<Sistema>/<fonte>/_texto/<Livro>.md`. O agente passa a
 ler o `.md`: é o mesmo conteúdo por uma fração dos tokens, e o livro inteiro cabe na janela.
 
 Quem converte são dois, nesta ordem:
@@ -292,8 +292,8 @@ pode ser o único caminho para a operação central do produto. Na prática, os 
   ponta a ponta seria trocar um desperdício por outro.
 - O extrator interno marca cada página (`## Página 42`), o que dá à busca uma seção para mostrar
   e permite ao agente citar de onde tirou a regra.
-- **Sem poppler, a leitura dos PDFs de `Systems/` é negada ao agente naquela execução**
-  (`Read(Systems/**/*.pdf)`), e o prompt diz por quê. Não é capricho: enquanto ela ficava
+- **Sem poppler, a leitura dos PDFs de `Input/` é negada ao agente naquela execução**
+  (`Read(Input/**/*.pdf)`), e o prompt diz por quê. Não é capricho: enquanto ela ficava
   disponível, o agente tentava conferir no PDF a tabela que a conversão embaralhou — o que seria
   o certo se funcionasse — e gastava um turno por livro para receber
   `pdftoppm is not installed`. Negar o caminho quebrado é o que transforma isso numa recusa
@@ -317,8 +317,8 @@ apareceu um conversor melhor.
 
 ## A base de conhecimento é indexada
 
-Cada pasta de `Knowledge/` ganha um `index.md` com uma linha sobre cada arquivo e cada
-subpasta dela, e `Knowledge/index.md` lista os sistemas. É por aí que o Dungeon Master navega:
+Cada pasta de `Sistemas/` ganha um `index.md` com uma linha sobre cada arquivo e cada
+subpasta dela, e `Sistemas/index.md` lista os sistemas. É por aí que o Dungeon Master navega:
 lê o índice, decide o que interessa e abre só isso, em vez de varrer a base inteira para achar
 uma regra.
 
@@ -331,7 +331,7 @@ descrições derivadas do próprio conteúdo — sem custo de tokens.
 ## Processamento retomável
 
 O Configurador registra o plano de arquivos antes de começar, e cada gravação atualiza
-`Knowledge/<Sistema>/_estado-do-processamento.json`. Uma execução interrompida — cota
+`Sistemas/<Sistema>/_estado-do-processamento.json`. Uma execução interrompida — cota
 esgotada, Ctrl+C, máquina desligada — deixa esse registro coerente com o que existe em disco,
 e a execução seguinte pergunta o que falta em vez de reler o livro inteiro.
 
@@ -345,7 +345,7 @@ Três consequências práticas:
   condição, um compêndio que o agente não conseguiu nem abrir (PDF sem o poppler que o `Read` do
   Claude Code exige) era marcado como lido por não haver mais nada pendente no plano antigo — e o
   sistema ficava "pronto" com uma expansão que ninguém leu. Quando o registro já está nesse
-  estado, a tela de processamento avisa quais fontes constam como lidas sem nada em `Knowledge/`
+  estado, a tela de processamento avisa quais fontes constam como lidas sem nada em `Sistemas/`
   e oferece relê-las. Ela **aponta** em vez de corrigir sozinha porque mover um livro de fonte
   produz exatamente a mesma imagem, e nesse caso reler seria desperdício.
 - Um livro só é marcado como incorporado quando a execução **termina**. Se ela morrer no último
@@ -355,13 +355,13 @@ Três consequências práticas:
   "livro lido cujo registro não fechou" são indistinguíveis.
 - Apagar um `.md` na mão basta para mandá-lo ser regerado: o disco é a verdade final, e o
   registro é reconciliado com ele antes de cada execução.
-- Trocar um PDF em `Systems/<Sistema>/<fonte>/` (mesmo nome, conteúdo diferente) marca aquele
+- Trocar um PDF em `Input/<Sistema>/<fonte>/` (mesmo nome, conteúdo diferente) marca aquele
   livro como não lido de novo. Quem decide isso é o **conteúdo**, por SHA-256, e não a data do
   arquivo: copiar a pasta do projeto, restaurar um backup ou deixar uma sincronização de nuvem
   passar por cima muda a data sem trocar nada dentro do livro, e isso já marcou como "não lidos"
   os dois livros de uma base que estava inteira. O hash só é calculado quando data ou tamanho
   mudam — no caso comum, nenhum arquivo chega a ser aberto. **Mover** um livro de fonte também
-  não obriga a relê-lo: o conteúdo é o mesmo, muda apenas o destino dele em `Knowledge/`.
+  não obriga a relê-lo: o conteúdo é o mesmo, muda apenas o destino dele em `Sistemas/`.
 - Uma base que já existia antes de tudo isso é **adotada**: a opção 1 do menu oferece gerar
   índice e registro a partir do que está em disco (de graça, sem agente). Os `.md` presentes
   entram como prontos e os livros, como ainda não lidos — que é a leitura honesta de uma base
@@ -403,9 +403,9 @@ no CLI de 15 em 15 minutos só para ouvir de novo que não há cota.
 Além dos arquivos de regras, o Configurador é obrigado a gerar dois arquivos de nome fixo,
 que são a ponte entre a conversa e o PDF final:
 
-- `Knowledge/<Sistema>/Ficha-Mapeamento.md` — tabela ligando cada campo preenchível do PDF ao
+- `Sistemas/<Sistema>/Ficha-Mapeamento.md` — tabela ligando cada campo preenchível do PDF ao
   dado do personagem que vai nele, com formato e fórmula de cálculo quando houver.
-- `Knowledge/<Sistema>/Ficha-ModeloEmTexto.md` — a ficha redesenhada em arte de texto (ASCII,
+- `Sistemas/<Sistema>/Ficha-ModeloEmTexto.md` — a ficha redesenhada em arte de texto (ASCII,
   até 78 colunas), com um marcador `{{NomeDoCampo}}` em cada lugar preenchível.
 
 Antes de gerar o PDF, o Dungeon Master preenche esse desenho com os dados do personagem e o
@@ -440,7 +440,7 @@ senha da sua conta a um programa que não tem por que vê-la é a forma de um go
 de um login legítimo. Nenhuma versão do aplicativo guarda chave de API — a que existia foi
 removida quando ele passou a usar o Claude Code.
 
-**Seus arquivos.** Livros (`Systems/`), fichas em branco (`Templates/`), o texto extraído
+**Seus arquivos.** Livros (`Input/`), fichas em branco (`Templates/`), o texto extraído
 (`_texto/`) e os personagens gerados (`Output/`) ficam só no seu disco, e estão todos no
 `.gitignore` — não vão para o Git nem por acidente. Os agentes rodam confinados à pasta do
 projeto, e toda escrita passa pelo servidor MCP em C#, onde `ResolverDentroDe` rejeita qualquer
@@ -448,7 +448,7 @@ caminho que escape do diretório permitido.
 
 **O que os agentes não alcançam.** `Bash`, `PowerShell`, `Write`, `Edit`, `WebFetch`, `WebSearch`
 e a leitura de `.claude/` e do código-fonte estão negados a todos eles — cada um é uma saída pela
-qual um agente contornaria as demais restrições. O Dungeon Master ainda perde `Systems/` e
+qual um agente contornaria as demais restrições. O Dungeon Master ainda perde `Input/` e
 `Templates/`, e o Configurador perde `Output/`. Isso é verificado por testes automatizados, não
 só escrito aqui.
 
@@ -456,7 +456,7 @@ só escrito aqui.
 pergunta, e só então roda — e não instala o Claude Code por você, porque isso significaria baixar
 e executar um script da internet em seu nome.
 
-**A base de conhecimento é sua e fica na sua máquina.** `Knowledge/` guarda as regras destiladas
+**A base de conhecimento é sua e fica na sua máquina.** `Sistemas/` guarda as regras destiladas
 dos livros que você importou; se esses livros são comerciais, o conteúdo é deles. Por isso o
 `.gitignore` mantém as bases fora do Git — a única versionada é a do `SistemaTeste`, que é
 fictício. Cada pessoa gera a sua a partir dos próprios livros, o que também é o motivo de o
@@ -491,9 +491,9 @@ aplicativo ser distribuído sem base nenhuma pronta.
 ## Status
 
 Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
-permissões por agente (verificado com o Dungeon Master tendo `Systems/` negado de fato), a
+permissões por agente (verificado com o Dungeon Master tendo `Input/` negado de fato), a
 importação de sistemas e a interface em console, com 140 testes automatizados. O Configurador
-foi validado ponta a ponta gerando `Knowledge/SistemaTeste/`.
+foi validado ponta a ponta gerando `Sistemas/SistemaTeste/`.
 
 Falta: rodar a validação ponta a ponta completa incluindo o Dungeon Master
 (`dotnet run --project tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e

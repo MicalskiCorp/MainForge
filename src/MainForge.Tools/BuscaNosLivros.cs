@@ -21,7 +21,7 @@ public sealed record OcorrenciaNoLivro(string Livro, int Linha, string Secao, st
 /// magias é ler o arquivo inteiro — que é o custo que a conversão existia para eliminar. As
 /// ferramentas de busca embutidas (<c>Grep</c>, <c>Bash</c>, <c>PowerShell</c>) continuam negadas
 /// a todos os agentes, porque cada uma delas alcança qualquer arquivo da máquina; esta alcança
-/// só <c>Systems/&lt;sistema&gt;/**/_texto/</c>, e o confinamento é aplicado em C#.</para>
+/// só <c>Input/&lt;sistema&gt;/**/_texto/</c>, e o confinamento é aplicado em C#.</para>
 ///
 /// <para>O resultado é deliberadamente magro — arquivo, linha, seção e a linha encontrada. Quem
 /// decide o que abrir é o agente, com <c>Read</c> e um offset; devolver o contexto inteiro de
@@ -47,7 +47,7 @@ public static class BuscaNosLivros
             throw new ErroDeFerramenta("Informe o termo a procurar.");
         }
 
-        var diretorio = CaminhosDoProjeto.ResolverDentroDe(caminhos.Sistemas, sistema);
+        var diretorio = CaminhosDoProjeto.ResolverDentroDe(caminhos.Entrada, sistema);
 
         if (!Directory.Exists(diretorio))
         {
@@ -59,7 +59,7 @@ public static class BuscaNosLivros
         if (textos.Count == 0)
         {
             throw new ErroDeFerramenta(
-                $"Nenhum texto convertido em Systems/{sistema}/**/{ConversorDeLivros.NomeDaPastaDeTexto}/" +
+                $"Nenhum texto convertido em Input/{sistema}/**/{ConversorDeLivros.NomeDaPastaDeTexto}/" +
                 (livro is null ? "" : $" para o livro '{livro}'") +
                 ". Leia o PDF com Read, ou peça ao usuário para reprocessar o sistema com o markitdown instalado.");
         }

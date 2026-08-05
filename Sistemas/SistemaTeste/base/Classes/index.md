@@ -1,6 +1,6 @@
 # Indice — base/Classes
 
-Caminho: `Knowledge/SistemaTeste/base/Classes/`
+Caminho: `Sistemas/SistemaTeste/base/Classes/`
 
 ## Arquivos
 

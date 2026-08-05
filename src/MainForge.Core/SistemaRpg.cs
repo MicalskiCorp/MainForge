@@ -2,7 +2,7 @@ namespace MainForge.Core;
 
 /// <summary>
 /// Um sistema de RPG identificado pelo nome da sua pasta (ex.: "D&amp;D5e"), que deve ser o
-/// mesmo em Systems/, Templates/ e Knowledge/.
+/// mesmo em Input/, Templates/ e Sistemas/.
 /// </summary>
 public sealed record SistemaRpg(string Id)
 {
@@ -20,15 +20,15 @@ public sealed record SistemaRpg(string Id)
     /// </summary>
     public bool EhDeTesteInterno => Id.Equals(IdDoSistemaDeTeste, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Sistemas com livros já importados em Systems/, prontos ou não para uso.</summary>
+    /// <summary>Sistemas com livros já importados em Input/, prontos ou não para uso.</summary>
     public static IReadOnlyList<SistemaRpg> DescobrirImportados(CaminhosDoProjeto caminhos)
     {
-        if (!Directory.Exists(caminhos.Sistemas))
+        if (!Directory.Exists(caminhos.Entrada))
         {
             return [];
         }
 
-        return Directory.EnumerateDirectories(caminhos.Sistemas)
+        return Directory.EnumerateDirectories(caminhos.Entrada)
             .Select(d => new SistemaRpg(Path.GetFileName(d)))
             .Where(s => !s.EhDeTesteInterno)
             .OrderBy(s => s.Id, StringComparer.OrdinalIgnoreCase)
@@ -53,27 +53,27 @@ public sealed record SistemaRpg(string Id)
 
     /// <summary>
     /// Os dois arquivos da ficha, que valem para o sistema inteiro e por isso moram na raiz de
-    /// <c>Knowledge/&lt;Sistema&gt;/</c>, fora das pastas de fonte. O nome é fixo porque o
+    /// <c>Sistemas/&lt;Sistema&gt;/</c>, fora das pastas de fonte. O nome é fixo porque o
     /// Dungeon Master procura exatamente por eles.
     /// </summary>
     public static readonly IReadOnlyList<string> ArquivosDaFicha =
         ["Ficha-Mapeamento.md", "Ficha-ModeloEmTexto.md"];
 
-    public string DiretorioSistemas(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Sistemas, Id);
+    public string DiretorioEntrada(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Entrada, Id);
     public string DiretorioModelo(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Modelos, Id);
     public string DiretorioConhecimento(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Conhecimento, Id);
 
-    /// <summary>Onde ficam os PDFs de uma fonte: <c>Systems/&lt;Sistema&gt;/&lt;fonte&gt;/</c>.</summary>
+    /// <summary>Onde ficam os PDFs de uma fonte: <c>Input/&lt;Sistema&gt;/&lt;fonte&gt;/</c>.</summary>
     public string DiretorioDaFonte(CaminhosDoProjeto caminhos, FonteDoSistema fonte) =>
-        CaminhosDoProjeto.ResolverDentroDe(DiretorioSistemas(caminhos), fonte.Id);
+        CaminhosDoProjeto.ResolverDentroDe(DiretorioEntrada(caminhos), fonte.Id);
 
-    /// <summary>Onde fica o conhecimento de uma fonte: <c>Knowledge/&lt;Sistema&gt;/&lt;fonte&gt;/</c>.</summary>
+    /// <summary>Onde fica o conhecimento de uma fonte: <c>Sistemas/&lt;Sistema&gt;/&lt;fonte&gt;/</c>.</summary>
     public string DiretorioConhecimentoDaFonte(CaminhosDoProjeto caminhos, FonteDoSistema fonte) =>
         CaminhosDoProjeto.ResolverDentroDe(DiretorioConhecimento(caminhos), fonte.Id);
 
     /// <summary>Fontes com livro importado, base primeiro. É o que a tela de sistemas mostra.</summary>
     public IReadOnlyList<FonteDoSistema> DescobrirFontes(CaminhosDoProjeto caminhos) =>
-        FontesEm(DiretorioSistemas(caminhos), diretorio => Directory.EnumerateFiles(diretorio, "*.pdf", SearchOption.AllDirectories).Any());
+        FontesEm(DiretorioEntrada(caminhos), diretorio => Directory.EnumerateFiles(diretorio, "*.pdf", SearchOption.AllDirectories).Any());
 
     /// <summary>
     /// Fontes que já têm conhecimento gerado — as únicas que o Dungeon Master consegue usar.
@@ -92,7 +92,7 @@ public sealed record SistemaRpg(string Id)
     /// não custa token nenhum.</para>
     /// </summary>
     public bool PrecisaMigrarParaFontes(CaminhosDoProjeto caminhos) =>
-        ConteudoForaDaBase(DiretorioSistemas(caminhos), "*.pdf", []) ||
+        ConteudoForaDaBase(DiretorioEntrada(caminhos), "*.pdf", []) ||
         ConteudoForaDaBase(DiretorioConhecimento(caminhos), "*.md", ArquivosDaFicha);
 
     private static IReadOnlyList<FonteDoSistema> FontesEm(string diretorioDoSistema, Func<string, bool> temConteudo)

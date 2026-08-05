@@ -3,8 +3,8 @@ using MainForge.Core;
 namespace MainForge.Tools;
 
 /// <summary>O que a migração moveu, para a interface poder contar ao usuário.</summary>
-/// <param name="Livros">PDFs movidos para <c>Systems/&lt;sistema&gt;/base/</c>.</param>
-/// <param name="Conhecimento">Arquivos e pastas movidos para <c>Knowledge/&lt;sistema&gt;/base/</c>.</param>
+/// <param name="Livros">PDFs movidos para <c>Input/&lt;sistema&gt;/base/</c>.</param>
+/// <param name="Conhecimento">Arquivos e pastas movidos para <c>Sistemas/&lt;sistema&gt;/base/</c>.</param>
 public sealed record ResultadoDaMigracao(IReadOnlyList<string> Livros, IReadOnlyList<string> Conhecimento)
 {
     public bool MoveuAlgo => Livros.Count > 0 || Conhecimento.Count > 0;
@@ -29,15 +29,15 @@ public static class MigracaoDeFontes
     {
         var sistema = new SistemaRpg(NomeDePasta.Validar(nomeDoSistema, "sistema", nameof(nomeDoSistema)));
 
-        // Em Systems/ só os PDFs soltos descem para base/: uma subpasta que já exista ali já é
+        // Em Input/ só os PDFs soltos descem para base/: uma subpasta que já exista ali já é
         // uma fonte, e engoli-la dentro de base/ apagaria justamente a separação que se quer.
         var livros = MoverParaBase(
-            sistema.DiretorioSistemas(caminhos),
+            sistema.DiretorioEntrada(caminhos),
             sistema.DiretorioDaFonte(caminhos, FonteDoSistema.Base),
             nome => false,
             moverPastas: false);
 
-        // Em Knowledge/ as pastas descem junto: "Classes/", "Racas/" e companhia são conteúdo do
+        // Em Sistemas/ as pastas descem junto: "Classes/", "Racas/" e companhia são conteúdo do
         // jogo base, não fontes — antes desta mudança o Configurador nunca criava pasta de fonte.
         var conhecimento = MoverParaBase(
             sistema.DiretorioConhecimento(caminhos),

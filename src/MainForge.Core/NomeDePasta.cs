@@ -1,8 +1,8 @@
 namespace MainForge.Core;
 
 /// <summary>
-/// Valida os nomes que o usuário digita e que viram nome de pasta em <c>Systems/</c>,
-/// <c>Templates/</c> e <c>Knowledge/</c> — o do sistema e o da expansão.
+/// Valida os nomes que o usuário digita e que viram nome de pasta em <c>Input/</c>,
+/// <c>Templates/</c> e <c>Sistemas/</c> — o do sistema e o da expansão.
 ///
 /// <para>Existe separado porque o mesmo nome é usado por três pastas diferentes: aceitar uma
 /// barra ou um ".." aqui não é desarrumação, é caminho para escrever fora do projeto. A

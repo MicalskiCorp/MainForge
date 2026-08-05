@@ -1,6 +1,6 @@
 ---
 name: estrutura-do-projeto
-description: Mapa obrigatório da estrutura do MainForge (MainForge) — o que existe em cada pasta, quais dependências entre projetos são permitidas e onde cada tipo de arquivo novo deve nascer. Use SEMPRE antes de ler, navegar, criar, mover ou renomear qualquer coisa na estrutura do projeto: criar arquivo, classe, pasta, projeto .csproj, teste, ferramenta MCP, fluxo da CLI, agente ou sistema de RPG; decidir "onde isso mora?"; ou explicar a organização do repositório. Também vale para leitura: consulte antes de sair procurando arquivo por arquivo.
+description: Mapa obrigatório da estrutura do MainForge — o que existe em cada pasta, quais dependências entre projetos são permitidas e onde cada tipo de arquivo novo deve nascer. Use SEMPRE antes de ler, navegar, criar, mover ou renomear qualquer coisa na estrutura do projeto: criar arquivo, classe, pasta, projeto .csproj, teste, ferramenta MCP, fluxo da CLI, agente ou sistema de RPG; decidir "onde isso mora?"; ou explicar a organização do repositório. Também vale para leitura: consulte antes de sair procurando arquivo por arquivo.
 ---
 
 # Estrutura do MainForge
@@ -16,9 +16,14 @@ um arquivo do lado errado quebra guardrail de segurança, não só a arrumação
 ## Regra de ouro
 
 Nada de código fora de `src/`, `tests/` e `tools/`. Nada de dado de usuário dentro de `src/`.
-As pastas de topo com nome em inglês e inicial maiúscula (`Agents/`, `Systems/`, `Templates/`,
-`Knowledge/`, `Output/`) são **dados**, resolvidos exclusivamente por
+As pastas de topo com inicial maiúscula (`Agents/`, `Input/`, `Templates/`, `Sistemas/`,
+`Output/`) são **dados**, resolvidos exclusivamente por
 [CaminhosDoProjeto](src/MainForge.Core/CaminhosDoProjeto.cs) — nunca monte esses caminhos na mão.
+
+O nome da pasta e o da propriedade que a resolve não coincidem em dois casos, e é de propósito:
+`Input/` é `CaminhosDoProjeto.Entrada` (os livros que o usuário fornece) e `Sistemas/` é
+`CaminhosDoProjeto.Conhecimento` (o que o Configurador destilou deles). Essa correspondência é
+escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 
 ## Mapa da raiz
 
@@ -28,28 +33,28 @@ As pastas de topo com nome em inglês e inicial maiúscula (`Agents/`, `Systems/
 | `tests/MainForge.Tests` | testes xunit de tudo em `src/` | pessoas | `dotnet test` |
 | `tools/ValidacaoPontaAPonta` | harness manual do fluxo completo, **fora da .sln** de propósito (gasta cota real) | pessoas | `dotnet run` manual |
 | `Agents/` | prompt de sistema de cada agente, em Markdown (`Configurador.md`, `DungeonMaster.md`) | pessoas | `DefinicaoDeAgente.CarregarPromptDeSistema` |
-| `Systems/<Sistema>/<fonte>/` | livros oficiais em PDF, um subdiretório por sistema e, dentro, um por fonte | `ImportadorDeSistema` | agente Configurador (`Read`) |
-| `Systems/<Sistema>/<fonte>/_texto/` | os mesmos livros em Markdown — é o que o Configurador lê de verdade | `ConversorDeLivros` | Configurador (`Read`, `procurar_no_texto_dos_livros`) |
+| `Input/<Sistema>/<fonte>/` | livros oficiais em PDF, um subdiretório por sistema e, dentro, um por fonte | `ImportadorDeSistema` | agente Configurador (`Read`) |
+| `Input/<Sistema>/<fonte>/_texto/` | os mesmos livros em Markdown — é o que o Configurador lê de verdade | `ConversorDeLivros` | Configurador (`Read`, `procurar_no_texto_dos_livros`) |
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
-| `Knowledge/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
+| `Sistemas/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
 | `.github/workflows/` | fluxo que publica o binário como release | pessoas | GitHub Actions |
 | `publicar.ps1` | empacota o aplicativo (executável único, self-contained) em `publicado/` | pessoas | `./publicar.ps1` |
 
-`Systems/`, `Templates/`, `Knowledge/` e `Output/` têm um `README.md` explicando a convenção
+`Input/`, `Templates/`, `Sistemas/` e `Output/` têm um `README.md` explicando a convenção
 daquela pasta — se você criar uma pasta de topo nova, ela também precisa de um.
 
 ## O segundo nível: fonte
 
-Dentro de `Systems/<Sistema>/` e de `Knowledge/<Sistema>/` há **uma pasta por fonte**: `base/`
+Dentro de `Input/<Sistema>/` e de `Sistemas/<Sistema>/` há **uma pasta por fonte**: `base/`
 é o jogo base (nome fixo, em `FonteDoSistema.IdDaBase`) e cada outra é uma expansão, com o nome
 que o usuário deu. Os dois lados usam os mesmos nomes: o conhecimento destilado dos livros de
 uma fonte mora na pasta de mesmo nome.
 
 Isto é guardrail, não arrumação. Na criação de personagem o usuário escolhe quais expansões a
 mesa usa, e `DefinicaoDeAgente.DungeonMasterLimitadoA` transforma as recusadas em
-`Read(Knowledge/<Sistema>/<fonte>/**)` negado. Conteúdo na pasta errada vira regra que vale numa
+`Read(Sistemas/<Sistema>/<fonte>/**)` negado. Conteúdo na pasta errada vira regra que vale numa
 mesa que não a escolheu.
 
 O `_texto/` de cada fonte segue a mesma regra, e por isso fica **dentro** da fonte: é o livro
@@ -58,7 +63,7 @@ daquela fonte, só que em Markdown. O underscore marca derivado (como o
 ali é o `ConversorDeLivros`, nunca o agente; apagar um `.md` de lá manda convertê-lo de novo no
 próximo processamento.
 
-Duas exceções ficam na **raiz** de `Knowledge/<Sistema>/`, listadas em
+Duas exceções ficam na **raiz** de `Sistemas/<Sistema>/`, listadas em
 `SistemaRpg.ArquivosDaFicha`: `Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`. A ficha em PDF é
 do sistema inteiro e precisa valer com qualquer expansão selecionada.
 
@@ -74,7 +79,7 @@ MainForge.Core        modelos de domínio (SistemaRpg) e CaminhosDoProjeto. Não
   ├─ MainForge.ClaudeCode   localiza e executa o `claude` headless, traduz o stream-json em
   │                         EventoDeAgente, reconhece cota esgotada (LimiteDeUso) e a política
   │                         de espera (PoliticaDeLimiteDeUso). Nada de RPG aqui dentro.
-  ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp, escrita em Knowledge/,
+  ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp, escrita em Sistemas/,
   │                         IndiceDeConhecimento, EstadoDoProcessamento, ImportadorDeSistema,
   │                         BuscaNosLivros e a conversão dos livros para texto
   │                         (ConversorDeLivros -> markitdown, ExtratorDeTextoDePdf -> PdfPig).
@@ -109,9 +114,9 @@ resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`); `net10.0-windows10.0.1
 | prompt/instrução de agente | `Agents/<Agente>.md` (nunca embutido em C#) | se for um agente novo, um `static readonly DefinicaoDeAgente` em [DefinicaoDeAgente.cs](src/MainForge.Agents/DefinicaoDeAgente.cs) |
 | conceito de domínio puro | `src/MainForge.Core/` | só se não depender de PDF, de agente nem de interface |
 | algo sobre executar o Claude Code | `src/MainForge.ClaudeCode/` | mantenha o projeto ignorante de RPG |
-| sistema de RPG novo | `Systems/<Sistema>/base/` + `Templates/<Sistema>/` pela opção 2 do menu | **não exige mexer em código** |
-| expansão/compêndio | `Systems/<Sistema>/<Expansao>/` pela opção 3 do menu | **não exige mexer em código** |
-| arquivo de conhecimento | `Knowledge/<Sistema>/<fonte>/` pelo agente | nunca escreva ali na mão |
+| sistema de RPG novo | `Input/<Sistema>/base/` + `Templates/<Sistema>/` pela opção 2 do menu | **não exige mexer em código** |
+| expansão/compêndio | `Input/<Sistema>/<Expansao>/` pela opção 3 do menu | **não exige mexer em código** |
+| arquivo de conhecimento | `Sistemas/<Sistema>/<fonte>/` pelo agente | nunca escreva ali na mão |
 
 Projeto `.csproj` novo só quando a responsabilidade não couber em nenhum dos sete — e aí ele
 entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da solução).
@@ -138,7 +143,7 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    linha corrompe os offsets internos do arquivo.
 7. **`Output/` é do usuário.** Nada do código lê de lá para tomar decisão, e o Configurador tem
    `Read(Output/**)` negado.
-8. **Todo conteúdo mora numa fonte.** Em `Systems/` e em `Knowledge/`, nada de conteúdo fica
+8. **Todo conteúdo mora numa fonte.** Em `Input/` e em `Sistemas/`, nada de conteúdo fica
    solto na raiz do sistema — a única exceção é `SistemaRpg.ArquivosDaFicha`. Código novo que
    monte caminho de sistema passa pela fonte (`DiretorioDaFonte`,
    `DiretorioConhecimentoDaFonte`), nunca por `Path.Combine(caminhos.Sistemas, sistema, ...)`.
@@ -149,7 +154,7 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
   `<summary>` que explica **por que** ela existe, não só o que faz. Leia o summary antes do corpo.
 - "O que o agente pode fazer?" → `Agents/<Agente>.md` (o que ele sabe) e `DefinicaoDeAgente`
   (o que ele consegue). Os dois precisam concordar.
-- "Como o conhecimento está organizado?" → `Knowledge/index.md` e o `index.md` de cada pasta.
+- "Como o conhecimento está organizado?" → `Sistemas/index.md` e o `index.md` de cada pasta.
   A estrutura interna de **cada fonte** é decidida pelo agente conforme o sistema de RPG —
   **não há esqueleto fixo** e o código não deve assumir um. O nível da fonte, esse sim, é do
   código: `base/` e uma pasta por expansão, sempre.

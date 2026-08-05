@@ -14,7 +14,7 @@ public sealed record ResultadoDaFerramenta(string Texto, bool Erro = false);
 /// <list type="bullet">
 ///   <item>manipulação de AcroForm (ler e preencher os campos da ficha) — o Claude Code não
 ///   faz PDF editável;</item>
-///   <item>escrita em Knowledge/ — poderia ser a ferramenta <c>Write</c> embutida, mas passar
+///   <item>escrita em Sistemas/ — poderia ser a ferramenta <c>Write</c> embutida, mas passar
 ///   por aqui permite impor o confinamento de diretório em código, que é o guardrail que a
 ///   arquitetura do produto promete.</item>
 /// </list>
@@ -32,13 +32,13 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
         [
             Ferramenta(
                 "escrever_arquivo_conhecimento",
-                "Cria ou sobrescreve um arquivo Markdown dentro de Knowledge/<sistema>/ com o conteúdo informado. Use sempre esta ferramenta para gravar a base de conhecimento. O index.md de cada pasta e o registro de progresso são atualizados automaticamente a cada gravação.",
+                "Cria ou sobrescreve um arquivo Markdown dentro de Sistemas/<sistema>/ com o conteúdo informado. Use sempre esta ferramenta para gravar a base de conhecimento. O index.md de cada pasta e o registro de progresso são atualizados automaticamente a cada gravação.",
                 """
                 {
                   "type": "object",
                   "properties": {
-                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Knowledge/)." },
-                    "caminho": { "type": "string", "description": "Caminho do arquivo .md relativo a Knowledge/<sistema>/, começando pela pasta da fonte de onde veio o conteúdo, ex.: \"base/Classes/Guerreiro.md\" ou \"Compendio-Arcano/Classes/Guerreiro-Subclasses.md\". Só os dois arquivos da ficha ficam na raiz. Nao use \"index.md\": ele e gerado automaticamente." },
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
+                    "caminho": { "type": "string", "description": "Caminho do arquivo .md relativo a Sistemas/<sistema>/, começando pela pasta da fonte de onde veio o conteúdo, ex.: \"base/Classes/Guerreiro.md\" ou \"Compendio-Arcano/Classes/Guerreiro-Subclasses.md\". Só os dois arquivos da ficha ficam na raiz. Nao use \"index.md\": ele e gerado automaticamente." },
                     "conteudo": { "type": "string", "description": "Conteúdo Markdown completo a gravar no arquivo." },
                     "resumo": { "type": "string", "description": "Uma linha dizendo o que ha neste arquivo. Vai para o index.md da pasta e e o que outro agente le para decidir se precisa abrir o arquivo." },
                     "livro": { "type": "string", "description": "Nome do PDF de onde veio o conteúdo, quando ele vem de um compêndio ou expansão." }
@@ -49,13 +49,13 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
 
             Ferramenta(
                 "descrever_pasta_de_conhecimento",
-                "Registra no index.md de uma pasta de Knowledge/<sistema>/ a descrição do que existe naquele nível. Use depois de criar os arquivos da pasta.",
+                "Registra no index.md de uma pasta de Sistemas/<sistema>/ a descrição do que existe naquele nível. Use depois de criar os arquivos da pasta.",
                 """
                 {
                   "type": "object",
                   "properties": {
-                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Knowledge/)." },
-                    "pasta": { "type": "string", "description": "Caminho da pasta relativo a Knowledge/<sistema>/, começando pela fonte, ex.: \"base\" ou \"base/Classes\". Use \"\" para a raiz do sistema." },
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
+                    "pasta": { "type": "string", "description": "Caminho da pasta relativo a Sistemas/<sistema>/, começando pela fonte, ex.: \"base\" ou \"base/Classes\". Use \"\" para a raiz do sistema." },
                     "descricao": { "type": "string", "description": "Um parágrafo curto dizendo o que ha nesse nível e quando vale a pena abrir os arquivos dele." }
                   },
                   "required": ["sistema", "pasta", "descricao"]
@@ -69,14 +69,14 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                 {
                   "type": "object",
                   "properties": {
-                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Knowledge/)." },
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
                     "itens": {
                       "type": "array",
                       "description": "Arquivos planejados. Registrar de novo um caminho ja existente nao apaga o progresso dele.",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "caminho": { "type": "string", "description": "Caminho do .md relativo a Knowledge/<sistema>/, começando pela pasta da fonte, ex.: \"base/Classes/Guerreiro.md\"." },
+                          "caminho": { "type": "string", "description": "Caminho do .md relativo a Sistemas/<sistema>/, começando pela pasta da fonte, ex.: \"base/Classes/Guerreiro.md\"." },
                           "descricao": { "type": "string", "description": "Uma linha dizendo o que vai no arquivo." }
                         },
                         "required": ["caminho"]
@@ -95,7 +95,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                 {
                   "type": "object",
                   "properties": {
-                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Knowledge/)." }
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." }
                   },
                   "required": ["sistema"]
                 }
@@ -103,12 +103,12 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
 
             Ferramenta(
                 "procurar_no_texto_dos_livros",
-                "Procura um termo no texto extraído dos livros do sistema (a versão Markdown dos PDFs, em Systems/<sistema>/<fonte>/_texto/) e devolve arquivo, linha e seção de cada ocorrência. Use para achar onde uma regra está antes de abrir o arquivo com Read: ler o livro inteiro para achar uma tabela é o maior desperdício de cota que existe aqui. A busca ignora acentos e maiúsculas.",
+                "Procura um termo no texto extraído dos livros do sistema (a versão Markdown dos PDFs, em Input/<sistema>/<fonte>/_texto/) e devolve arquivo, linha e seção de cada ocorrência. Use para achar onde uma regra está antes de abrir o arquivo com Read: ler o livro inteiro para achar uma tabela é o maior desperdício de cota que existe aqui. A busca ignora acentos e maiúsculas.",
                 """
                 {
                   "type": "object",
                   "properties": {
-                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Systems/)." },
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Input/)." },
                     "termo": { "type": "string", "description": "Texto a procurar, ex.: \"Pontos de Vida\". Ignora acentos e maiúsculas." },
                     "livro": { "type": "string", "description": "Nome do PDF a que restringir a busca. Sem ele, procura em todos os livros do sistema." },
                     "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." }

@@ -7,7 +7,7 @@ namespace MainForge.Tools;
 public sealed record ItemDoIndice(string Nome, string Descricao);
 
 /// <summary>
-/// Mantém um <c>index.md</c> em cada nível de <c>Knowledge/</c>, descrevendo o que existe
+/// Mantém um <c>index.md</c> em cada nível de <c>Sistemas/</c>, descrevendo o que existe
 /// naquele nível.
 ///
 /// <para><b>Por que isso existe.</b> Sem índice, o único jeito de um agente descobrir onde
@@ -30,12 +30,12 @@ public static class IndiceDeConhecimento
     private const string SecaoDePastas = "## Subpastas";
 
     /// <summary>
-    /// Regenera o <c>index.md</c> de todos os níveis de <c>Knowledge/&lt;sistema&gt;/</c> e o
-    /// índice raiz de <c>Knowledge/</c>. Devolve os índices gravados, relativos à raiz do
+    /// Regenera o <c>index.md</c> de todos os níveis de <c>Sistemas/&lt;sistema&gt;/</c> e o
+    /// índice raiz de <c>Sistemas/</c>. Devolve os índices gravados, relativos à raiz do
     /// projeto.
     /// </summary>
     /// <param name="descricoes">
-    /// Descrições novas, por caminho relativo a <c>Knowledge/&lt;sistema&gt;/</c> (com barras
+    /// Descrições novas, por caminho relativo a <c>Sistemas/&lt;sistema&gt;/</c> (com barras
     /// normais). Vence o que já estava registrado. Uma chave sem extensão descreve uma pasta;
     /// a chave vazia descreve a raiz do sistema.
     /// </param>
@@ -67,7 +67,7 @@ public static class IndiceDeConhecimento
     }
 
     /// <summary>
-    /// Regenera <c>Knowledge/index.md</c>, o índice de mais alto nível: um sistema por linha,
+    /// Regenera <c>Sistemas/index.md</c>, o índice de mais alto nível: um sistema por linha,
     /// com a descrição que o próprio índice do sistema declara. É por onde o Dungeon Master
     /// começa a navegar.
     /// </summary>
@@ -87,7 +87,7 @@ public static class IndiceDeConhecimento
             .ToList();
 
         var texto = new StringBuilder()
-            .AppendLine("# Indice — Knowledge")
+            .AppendLine("# Indice — Sistemas")
             .AppendLine()
             .AppendLine("Bases de conhecimento geradas pelo Agente Configurador, uma por sistema de RPG.")
             .AppendLine("Abra o `index.md` do sistema desejado para ver a estrutura dele; cada pasta tem o")
@@ -193,7 +193,7 @@ public static class IndiceDeConhecimento
         var texto = new StringBuilder()
             .AppendLine($"# Indice — {titulo}")
             .AppendLine()
-            .AppendLine($"Caminho: `Knowledge/{sistema}/{caminho}`")
+            .AppendLine($"Caminho: `Sistemas/{sistema}/{caminho}`")
             .AppendLine();
 
         if (descricao.Length > 0)
