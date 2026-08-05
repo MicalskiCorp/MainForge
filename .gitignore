@@ -45,5 +45,10 @@ appsettings.Local.json
 /Knowledge/*/
 !/Knowledge/SistemaTeste/
 
+# O índice da raiz de Knowledge/ é derivado e lista os sistemas que existem *nesta* máquina —
+# ou seja, descreve os livros de quem está usando o aplicativo. Ele é regerado a cada gravação,
+# então versioná-lo só serviria para vazar essa lista e sujar o diff a cada execução.
+/Knowledge/index.md
+
 # Pacote gerado por publicar.ps1.
 /publicado/
