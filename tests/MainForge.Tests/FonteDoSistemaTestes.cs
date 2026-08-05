@@ -55,7 +55,7 @@ public sealed class FonteDoSistemaTestes : IDisposable
             new FonteDoSistema("Aventuras"),
         ]);
 
-        Assert.Equal(["base", "Aventuras", "Compendio-Sombrio", "Compendio-Arcano"], ordenadas.Select(fonte => fonte.Id));
+        Assert.Equal(["base", "Aventuras", "Compendio-Arcano", "Compendio-Sombrio"], ordenadas.Select(fonte => fonte.Id));
     }
 
     [Fact]

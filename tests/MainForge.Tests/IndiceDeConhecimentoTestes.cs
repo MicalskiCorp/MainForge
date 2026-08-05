@@ -164,11 +164,11 @@ public sealed class IndiceDeConhecimentoTestes : IDisposable
     [Fact]
     public void Reconstruir_NomeComEspacoEParenteses_ContinuaCodificadoNoLink()
     {
-        Gravar("Regras Basicas (PT-BR).md", "# Regras");
+        Gravar("Regras Gerais (PT-BR).md", "# Regras");
 
         IndiceDeConhecimento.Reconstruir(_caminhos, "Aventura&Cia");
 
-        Assert.Contains("(Regras%20Basicas%20%28PT-BR%29.md)", LerIndice(""));
+        Assert.Contains("(Regras%20Gerais%20%28PT-BR%29.md)", LerIndice(""));
     }
 
     [Fact]

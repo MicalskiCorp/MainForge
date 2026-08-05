@@ -52,3 +52,7 @@ appsettings.Local.json
 
 # Pacote gerado por publicar.ps1.
 /publicado/
+
+# Atalho do Windows criado na máquina de quem desenvolve: guarda o caminho absoluto do
+# executável, então só vale naquele computador e quebra a cada pasta renomeada.
+*.lnk
