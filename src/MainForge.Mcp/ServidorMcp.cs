@@ -18,8 +18,15 @@ public sealed class ServidorMcp(CatalogoDeFerramentas catalogo)
     public async Task RodarAsync(TextReader entrada, TextWriter saida, CancellationToken cancelamento = default)
     {
         while (!cancelamento.IsCancellationRequested &&
-               await entrada.ReadLineAsync(cancelamento) is { } linha)
+               await entrada.ReadLineAsync(cancelamento) is { } linhaCrua)
         {
+            // O BOM do UTF-8 chega como um caractere invisível no começo da linha, e o parser de
+            // JSON o rejeita com "'0xEF' is an invalid start of a value" — mensagem que não diz
+            // nada a quem está lendo. Quem escreve na entrada padrão é outro programa, e alguns
+            // (o PowerShell, ao redirecionar um texto) mandam o BOM sem perguntar. Descartá-lo é
+            // mais barato que explicá-lo.
+            var linha = linhaCrua.TrimStart('\uFEFF');
+
             if (string.IsNullOrWhiteSpace(linha))
             {
                 continue;

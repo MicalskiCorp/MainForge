@@ -89,6 +89,22 @@ public class ServidorMcpTestes : IDisposable
     }
 
     /// <summary>
+    /// Quem escreve na entrada padrão é outro programa, e alguns mandam o BOM do UTF-8 antes da
+    /// primeira mensagem — o PowerShell faz isso ao redirecionar texto para um executável. Sem
+    /// descartá-lo, a primeira chamada de toda sessão morria com "'0xEF' is an invalid start of a
+    /// value", que não diz nada a quem lê.
+    /// </summary>
+    [Fact]
+    public async Task PrimeiraMensagemComBom_ERespondidaNormalmente()
+    {
+        var respostas = await ConversarAsync("\uFEFF" + """{"jsonrpc":"2.0","id":1,"method":"ping"}""");
+
+        var resposta = Assert.Single(respostas);
+        Assert.Equal(1, resposta["id"]!.GetValue<int>());
+        Assert.Null(resposta["error"]);
+    }
+
+    /// <summary>
     /// Responder a uma notificação é violação do JSON-RPC e trava clientes que casam
     /// resposta com id.
     /// </summary>

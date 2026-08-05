@@ -1,5 +1,8 @@
 # Chatbot para Criação de Fichas de Personagens de RPG
 
+[![build](https://github.com/MicalskiCorp/MainForge/actions/workflows/build.yml/badge.svg)](https://github.com/MicalskiCorp/MainForge/actions/workflows/build.yml)
+[![licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+
 Aplicativo desktop em C#/.NET que entende livros de RPG em PDF e conduz a criação de
 personagens, terminando num PDF de ficha preenchido. Tudo roda localmente na máquina do
 usuário.
@@ -198,6 +201,13 @@ dotnet test MainForge.sln
 dotnet run --project src/MainForge.Cli    # o aplicativo
 ./publicar.ps1 -Versao 0.1.0              # gera o .zip do release (win-x64, executável único)
 ```
+
+Os mesmos comandos rodam no CI a cada push e pull request
+([build.yml](.github/workflows/build.yml)), em Windows — que é onde o aplicativo vive. Além de
+compilar e testar, o CI **empacota e executa o pacote**: confere que os prompts dos agentes e a
+licença estão dentro dele e que o binário responde no modo servidor MCP. Os dois últimos existem
+porque já quebraram: a cópia dos prompts acontece só na publicação, e um pacote que não abre
+passaria em todos os testes de unidade.
 
 O `publicar.ps1` roda o mesmo publish do fluxo de release
 ([`.github/workflows/release.yml`](.github/workflows/release.yml)), que empacota e anexa o `.zip`

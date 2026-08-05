@@ -1,0 +1,97 @@
+# Compila e testa a cada mudança no código.
+#
+# Antes disto, o projeto só era compilado no CI quando saía um release: uma quebra ficava
+# escondida até a hora de publicar, que é o pior momento para descobri-la. Aqui ela aparece no
+# commit que a causou.
+#
+# Roda em Windows porque o aplicativo é de Windows: o TFM é net10.0-windows, o preenchimento da
+# ficha lê as fontes de C:\Windows\Fonts e há teste que exercita a passagem de caminho para um
+# .cmd. Num runner Linux, metade disso não teria como ser verificada.
+name: build
+
+on:
+  push:
+    branches: [main]
+    # Mudança só em documentação não altera o que é compilado — e minuto de runner Windows
+    # conta em dobro na cota do GitHub.
+    paths-ignore: ["**.md", ".gitignore", ".gitattributes", "LICENSE"]
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md", ".gitignore", ".gitattributes", "LICENSE"]
+  workflow_dispatch:
+
+# Empurrar duas vezes seguidas não precisa de duas execuções: a antiga é cancelada.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restaurar
+        run: dotnet restore MainForge.sln
+
+      - name: Compilar
+        run: dotnet build MainForge.sln -c Release --no-restore
+
+      - name: Testar
+        run: dotnet test MainForge.sln -c Release --no-build
+
+      # O empacotamento tem caminhos que o build comum não exercita — os prompts dos agentes,
+      # por exemplo, são copiados na publicação e não no build. Já quebrou uma vez por isso, e
+      # o release só teria contado a novidade quando fosse tarde.
+      - name: Empacotar
+        shell: pwsh
+        run: ./publicar.ps1 -Versao 0.0.0-ci
+
+      - name: Conferir o pacote
+        shell: pwsh
+        run: |
+          $pacote = "publicado/MainForge"
+          $exigidos = @(
+            "MainForge.Cli.exe",
+            "Agents/Configurador.md",
+            "Agents/DungeonMaster.md",
+            "LICENSE",
+            "README.md"
+          )
+
+          $faltando = $exigidos | Where-Object { -not (Test-Path (Join-Path $pacote $_)) }
+
+          if ($faltando) {
+            Write-Host "::error::Faltou no pacote: $($faltando -join ', ')"
+            exit 1
+          }
+
+          # O servidor MCP é o próprio executável (modo --mcp). Um segundo binário aqui levaria
+          # outro runtime .NET embutido e poderia divergir de versão.
+          if (Test-Path (Join-Path $pacote "MainForge.Mcp.exe")) {
+            Write-Host "::error::MainForge.Mcp.exe não deveria estar no pacote."
+            exit 1
+          }
+
+          Write-Host "Pacote conferido: $((Get-ChildItem $pacote).Count) itens."
+
+      # Prova que o binário publicado sobe e responde — inclusive no modo servidor MCP, que é
+      # como o Claude Code o lança. Um pacote que não abre passaria em todos os testes acima.
+      - name: Executar o pacote
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "publicado/MainForge/MainForge.Cli.exe"
+          $pedido = '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+          $resposta = $pedido | & $exe --mcp (Resolve-Path "publicado/MainForge")
+
+          if ($resposta -notmatch "preencher_ficha_personagem") {
+            Write-Host "::error::O modo --mcp não respondeu com as ferramentas esperadas."
+            exit 1
+          }
+
+          Write-Host "Modo MCP respondeu."
