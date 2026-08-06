@@ -44,6 +44,16 @@ public sealed record DefinicaoDeAgente(
     public const string NomeDoServidorMcp = "mainforge";
 
     /// <summary>
+    /// As fontes que valem nesta sessão, quando ela é de uma mesa. <c>null</c> significa sem
+    /// limite — é o caso do Configurador, que escreve a base inteira.
+    ///
+    /// <para>Existe além das negações de <c>Read</c> porque elas param no agente: uma ferramenta
+    /// MCP que leia <c>Sistemas/</c> roda em outro processo, onde a lista de negação do Claude
+    /// Code não chega. Esta restrição é o que viaja até lá.</para>
+    /// </summary>
+    public RestricaoDeFontes? FontesDaMesa { get; init; }
+
+    /// <summary>
     /// Negado para todos os agentes, sem exceção. Cada item fecha um caminho pelo qual um
     /// agente contornaria o próprio allowlist:
     /// <list type="bullet">
@@ -161,7 +171,10 @@ public sealed record DefinicaoDeAgente(
             "procurar_no_texto_dos_livros",
             "listar_campos_da_ficha",
         ],
-        NegacoesEspecificas: ["Read(Output/**)"]);
+        // Output/ são as fichas em PDF já entregues e Personagens/ são os dossiês delas: os dois
+        // são resultado do Dungeon Master, e nada do que o Configurador faz depende de olhar
+        // personagem nenhum.
+        NegacoesEspecificas: ["Read(Output/**)", "Read(Personagens/**)"]);
 
     /// <summary>
     /// O Configurador numa máquina em que abrir PDF não funciona: a leitura dos livros em
@@ -187,33 +200,50 @@ public sealed record DefinicaoDeAgente(
         };
 
     /// <summary>
-    /// Só lê Sistemas/ e só escreve em Output/Personagens/, pela ferramenta MCP de
-    /// preenchimento. Nunca lê os PDFs originais em Input/ (caros em tokens, e é justamente
-    /// para isso que o Configurador destilou o conhecimento) nem o template em Templates/ —
-    /// para ver a ficha ele usa o Ficha-ModeloEmTexto.md, e para saber os nomes dos campos,
-    /// o Ficha-Mapeamento.md.
+    /// Só lê Sistemas/ e Personagens/, e só escreve pelas ferramentas MCP — o dossiê do
+    /// personagem e a ficha em PDF. Nunca lê os PDFs originais em Input/ (caros em tokens, e é
+    /// justamente para isso que o Configurador destilou o conhecimento) nem o template em
+    /// Templates/ — para ver a ficha ele usa o Ficha-ModeloEmTexto.md, e para saber os nomes dos
+    /// campos, o Ficha-Mapeamento.md.
+    ///
+    /// <para><c>Output/</c> continua negado mesmo agora que ele produz PDF ali: escrever é pela
+    /// ferramenta, e ler as fichas já entregues não ajuda em nada — o estado do personagem mora
+    /// em <c>Personagens/</c>, em texto, que é o que ele consegue de fato usar.</para>
     /// </summary>
     public static readonly DefinicaoDeAgente DungeonMaster = new(
         Nome: "DungeonMaster",
         NomeArquivoPrompt: "DungeonMaster.md",
         FerramentasNativasPermitidas: ["Read", "Glob"],
-        FerramentasMcpPermitidas: ["preencher_ficha_personagem"],
-        NegacoesEspecificas: ["Read(Input/**)", "Read(Templates/**)"]);
+        FerramentasMcpPermitidas:
+        [
+            "preencher_ficha_personagem",
+            "registrar_personagem",
+            "procurar_no_conhecimento",
+        ],
+        NegacoesEspecificas: ["Read(Input/**)", "Read(Templates/**)", "Read(Output/**)"]);
 
     /// <summary>
     /// O Dungeon Master de uma mesa que não usa todas as expansões: as fontes que o usuário não
-    /// escolheu viram negação de leitura por caminho.
+    /// escolheu viram negação de leitura por caminho, e as que ele escolheu viajam até o servidor
+    /// MCP em <see cref="FontesDaMesa"/>.
     ///
     /// <para><b>Por que negar em vez de pedir.</b> "Não use o compêndio X" no prompt é um pedido
     /// — o modelo esbarra no arquivo enquanto navega pelo índice e o conteúdo entra na conversa
     /// de qualquer jeito. Negar a pasta faz a escolha do usuário valer mesmo: o personagem não
     /// pode ganhar uma subclasse de um livro que a mesa não usa se o agente não alcança o
     /// arquivo onde ela está.</para>
+    ///
+    /// <para><b>Por que as duas listas.</b> A negação por caminho vale para o <c>Read</c> do
+    /// agente e para mais nada. A busca na base é uma ferramenta MCP, que roda noutro processo:
+    /// ela precisa saber quais fontes valem, ou seria a porta lateral para o conteúdo que a
+    /// negação acabou de fechar.</para>
     /// </summary>
     /// <param name="sistema">Sistema em que o personagem está sendo criado.</param>
+    /// <param name="fontesDaMesa">Fontes que valem — o jogo base mais as expansões marcadas.</param>
     /// <param name="fontesRecusadas">Fontes que ficam de fora — em geral, as expansões não marcadas.</param>
     public static DefinicaoDeAgente DungeonMasterLimitadoA(
         SistemaRpg sistema,
+        IReadOnlyList<FonteDoSistema> fontesDaMesa,
         IReadOnlyList<FonteDoSistema> fontesRecusadas) =>
         DungeonMaster with
         {
@@ -222,5 +252,8 @@ public sealed record DefinicaoDeAgente(
                 .. DungeonMaster.NegacoesEspecificas,
                 .. fontesRecusadas.Select(fonte => $"Read(Sistemas/{sistema.Id}/{fonte.Id}/**)"),
             ],
+            FontesDaMesa = new RestricaoDeFontes(
+                sistema.Id,
+                [.. fontesDaMesa.Select(fonte => fonte.Id).DefaultIfEmpty(FonteDoSistema.IdDaBase)]),
         };
 }

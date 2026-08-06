@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       versao:
-        description: "Versão a carimbar no executável (ex.: 0.1.0)"
+        description: "Versão a carimbar no executável (ex.: 1.1.0)"
         required: true
-        default: "0.1.0"
+        default: "1.1.0"
 
 permissions:
   contents: write # necessário para criar o release e anexar o .zip
@@ -121,7 +121,7 @@ jobs:
 
             É preciso ter o [Claude Code](https://claude.com/product/claude-code) instalado e
             logado na sua conta — o aplicativo usa a **sua** assinatura e não guarda credencial
-            nenhuma. A opção 7 do menu confere as dependências e ajuda a instalar o que faltar.
+            nenhuma. O menu **Ambiente** confere as dependências e ajuda a instalar o que faltar.
 
             **O Windows vai avisar na primeira execução** ("Mais informações" › "Executar assim
             mesmo"): o executável não é assinado digitalmente, e o SmartScreen avisa sobre

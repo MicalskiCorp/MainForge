@@ -72,8 +72,9 @@ public class CaminhosDoProjetoTestes
         Assert.True(Directory.Exists(caminhos.Entrada));
         Assert.True(Directory.Exists(caminhos.Modelos));
         Assert.True(Directory.Exists(caminhos.Conhecimento));
+        Assert.True(Directory.Exists(caminhos.Personagens));
         Assert.True(Directory.Exists(caminhos.SaidaPersonagens));
-        Assert.Equal(4, criadas.Count);
+        Assert.Equal(5, criadas.Count);
 
         // Rodar de novo não recria nada: o aviso ao usuário é sobre o que mudou agora.
         Assert.Empty(caminhos.GarantirEstrutura());

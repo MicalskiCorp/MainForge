@@ -17,7 +17,7 @@ um arquivo do lado errado quebra guardrail de segurança, não só a arrumação
 
 Nada de código fora de `src/`, `tests/` e `tools/`. Nada de dado de usuário dentro de `src/`.
 As pastas de topo com inicial maiúscula (`Agents/`, `Input/`, `Templates/`, `Sistemas/`,
-`Output/`) são **dados**, resolvidos exclusivamente por
+`Personagens/`, `Output/`) são **dados**, resolvidos exclusivamente por
 [CaminhosDoProjeto](src/MainForge.Core/CaminhosDoProjeto.cs) — nunca monte esses caminhos na mão.
 
 O nome da pasta e o da propriedade que a resolve não coincidem em dois casos, e é de propósito:
@@ -37,13 +37,20 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `Input/<Sistema>/<fonte>/_texto/` | os mesmos livros em Markdown — é o que o Configurador lê de verdade | `ConversorDeLivros` | Configurador (`Read`, `procurar_no_texto_dos_livros`) |
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
 | `Sistemas/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
+| `Personagens/<Sistema>/<Id>/` | dossiê do personagem: `personagem.json` (situação, fontes da mesa, sessão) + `ficha.md` (estado dele em texto) | `RepositorioDePersonagens` — o C# grava o JSON, o agente grava o `.md` pelo MCP | a CLI e o Dungeon Master |
 | `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
+| `Output/Pacotes/` | sistemas exportados (`.mainforge.zip`) para levar a outra máquina | `PacoteDeSistema` | o usuário |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
 | `.github/workflows/` | fluxo que publica o binário como release | pessoas | GitHub Actions |
 | `publicar.ps1` | empacota o aplicativo (executável único, self-contained) em `publicado/` | pessoas | `./publicar.ps1` |
 
-`Input/`, `Templates/`, `Sistemas/` e `Output/` têm um `README.md` explicando a convenção
-daquela pasta — se você criar uma pasta de topo nova, ela também precisa de um.
+`Input/`, `Templates/`, `Sistemas/`, `Personagens/` e `Output/` têm um `README.md` explicando a
+convenção daquela pasta — se você criar uma pasta de topo nova, ela também precisa de um.
+
+`Personagens/` e `Output/Personagens/` são coisas diferentes, e a diferença é o item 7 das
+regras: `Output/` é entrega, e o código não tira decisão de lá; `Personagens/` é dado de
+trabalho — a CLI lê dali o que continuar, e é a única pasta de resultado que o Dungeon Master
+alcança.
 
 ## O segundo nível: fonte
 
@@ -81,9 +88,10 @@ MainForge.Core        modelos de domínio (SistemaRpg) e CaminhosDoProjeto. Não
   │                         de espera (PoliticaDeLimiteDeUso). Nada de RPG aqui dentro.
   ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp, escrita em Sistemas/,
   │                         IndiceDeConhecimento, EstadoDoProcessamento, ImportadorDeSistema,
-  │                         BuscaNosLivros e a conversão dos livros para texto
-  │                         (ConversorDeLivros -> markitdown, ExtratorDeTextoDePdf -> PdfPig).
-  │                         Sem dependência de agente nem de interface.
+  │                         RepositorioDePersonagens, PacoteDeSistema, as duas buscas
+  │                         (BuscaNosLivros, BuscaNoConhecimento) e a conversão dos livros para
+  │                         texto (ConversorDeLivros -> markitdown, ExtratorDeTextoDePdf ->
+  │                         PdfPig). Sem dependência de agente nem de interface.
   │    └─ MainForge.Mcp     servidor MCP stdio (executável próprio) que expõe MainForge.Tools
   │                         ao Claude Code. Só adapta: a regra mora em Tools.
   └─ MainForge.Agents       DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente (a conversa).
@@ -109,14 +117,15 @@ resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`); `net10.0-windows10.0.1
 | Vou criar | Vai em | E também |
 | --- | --- | --- |
 | regra de negócio que toca disco | `src/MainForge.Tools/` | um `*Testes.cs` em `tests/MainForge.Tests/` |
-| ferramenta nova para o agente | a lógica em `MainForge.Tools`, o schema em [CatalogoDeFerramentas.cs](src/MainForge.Mcp/CatalogoDeFerramentas.cs), o despacho em [ServidorMcp.cs](src/MainForge.Mcp/ServidorMcp.cs) | conceder em `DefinicaoDeAgente.FerramentasMcpPermitidas` **e** citar no `Agents/<Agente>.md` — ferramenta não anunciada no prompt não é usada |
-| opção nova de menu | um `FluxoDeXxx.cs` em `src/MainForge.Cli/`, ligado no `switch` de [Program.cs](src/MainForge.Cli/Program.cs) | texto de UI sempre por `ConsoleUi`; o estado da janela do console (maximizar, tamanho) fica em `JanelaDoConsole`, o único ponto com P/Invoke |
+| ferramenta nova para o agente | a lógica em `MainForge.Tools`, o schema em [CatalogoDeFerramentas.cs](src/MainForge.Mcp/CatalogoDeFerramentas.cs), o despacho em [ServidorMcp.cs](src/MainForge.Mcp/ServidorMcp.cs) | conceder em `DefinicaoDeAgente.FerramentasMcpPermitidas` **e** citar no `Agents/<Agente>.md` — ferramenta não anunciada no prompt não é usada. Se ela lê `Sistemas/`, precisa conferir a `RestricaoDeFontes` (veja a regra 9) |
+| opção nova de menu | um `FluxoDeXxx.cs` em `src/MainForge.Cli/`, ligado ao `MenuDeXxx.cs` do assunto (Sistemas, Personagens, Ambiente) | o menu principal tem três portas e não ganha uma quarta sem motivo forte; texto de UI sempre por `ConsoleUi`; o estado da janela do console fica em `JanelaDoConsole`, o único ponto com P/Invoke |
 | prompt/instrução de agente | `Agents/<Agente>.md` (nunca embutido em C#) | se for um agente novo, um `static readonly DefinicaoDeAgente` em [DefinicaoDeAgente.cs](src/MainForge.Agents/DefinicaoDeAgente.cs) |
 | conceito de domínio puro | `src/MainForge.Core/` | só se não depender de PDF, de agente nem de interface |
 | algo sobre executar o Claude Code | `src/MainForge.ClaudeCode/` | mantenha o projeto ignorante de RPG |
-| sistema de RPG novo | `Input/<Sistema>/base/` + `Templates/<Sistema>/` pela opção 2 do menu | **não exige mexer em código** |
-| expansão/compêndio | `Input/<Sistema>/<Expansao>/` pela opção 3 do menu | **não exige mexer em código** |
+| sistema de RPG novo | `Input/<Sistema>/base/` + `Templates/<Sistema>/` por Sistemas > Novo sistema | **não exige mexer em código** |
+| expansão/compêndio | `Input/<Sistema>/<Expansao>/` por Sistemas > Adicionar livros | **não exige mexer em código** |
 | arquivo de conhecimento | `Sistemas/<Sistema>/<fonte>/` pelo agente | nunca escreva ali na mão |
+| dossiê de personagem | `Personagens/<Sistema>/<Id>/` por `RepositorioDePersonagens` | nunca escreva ali na mão: o JSON é do C#, o `ficha.md` é do agente pelo MCP |
 
 Projeto `.csproj` novo só quando a responsabilidade não couber em nenhum dos sete — e aí ele
 entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da solução).
@@ -147,6 +156,16 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    solto na raiz do sistema — a única exceção é `SistemaRpg.ArquivosDaFicha`. Código novo que
    monte caminho de sistema passa pela fonte (`DiretorioDaFonte`,
    `DiretorioConhecimentoDaFonte`), nunca por `Path.Combine(caminhos.Sistemas, sistema, ...)`.
+9. **A negação de `Read` por caminho para no agente.** A escolha de expansões da mesa é aplicada
+   como `Read(Sistemas/<Sistema>/<fonte>/**)` negado, e isso não alcança o servidor MCP, que roda
+   em outro processo. Ferramenta MCP que percorra `Sistemas/` por conta própria precisa conferir
+   a `RestricaoDeFontes` que chega pelo ambiente (`RestricaoDeFontes.VariavelDeAmbiente`, posta no
+   bloco `env` por `ConfiguracaoDoServidorMcp`) — sem isso ela é a porta lateral para o conteúdo
+   que a negação acabou de fechar. `BuscaNoConhecimento` é o exemplo, e `BuscaNoConhecimentoTestes`
+   trava o comportamento.
+10. **Caminho de dentro de um `.zip` é caminho vindo de fora.** A importação de pacote resolve
+    cada entrada com `ResolverDentroDe` antes de extrair — um `.zip` pode carregar `../../` (o
+    "zip slip") tanto quanto um caminho vindo do modelo.
 
 ## Como navegar (em vez de varrer)
 

@@ -13,16 +13,17 @@ internal static class FluxoDeSistemas
     public static void Executar(ContextoDoAplicativo contexto)
     {
         var caminhos = contexto.Caminhos;
-        var sistemas = SistemaRpg.DescobrirImportados(caminhos);
+        // Os dois lados: um sistema que chegou por pacote tem base sem ter livro nenhum, e some
+        // desta tela se ela olhar só Input/.
+        var sistemas = SistemaRpg.DescobrirTodos(caminhos);
 
-        ConsoleUi.Titulo("Sistemas");
+        ConsoleUi.Titulo("Panorama dos sistemas");
         ConsoleUi.Detalhe($"Raiz do projeto: {caminhos.Raiz}");
 
         if (sistemas.Count == 0)
         {
             ConsoleUi.Aviso($"\nNenhum sistema em {caminhos.Entrada}.");
-            ConsoleUi.Info("Para adicionar um: crie Input/<NomeDoSistema>/ com o PDF do livro,");
-            ConsoleUi.Info("e Templates/<NomeDoSistema>/ com a ficha em PDF editável (AcroForm).");
+            ConsoleUi.Info("Use \"Novo sistema\" abaixo, ou traga um pronto com \"Importar um pacote de sistema\".");
             return;
         }
 
@@ -55,6 +56,13 @@ internal static class FluxoDeSistemas
 
             ConsoleUi.Info($"  {sistema.Id,-24} {livros,-8} {descricaoConhecimento,-32} {descricaoFicha,-8}");
 
+            // Sistema vindo de pacote: a base está pronta e não há livro para processar. Sem esta
+            // linha, "0 livros" parece um sistema quebrado em vez de um que veio completo.
+            if (livros == 0 && sistema.TemConhecimento(caminhos))
+            {
+                ConsoleUi.Detalhe("    · sem livros em Input/ — base recebida por pacote; já dá para criar personagem");
+            }
+
             MostrarFontes(caminhos, sistema);
         }
 
@@ -82,21 +90,24 @@ internal static class FluxoDeSistemas
     private static void MostrarFontes(CaminhosDoProjeto caminhos, SistemaRpg sistema)
     {
         var comLivro = sistema.DescobrirFontes(caminhos);
+        var comConhecimento = sistema.DescobrirFontesComConhecimento(caminhos);
 
-        if (comLivro.Count == 0)
+        // As duas listas, e não só a de Input/: um sistema vindo de pacote tem fonte com
+        // conhecimento e nenhum livro, e mostrar só o que tem livro o deixaria sem fonte alguma.
+        var fontes = FonteDoSistema.Ordenar(
+            comLivro.Concat(comConhecimento).DistinctBy(fonte => fonte.Id, StringComparer.OrdinalIgnoreCase));
+
+        if (fontes.Count == 0)
         {
             return;
         }
 
-        var comConhecimento = sistema
-            .DescobrirFontesComConhecimento(caminhos)
-            .Select(fonte => fonte.Id)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var geradas = comConhecimento.Select(fonte => fonte.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var fonte in comLivro)
+        foreach (var fonte in fontes)
         {
             var livros = Contar(sistema.DiretorioDaFonte(caminhos, fonte), "*.pdf");
-            var situacao = comConhecimento.Contains(fonte.Id) ? "conhecimento gerado" : "ainda não processada";
+            var situacao = geradas.Contains(fonte.Id) ? "conhecimento gerado" : "ainda não processada";
 
             ConsoleUi.Detalhe($"    · {fonte.Id,-20} {livros} livro(s) — {situacao}");
         }

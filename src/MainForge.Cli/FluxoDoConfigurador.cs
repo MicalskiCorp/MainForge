@@ -38,7 +38,7 @@ internal static class FluxoDoConfigurador
         if (sistemas.Count == 0)
         {
             ConsoleUi.Aviso("Nenhum sistema importado ainda.");
-            ConsoleUi.Info("Use a opção \"Importar um sistema de RPG\" no menu principal.");
+            ConsoleUi.Info("Use \"Novo sistema\" no menu Sistemas.");
             return;
         }
 
@@ -432,7 +432,7 @@ internal static class FluxoDoConfigurador
         ConsoleUi.Info("");
         ConsoleUi.Sucesso($"Nada a processar: {estado.Resumo()}, e todos os livros já foram incorporados.");
         ConsoleUi.Info("Rodar o Configurador agora só faria ele reler os livros e regravar o que já existe.");
-        ConsoleUi.Detalhe("Para acrescentar conteúdo, use a opção 3 do menu (adicionar livro ao sistema).");
+        ConsoleUi.Detalhe("Para acrescentar conteúdo, use \"Adicionar livros\" no menu Sistemas.");
 
         var opcoes = new List<OpcaoDeModo>
         {

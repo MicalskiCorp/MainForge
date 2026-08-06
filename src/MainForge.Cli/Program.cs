@@ -51,19 +51,19 @@ if (pastasCriadas.Count > 0)
 
 if (!contexto.TemClaudeCode)
 {
-    ConsoleUi.Aviso("\nClaude Code não encontrado — os agentes não vão rodar. Veja as opções 6 e 7.");
+    ConsoleUi.Aviso("\nClaude Code não encontrado — os agentes não vão rodar. Veja a opção 3, Ambiente.");
 }
 
+// Três portas, na ordem em que o trabalho acontece: primeiro o sistema de RPG existe, depois os
+// personagens nascem dele, e o ambiente só interessa quando algo não funciona. Cada uma abre um
+// submenu com as ações daquele assunto — o menu antigo tinha sete opções em que a diferença
+// entre "importar", "adicionar" e "processar" só ficava clara para quem já conhecia o programa.
 while (true)
 {
     ConsoleUi.Titulo("Menu principal");
-    ConsoleUi.Info("  1) Ver sistemas e base de conhecimento");
-    ConsoleUi.Info("  2) Importar um sistema de RPG (livros + ficha)");
-    ConsoleUi.Info("  3) Adicionar livro a um sistema (compêndio/expansão)");
-    ConsoleUi.Info("  4) Processar um sistema (Agente Configurador)");
-    ConsoleUi.Info("  5) Criar um personagem (Agente Dungeon Master)");
-    ConsoleUi.Info($"  6) Verificar o Claude Code   [{contexto.DescreverClaudeCode()}]");
-    ConsoleUi.Info("  7) Dependências do aplicativo");
+    ConsoleUi.Info("  1) Sistemas     — importar livros, processar e exportar sistemas de RPG");
+    ConsoleUi.Info("  2) Personagens  — criar, continuar e evoluir personagens");
+    ConsoleUi.Info($"  3) Ambiente     — Claude Code e dependências   [{contexto.DescreverClaudeCode()}]");
     ConsoleUi.Info("  0) Sair");
 
     var escolha = ConsoleUi.LerLinha("\nEscolha: ");
@@ -76,38 +76,15 @@ while (true)
         switch (escolha)
         {
             case "1":
-                FluxoDeSistemas.Executar(contexto);
-                ConsoleUi.Pausar();
+                await MenuDeSistemas.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 break;
 
             case "2":
-                await FluxoDeImportacao.ExecutarAsync(contexto, cancelamentoAtual.Token);
-                ConsoleUi.Pausar();
+                await MenuDePersonagens.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 break;
 
             case "3":
-                await FluxoDeAdicaoDeLivro.ExecutarAsync(contexto, cancelamentoAtual.Token);
-                ConsoleUi.Pausar();
-                break;
-
-            case "4":
-                await FluxoDoConfigurador.ExecutarAsync(contexto, cancelamentoAtual.Token);
-                ConsoleUi.Pausar();
-                break;
-
-            case "5":
-                await FluxoDeCriacaoDePersonagem.ExecutarAsync(contexto, cancelamentoAtual.Token);
-                ConsoleUi.Pausar();
-                break;
-
-            case "6":
-                await FluxoDoClaudeCode.ExecutarAsync(contexto, cancelamentoAtual.Token);
-                ConsoleUi.Pausar();
-                break;
-
-            case "7":
-                await FluxoDeDependencias.ExecutarAsync(contexto, cancelamentoAtual.Token);
-                ConsoleUi.Pausar();
+                await MenuDoAmbiente.ExecutarAsync(contexto, cancelamentoAtual.Token);
                 break;
 
             case "0" or "":

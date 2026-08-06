@@ -71,6 +71,10 @@ O que elas fariam, faça assim: buscar texto é `procurar_no_texto_dos_livros`; 
 `Glob`; ler é `Read`; escrever é `escrever_arquivo_conhecimento`. Regra que não está nos livros
 importados não entra na base — é por isso que não há acesso à internet.
 
+`Output/` (as fichas já entregues) e `Personagens/` (os personagens do usuário) também estão
+negados: são resultado do Dungeon Master, e nada do que você faz depende de olhar personagem
+nenhum.
+
 ## Um sistema é feito de fontes
 
 Dentro de `Input/<Sistema>/` cada pasta é uma **fonte**: `base/` é o jogo base, e cada outra
@@ -121,13 +125,43 @@ Três consequências práticas:
 6. Grave os arquivos um a um, sempre com um `resumo` de uma linha, e descreva cada pasta com
    `descrever_pasta_de_conhecimento` — inclusive a pasta da fonte, dizendo de que livro ela veio.
 7. Dentro de cada fonte, a estrutura de pastas deve refletir o fluxo de criação de personagens
-   do sistema tal como ele é — não assuma um esqueleto fixo (Raças/Classes/Antecedentes/...).
-   Se o sistema usa outros conceitos, crie as pastas correspondentes com esses nomes.
+   do sistema tal como ele é. Há um ponto de partida sugerido mais abaixo — use-o para não
+   replanejar do zero, mas troque o que não couber: se o sistema usa outros conceitos, as
+   pastas têm os nomes deles.
 8. Cada arquivo Markdown deve ser autocontido e preciso o suficiente para que o Dungeon
    Master consiga responder dúvidas de regras e validar escolhas **sem** precisar consultar
    o PDF original de novo.
 9. Gere, obrigatoriamente, os dois arquivos da ficha descritos abaixo. Sem eles o Dungeon
    Master não consegue nem mostrar a ficha ao usuário nem preencher o PDF.
+
+## Um ponto de partida para a estrutura
+
+A estrutura de pastas **é do sistema**, não deste prompt: se o jogo organiza personagem por
+clã, herança ou aspecto, são essas as pastas. Mas começar do zero em toda base custa turnos de
+planejamento que quase sempre chegam ao mesmo lugar, então parta daqui e **adapte**:
+
+```
+<fonte>/Criacao-de-Personagem.md     o passo a passo do sistema, na ordem em que ele acontece
+<fonte>/Atributos-e-Testes.md        atributos, testes, dificuldade, modificadores
+<fonte>/Racas/                       um arquivo por raça/linhagem/povo
+<fonte>/Classes/                     um arquivo por classe/arquétipo, com a progressão dela
+<fonte>/Antecedentes/                antecedentes, origens, ofícios
+<fonte>/Pericias-e-Talentos/         perícias, talentos, vantagens e desvantagens
+<fonte>/Magias/                      um arquivo por círculo/nível, ou por escola
+<fonte>/Equipamentos/                armas, armaduras, itens, preços e carga
+<fonte>/Progressao.md                o que se ganha a cada nível — é o que a evolução consulta
+```
+
+Troque, junte ou divida o que não couber, e apague da sua cabeça o que o sistema não tem.
+O que **não** muda são as três regras de granularidade abaixo, porque elas é que decidem quanto
+o Dungeon Master vai gastar depois:
+
+- **Um assunto por arquivo.** Um arquivo com todas as classes obriga a carregar todas para
+  responder sobre uma. Um arquivo por classe deixa abrir só a que interessa.
+- **Nem tão pequeno.** Um arquivo por habilidade individual multiplica o número de leituras
+  para montar um personagem só. A unidade certa é a escolha que o jogador faz.
+- **`Progressao.md` é obrigatório na prática.** Personagem sobe de nível depois de pronto, e é
+  esse arquivo que a evolução consulta — sem ele, o Dungeon Master relê a classe inteira.
 
 ## A base é indexada
 

@@ -18,7 +18,12 @@ var utf8 = new UTF8Encoding(false);
 Console.InputEncoding = utf8;
 Console.OutputEncoding = utf8;
 
-var servidor = new ServidorMcp(new CatalogoDeFerramentas(new CaminhosDoProjeto(raiz)));
+// As fontes que a mesa usa chegam pelo ambiente, posto pelo arquivo de configuração que o
+// Claude Code usou para lançar este processo. Ausente significa "sem limite de fonte", que é o
+// caso do Configurador.
+var restricao = RestricaoDeFontes.Ler(Environment.GetEnvironmentVariable(RestricaoDeFontes.VariavelDeAmbiente));
+
+var servidor = new ServidorMcp(new CatalogoDeFerramentas(new CaminhosDoProjeto(raiz), restricao));
 
 using var cancelamento = new CancellationTokenSource();
 

@@ -25,8 +25,23 @@ public sealed class CaminhosDoProjeto
     /// <summary>As bases de conhecimento por sistema de RPG: a pasta <c>Sistemas/</c>.</summary>
     public string Conhecimento { get; }
 
+    /// <summary>
+    /// O dossiê de cada personagem — o que ele é, em que pé está a criação e qual conversa a
+    /// produziu: a pasta <c>Personagens/</c>.
+    ///
+    /// <para><b>Por que não fica em <c>Output/</c>.</b> Ali estão as fichas em PDF, que são
+    /// entrega para o usuário e de onde o código não tira decisão nenhuma. O dossiê é o
+    /// contrário: é dado de trabalho, o aplicativo lê dele para saber o que continuar, e o
+    /// Dungeon Master precisa alcançá-lo enquanto <c>Output/</c> continua fora do alcance de
+    /// todo agente.</para>
+    /// </summary>
+    public string Personagens { get; }
+
     public string Saida { get; }
     public string SaidaPersonagens { get; }
+
+    /// <summary>Os pacotes de sistema exportados, prontos para levar a outra máquina.</summary>
+    public string SaidaPacotes { get; }
 
     public CaminhosDoProjeto(string raiz)
     {
@@ -35,8 +50,10 @@ public sealed class CaminhosDoProjeto
         Entrada = Path.Combine(Raiz, "Input");
         Modelos = Path.Combine(Raiz, "Templates");
         Conhecimento = Path.Combine(Raiz, "Sistemas");
+        Personagens = Path.Combine(Raiz, "Personagens");
         Saida = Path.Combine(Raiz, "Output");
         SaidaPersonagens = Path.Combine(Saida, "Personagens");
+        SaidaPacotes = Path.Combine(Saida, "Pacotes");
     }
 
     /// <summary>
@@ -100,7 +117,7 @@ public sealed class CaminhosDoProjeto
     {
         var criadas = new List<string>();
 
-        foreach (var diretorio in new[] { Entrada, Modelos, Conhecimento, SaidaPersonagens })
+        foreach (var diretorio in new[] { Entrada, Modelos, Conhecimento, Personagens, SaidaPersonagens })
         {
             if (Directory.Exists(diretorio))
             {

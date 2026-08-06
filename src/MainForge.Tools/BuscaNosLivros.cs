@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using MainForge.Core;
 
@@ -152,23 +151,5 @@ public static class BuscaNosLivros
     private static string Encurtar(string linha) =>
         linha.Length <= 160 ? linha : string.Concat(linha.AsSpan(0, 160), "...");
 
-    /// <summary>
-    /// Compara ignorando acento: o agente escreve "Maos" e o livro traz "Mãos", e uma busca que
-    /// falha por isso manda ele de volta a ler o PDF inteiro.
-    /// </summary>
-    private static string SemAcento(string texto)
-    {
-        var decomposto = texto.Normalize(NormalizationForm.FormD);
-        var limpo = new StringBuilder(decomposto.Length);
-
-        foreach (var caractere in decomposto)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(caractere) != UnicodeCategory.NonSpacingMark)
-            {
-                limpo.Append(caractere);
-            }
-        }
-
-        return limpo.ToString().Normalize(NormalizationForm.FormC);
-    }
+    private static string SemAcento(string texto) => TextoNormalizado.SemAcento(texto);
 }

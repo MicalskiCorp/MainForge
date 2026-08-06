@@ -42,10 +42,26 @@ internal static class ConsoleUi
         Console.ForegroundColor = anterior;
     }
 
-    public static string LerLinha(string rotulo)
+    public static string LerLinha(string rotulo) => LerLinhaOuFim(rotulo) ?? string.Empty;
+
+    /// <summary>
+    /// Lê uma linha, ou devolve <c>null</c> quando <b>a entrada acabou</b> — stdin fechada,
+    /// execução com entrada redirecionada de um arquivo que terminou, terminal encerrado.
+    ///
+    /// <para><b>Por que a diferença importa.</b> <see cref="LerLinha"/> devolve texto vazio nos
+    /// dois casos, e "o usuário só apertou Enter" é uma resposta legítima em quase toda pergunta
+    /// daqui. Onde a linha vazia manda <em>repetir</em> a pergunta ou <em>continuar</em>, tratar
+    /// o fim da entrada como Enter vira laço infinito: no melhor caso o aplicativo gira consumindo
+    /// CPU, no pior ele fica mandando turno atrás de turno ao agente, gastando a cota da
+    /// assinatura sem ninguém na frente do console.</para>
+    ///
+    /// <para>Quem chama isto trata o <c>null</c> como "não há mais ninguém para responder" —
+    /// nunca como uma resposta.</para>
+    /// </summary>
+    public static string? LerLinhaOuFim(string rotulo)
     {
         Console.Write(rotulo);
-        return (Console.ReadLine() ?? string.Empty).Trim();
+        return Console.ReadLine()?.Trim();
     }
 
     /// <summary>
@@ -95,18 +111,30 @@ internal static class ConsoleUi
         }
     }
 
+    /// <summary>
+    /// Pergunta de sim ou não, que insiste até vir uma das duas respostas.
+    ///
+    /// <para>Fim da entrada é "não", e não mais uma repetição da pergunta: toda confirmação deste
+    /// aplicativo guarda uma ação que não deve acontecer por omissão — copiar arquivo, substituir
+    /// uma base que custou cota, começar o processamento mais caro que existe aqui.</para>
+    /// </summary>
     public static bool Confirmar(string pergunta)
     {
         while (true)
         {
-            var resposta = LerLinha($"{pergunta} (s/n): ").ToLowerInvariant();
-
-            switch (resposta)
+            switch (LerLinhaOuFim($"{pergunta} (s/n): ")?.ToLowerInvariant())
             {
                 case "s" or "sim":
                     return true;
+
                 case "n" or "nao" or "não":
                     return false;
+
+                case null:
+                    Console.WriteLine();
+                    Aviso("Entrada encerrada — assumindo 'não'.");
+                    return false;
+
                 default:
                     Aviso("Responda 's' ou 'n'.");
                     break;

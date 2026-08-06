@@ -99,7 +99,11 @@ public static class ImportadorDeSistema
         var sistema = ValidarNome(nomeDoSistema);
         var diretorioDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Entrada, sistema.Id);
 
-        if (!Directory.Exists(diretorioDoSistema))
+        // Ter base de conhecimento vale tanto quanto ter livro: é o caso de um sistema que chegou
+        // por pacote, em que a base veio pronta e os PDFs ficaram do outro lado. O que a exigência
+        // impede é o oposto — um compêndio solto, sem jogo base em lugar nenhum, que produziria
+        // uma base cheia de buracos.
+        if (!Directory.Exists(diretorioDoSistema) && !sistema.TemConhecimento(caminhos))
         {
             throw new InvalidOperationException(
                 $"O sistema '{sistema.Id}' ainda não foi importado. Importe o livro básico e a ficha antes " +

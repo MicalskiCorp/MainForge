@@ -35,33 +35,47 @@ public sealed class SessaoDeAgente : IDisposable
     private string? _idDaSessao;
     private bool _jaIniciada;
 
+    /// <param name="retomarSessao">
+    /// Id de uma conversa anterior a continuar, em vez de começar do zero. É o que permite a um
+    /// personagem interrompido voltar com todo o contexto já pago — a base que o agente leu, as
+    /// escolhas já feitas. Se o Claude Code não tiver mais essa conversa, a sessão recomeça
+    /// sozinha (veja <see cref="PareceSessaoPerdida"/>).
+    /// </param>
     public SessaoDeAgente(
         OpcoesDoClaudeCode opcoes,
         DefinicaoDeAgente agente,
         CaminhosDoProjeto caminhos,
-        PoliticaDeLimiteDeUso? politica = null)
-        : this(new ProcessoDoClaudeCode(opcoes), agente, caminhos, politica)
+        PoliticaDeLimiteDeUso? politica = null,
+        string? retomarSessao = null)
+        : this(new ProcessoDoClaudeCode(opcoes), agente, caminhos, politica, retomarSessao: retomarSessao)
     {
     }
 
     /// <param name="dormir">Como esperar. Trocável para os testes não dormirem de verdade.</param>
     /// <param name="agora">Que horas são. Trocável pelo mesmo motivo.</param>
+    /// <param name="retomarSessao">Id de uma conversa anterior a continuar.</param>
     public SessaoDeAgente(
         IExecutorDeTurno executor,
         DefinicaoDeAgente agente,
         CaminhosDoProjeto caminhos,
         PoliticaDeLimiteDeUso? politica = null,
         Func<TimeSpan, CancellationToken, Task>? dormir = null,
-        Func<DateTimeOffset>? agora = null)
+        Func<DateTimeOffset>? agora = null,
+        string? retomarSessao = null)
     {
         _executor = executor;
         _agente = agente;
         _caminhos = caminhos;
-        _configuracaoMcp = ConfiguracaoDoServidorMcp.Criar(caminhos);
+        _configuracaoMcp = ConfiguracaoDoServidorMcp.Criar(caminhos, agente.FontesDaMesa);
         _politica = politica ?? PoliticaDeLimiteDeUso.Padrao;
         _dormir = dormir ?? Task.Delay;
         _agora = agora ?? (() => DateTimeOffset.Now);
-        _idDaSessao = Guid.NewGuid().ToString();
+        _idDaSessao = retomarSessao ?? Guid.NewGuid().ToString();
+
+        // Conversa que já existe do outro lado se retoma com --resume; a nova se cria com
+        // --session-id. Errar isto no primeiro turno é a diferença entre continuar de onde parou
+        // e pagar de novo por tudo que o agente já tinha lido.
+        _jaIniciada = retomarSessao is not null;
     }
 
     /// <summary>

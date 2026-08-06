@@ -18,7 +18,9 @@ internal static class FluxoDeAdicaoDeLivro
     public static async Task ExecutarAsync(ContextoDoAplicativo contexto, CancellationToken cancelamento)
     {
         var caminhos = contexto.Caminhos;
-        var sistemas = SistemaRpg.DescobrirImportados(caminhos);
+        // Inclui os que chegaram por pacote: eles não têm livro em Input/, e acrescentar os PDFs
+        // depois é justamente o caminho para reprocessá-los aqui.
+        var sistemas = SistemaRpg.DescobrirTodos(caminhos);
 
         if (sistemas.Count == 0)
         {

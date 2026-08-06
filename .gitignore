@@ -22,6 +22,13 @@ appsettings.Local.json
 /Output/Personagens/*
 !/Output/Personagens/.gitkeep
 
+# Pacotes exportados: são a base de conhecimento de livros comerciais dentro de um .zip, com o
+# mesmo problema de direitos de Sistemas/ — e são regeráveis pela exportação a qualquer momento.
+/Output/Pacotes/
+
+# Os dossiês de personagem são do usuário: dizem que livros ele tem e o que ele está jogando.
+/Personagens/*/
+
 # Livros e fichas importados pelo usuário ficam locais: são PDFs comerciais, pesam dezenas de
 # MB e, uma vez no histórico do Git, só saem reescrevendo-o. O conhecimento destilado deles
 # (Sistemas/) também fica local, pelo mesmo motivo — veja o bloco abaixo.

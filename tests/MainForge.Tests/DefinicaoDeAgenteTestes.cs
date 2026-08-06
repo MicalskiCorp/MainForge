@@ -158,6 +158,7 @@ public class DefinicaoDeAgenteTestes
     {
         var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(
             new SistemaRpg("Aventura&Cia"),
+            [FonteDoSistema.Base],
             [new FonteDoSistema("Compendio-Arcano"), new FonteDoSistema("Compendio-Sombrio")]);
 
         var negadas = agente.FerramentasNegadas();
@@ -174,9 +175,46 @@ public class DefinicaoDeAgenteTestes
     [Fact]
     public void DungeonMasterLimitadoA_SemExpansaoRecusada_NaoAcrescentaNegacao()
     {
-        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(new SistemaRpg("Aventura&Cia"), []);
+        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(
+            new SistemaRpg("Aventura&Cia"),
+            [FonteDoSistema.Base],
+            []);
 
         Assert.Equal(DefinicaoDeAgente.DungeonMaster.FerramentasNegadas(), agente.FerramentasNegadas());
+    }
+
+    /// <summary>
+    /// A negação por caminho para no <c>Read</c> do agente: a ferramenta MCP que procura dentro
+    /// de <c>Sistemas/</c> roda em outro processo, onde essa lista não chega. Se a restrição de
+    /// fontes não viajar junto com o agente, a escolha de expansões do usuário deixa de valer
+    /// justamente pela ferramenta que lê a base inteira.
+    /// </summary>
+    [Fact]
+    public void DungeonMasterLimitadoA_LevaAsFontesDaMesaParaOServidorMcp()
+    {
+        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(
+            new SistemaRpg("Aventura&Cia"),
+            [FonteDoSistema.Base, new FonteDoSistema("Compendio-Arcano")],
+            [new FonteDoSistema("Compendio-Sombrio")]);
+
+        var mesa = Assert.IsType<RestricaoDeFontes>(agente.FontesDaMesa);
+
+        Assert.True(mesa.Permite("Aventura&Cia", "base"));
+        Assert.True(mesa.Permite("Aventura&Cia", "Compendio-Arcano"));
+        Assert.False(mesa.Permite("Aventura&Cia", "Compendio-Sombrio"));
+
+        // Outro sistema nunca entra: a mesa é de um sistema só.
+        Assert.False(mesa.Permite("OutroSistema", "base"));
+    }
+
+    /// <summary>
+    /// O Configurador escreve a base inteira e não pertence a mesa nenhuma — restrição de fonte
+    /// ali seria um limite sem dono, que só apareceria como uma busca que não acha nada.
+    /// </summary>
+    [Fact]
+    public void Configurador_NaoTemRestricaoDeFontes()
+    {
+        Assert.Null(DefinicaoDeAgente.Configurador.FontesDaMesa);
     }
 
     /// <summary>

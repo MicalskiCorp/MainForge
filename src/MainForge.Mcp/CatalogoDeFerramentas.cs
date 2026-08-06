@@ -24,7 +24,12 @@ public sealed record ResultadoDaFerramenta(string Texto, bool Erro = false);
 /// pelo <c>Read</c> nativo: uma ferramenta MCP que devolvesse o PDF só faria o Claude Code
 /// gravar o binário em disco e passar o caminho ao modelo, que não conseguiria lê-lo.
 /// </summary>
-public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
+/// <param name="restricao">
+/// As fontes que valem nesta sessão, quando há uma mesa definida. Ferramenta que lê
+/// <c>Sistemas/</c> precisa conferi-la: a escolha das expansões é aplicada como negação de
+/// <c>Read</c> por caminho, e negação de ferramenta do Claude Code não alcança este processo.
+/// </param>
+public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoDeFontes? restricao = null)
 {
     public JsonArray Descrever()
     {
@@ -118,6 +123,43 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                 """),
 
             Ferramenta(
+                "procurar_no_conhecimento",
+                "Procura um termo na base de conhecimento do sistema (Sistemas/<sistema>/), dentro das fontes que esta mesa usa, e devolve arquivo, linha e seção de cada ocorrência. Use quando a pergunta não cai direto na estrutura do índice (\"onde está a regra de carga?\", \"que magias curam?\"): descer índice por índice custa uma leitura por nível. A busca ignora acentos e maiúsculas.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
+                    "termo": { "type": "string", "description": "Texto a procurar, ex.: \"Pontos de Vida\". Ignora acentos e maiúsculas." },
+                    "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." }
+                  },
+                  "required": ["sistema", "termo"]
+                }
+                """),
+
+            Ferramenta(
+                "registrar_personagem",
+                "Grava o estado atual do personagem em Personagens/<sistema>/<personagem>/, para que a criação possa ser retomada depois e para que ele possa evoluir (subir de nível, trocar equipamento) numa conversa futura. Chame a cada bloco de decisões fechado — atributos definidos, classe escolhida, equipamento comprado —, não só no fim.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
+                    "personagem": { "type": "string", "description": "Identificador do personagem, exatamente como a mensagem inicial da conversa informou." },
+                    "nome": { "type": "string", "description": "Nome do personagem, quando ele já tiver um." },
+                    "resumo": { "type": "string", "description": "Uma linha dizendo quem ele é, ex.: \"Anao guerreiro de nivel 3\". E o que aparece na lista de personagens do aplicativo." },
+                    "ficha": { "type": "string", "description": "O estado COMPLETO do personagem em Markdown: atributos, escolhas feitas, equipamento, magias, nivel, e o que ainda falta decidir. E o que reconstroi o personagem numa conversa futura, entao escreva pensando em quem nao acompanhou esta." },
+                    "campos": {
+                      "type": "object",
+                      "description": "Opcional: valores por nome de campo do PDF, como iriam para preencher_ficha_personagem.",
+                      "additionalProperties": { "type": "string" }
+                    }
+                  },
+                  "required": ["sistema", "personagem", "ficha"]
+                }
+                """),
+
+            Ferramenta(
                 "listar_campos_da_ficha",
                 "Lista os nomes exatos dos campos preenchíveis (AcroForm) da ficha em Templates/<sistema>/, exatamente como devem ser informados a preencher_ficha_personagem.",
                 """
@@ -139,6 +181,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                   "type": "object",
                   "properties": {
                     "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Templates/)." },
+                    "personagem": { "type": "string", "description": "Identificador do personagem, como a mensagem inicial informou. Liga o PDF ao dossie em Personagens/ e marca a criacao como concluida. Informe sempre que a conversa tiver um." },
                     "arquivoModelo": { "type": "string", "description": "Nome do PDF de template dentro de Templates/<sistema>/. Só é obrigatório se houver mais de um PDF nessa pasta." },
                     "campos": {
                       "type": "object",
@@ -167,6 +210,8 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
                 "registrar_plano_de_conhecimento" => RegistrarPlano(argumentos),
                 "consultar_progresso" => ConsultarProgresso(argumentos),
                 "procurar_no_texto_dos_livros" => ProcurarNosLivros(argumentos),
+                "procurar_no_conhecimento" => ProcurarNoConhecimento(argumentos),
+                "registrar_personagem" => RegistrarPersonagem(argumentos),
                 "listar_campos_da_ficha" => ListarCamposDaFicha(argumentos),
                 "preencher_ficha_personagem" => PreencherFicha(argumentos),
                 _ => new ResultadoDaFerramenta($"Ferramenta desconhecida: '{nome}'.", Erro: true),
@@ -292,6 +337,42 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
         return new ResultadoDaFerramenta(BuscaNosLivros.Descrever(ocorrencias, termo, maximo));
     }
 
+    /// <summary>
+    /// A busca dentro da base já mapeada. Passa a restrição de fontes adiante: é aqui, e não na
+    /// lista de negações do Claude Code, que a escolha de expansões da mesa continua valendo
+    /// para uma ferramenta que roda em outro processo.
+    /// </summary>
+    private ResultadoDaFerramenta ProcurarNoConhecimento(JsonObject argumentos)
+    {
+        var termo = Obrigatorio(argumentos, "termo");
+        var maximo = Inteiro(argumentos, "maximo") ?? BuscaNoConhecimento.MaximoPadraoDeOcorrencias;
+
+        var ocorrencias = BuscaNoConhecimento.Procurar(
+            caminhos,
+            Obrigatorio(argumentos, "sistema"),
+            termo,
+            restricao,
+            Math.Clamp(maximo, 1, 200));
+
+        return new ResultadoDaFerramenta(BuscaNoConhecimento.Descrever(ocorrencias, termo, maximo));
+    }
+
+    private ResultadoDaFerramenta RegistrarPersonagem(JsonObject argumentos)
+    {
+        var personagem = RepositorioDePersonagens.Registrar(
+            caminhos,
+            Obrigatorio(argumentos, "sistema"),
+            Obrigatorio(argumentos, "personagem"),
+            Opcional(argumentos, "nome"),
+            Opcional(argumentos, "resumo"),
+            Obrigatorio(argumentos, "ficha"),
+            argumentos["campos"] is JsonObject ? MapaDeTexto(argumentos, "campos") : null);
+
+        return new ResultadoDaFerramenta(
+            $"Personagem '{personagem.Rotulo}' salvo em Personagens/{personagem.Sistema}/{personagem.Id}/. " +
+            "Se a conversa for interrompida agora, o usuário consegue retomá-la daqui.");
+    }
+
     private ResultadoDaFerramenta ListarCamposDaFicha(JsonObject argumentos)
     {
         var campos = PreenchedorDeFicha.ListarCampos(
@@ -308,16 +389,28 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos)
 
     private ResultadoDaFerramenta PreencherFicha(JsonObject argumentos)
     {
+        var sistema = Obrigatorio(argumentos, "sistema");
         var campos = MapaDeTexto(argumentos, "campos");
 
         var gerado = PreenchedorDeFicha.Preencher(
             caminhos,
-            Obrigatorio(argumentos, "sistema"),
+            sistema,
             Opcional(argumentos, "arquivoModelo"),
             campos,
             Obrigatorio(argumentos, "nomeArquivoSaida"));
 
-        return new ResultadoDaFerramenta($"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)).");
+        // O PDF existir é o sinal de conclusão que não depende de o modelo declarar que
+        // terminou — por isso é aqui, e não numa ferramenta à parte, que o dossiê fecha.
+        if (Opcional(argumentos, "personagem") is not { } personagem)
+        {
+            return new ResultadoDaFerramenta($"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)).");
+        }
+
+        RepositorioDePersonagens.RegistrarFichaGerada(caminhos, sistema, personagem, gerado, campos);
+
+        return new ResultadoDaFerramenta(
+            $"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)). " +
+            $"O personagem '{personagem}' está registrado como concluído e pode ser evoluído depois.");
     }
 
     private static string Obrigatorio(JsonObject argumentos, string campo)

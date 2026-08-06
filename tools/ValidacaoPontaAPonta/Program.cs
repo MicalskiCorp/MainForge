@@ -173,13 +173,25 @@ Titulo("Etapa 4 — Dungeon Master criando o personagem");
 Directory.CreateDirectory(caminhos.SaidaPersonagens);
 var fichasAntes = FichasEmSaida(caminhos);
 
-using var dungeonMaster = new SessaoDeAgente(opcoes, DefinicaoDeAgente.DungeonMaster, caminhos);
+// O dossiê nasce aqui, como na interface: é ele que dá ao agente o identificador que
+// registrar_personagem e preencher_ficha_personagem exigem, e é por ele que a etapa 5 confere
+// que a criação foi de fato registrada como concluída.
+var personagem = RepositorioDePersonagens.Criar(caminhos, sistema, "Thoradin", [FonteDoSistema.IdDaBase]);
+
+var agenteDoDungeonMaster = DefinicaoDeAgente.DungeonMasterLimitadoA(
+    new SistemaRpg(sistema),
+    [FonteDoSistema.Base],
+    []);
+
+using var dungeonMaster = new SessaoDeAgente(opcoes, agenteDoDungeonMaster, caminhos);
 
 // A primeira mensagem já embute todas as decisões, para o teste rodar sem interação humana.
 var roteiro = new[]
 {
     $"Quero criar um personagem no sistema '{sistema}'. Esta mesa usa só o jogo base: " +
-    $"Sistemas/{sistema}/{FonteDoSistema.IdDaBase}/index.md. Já decidi tudo: classe Guerreiro, " +
+    $"Sistemas/{sistema}/{FonteDoSistema.IdDaBase}/index.md. " +
+    $"Identificador do personagem: {personagem.Id} (use-o em registrar_personagem e em " +
+    "preencher_ficha_personagem). Já decidi tudo: classe Guerreiro, " +
     "nome 'Thoradin', e pode distribuir os 3 pontos livres de atributo como achar melhor " +
     "pelas regras. Calcule o resto conforme as regras do sistema, me mostre a ficha final " +
     "e peça minha confirmação antes de gerar o PDF.",
@@ -233,6 +245,37 @@ using (var fichaGerada = PdfReader.Open(fichaNova, PdfDocumentOpenMode.Import))
         Console.WriteLine($"    {nomeCampo,-16} = {(string.IsNullOrWhiteSpace(valor) ? "(vazio)" : valor)}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Etapa 6 — conferir o dossiê do personagem
+// ---------------------------------------------------------------------------
+Titulo("Etapa 6 — dossiê do personagem");
+
+var dossie = RepositorioDePersonagens.Carregar(caminhos, sistema, personagem.Id);
+
+if (dossie is null)
+{
+    Erro($"O dossiê de '{personagem.Id}' sumiu de Personagens/{sistema}/.");
+    return 1;
+}
+
+Console.WriteLine($"    situação = {Personagem.DescreverStatus(dossie.Status)}");
+Console.WriteLine($"    ficha    = {dossie.FichaGerada ?? "(não registrada)"}");
+Console.WriteLine($"    resumo   = {(dossie.Resumo.Length == 0 ? "(vazio)" : dossie.Resumo)}");
+
+if (dossie.Status != StatusDoPersonagem.Concluido)
+{
+    Erro("A ficha saiu, mas o dossiê não fechou — o agente preencheu o PDF sem informar 'personagem'.");
+    return 1;
+}
+
+if (RepositorioDePersonagens.LerFichaEmTexto(caminhos, sistema, personagem.Id).Length == 0)
+{
+    Erro("O agente nunca chamou registrar_personagem: uma interrupção teria apagado a criação inteira.");
+    return 1;
+}
+
+Ok("Dossiê gravado e concluído — a criação seria retomável se tivesse sido interrompida.");
 
 Titulo("Validação ponta a ponta concluída. Confira acima se os valores batem com as regras.");
 return 0;

@@ -9,8 +9,8 @@ usuário.
 
 ## Baixar e usar
 
-**[Baixar o MainForge 0.1.0](https://github.com/MicalskiCorp/MainForge/releases/download/v0.1.0/MainForge-0.1.0-win-x64.zip)**
-(Windows x64, 34 MB) — descompacte o `.zip` onde quiser e rode `MainForge.Cli.exe`.
+**[Baixar o MainForge 1.1.0](https://github.com/MicalskiCorp/MainForge/releases/download/v1.1.0/MainForge-1.1.0-win-x64.zip)**
+(Windows x64, 33 MB) — descompacte o `.zip` onde quiser e rode `MainForge.Cli.exe`.
 As demais versões ficam em [releases](https://github.com/MicalskiCorp/MainForge/releases/latest).
 
 O download é **um executável só**, com o runtime .NET e as bibliotecas de PDF dentro dele: não
@@ -26,9 +26,9 @@ roda os agentes, com a **sua** assinatura:
 winget install --id Anthropic.ClaudeCode
 ```
 
-Não precisa decorar: a **opção 7** do menu confere todas as dependências e oferece rodar esse
-comando por você, e a **opção 6** abre a janela do Claude Code para o `/login`. O primeiro
-processamento também passa por essa conferência antes de gastar qualquer cota.
+Não precisa decorar: o menu **Ambiente** confere todas as dependências e oferece rodar esse
+comando por você, e abre a janela do Claude Code para o `/login`. O primeiro processamento
+também passa por essa conferência antes de gastar qualquer cota.
 
 | | Precisa instalar? | Para quê |
 | --- | --- | --- |
@@ -65,7 +65,7 @@ No lugar da assinatura, você tem como **verificar por conta própria** que o ar
 o que a compilação pública gerou. Todo release traz o `.sha256` ao lado do `.zip`:
 
 ```powershell
-Get-FileHash .\MainForge-0.1.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\MainForge-1.1.0-win-x64.zip -Algorithm SHA256
 ```
 
 O valor precisa bater com o do arquivo `.sha256` e com o que está nas notas do release. Se bater,
@@ -125,8 +125,8 @@ delas suficiente sozinha:
 | | Configurador | Dungeon Master |
 | --- | --- | --- |
 | Embutidas | `Read`, `Glob` | `Read`, `Glob` |
-| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `listar_campos_da_ficha` | `preencher_ficha_personagem` |
-| Negações próprias | `Read(Output/**)` | `Read(Input/**)`, `Read(Templates/**)` |
+| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `listar_campos_da_ficha` | `preencher_ficha_personagem`, `registrar_personagem`, `procurar_no_conhecimento` |
+| Negações próprias | `Read(Output/**)`, `Read(Personagens/**)` | `Read(Input/**)`, `Read(Templates/**)`, `Read(Output/**)` |
 
 Negado para os dois, sempre: `Bash`, `PowerShell`, `BashOutput`, `KillShell`, `Write`, `Edit`,
 `NotebookEdit`, `Task`, `Agent`, `Skill`, `SlashCommand`, `WebFetch`, `WebSearch`, `Grep`, e a
@@ -142,13 +142,22 @@ justamente o código-fonte que ele não pode ler.
 > nega shell nenhum**: negação por nome é uma lista, e lista se esquece. É por isso que a camada
 > que realmente contém a escrita é o servidor MCP em C#, e não esta tabela.
 
-Buscar dentro dos livros continua sendo necessário, e é por isso que existe
-`procurar_no_texto_dos_livros`: ela faz o que a `Grep` faria, mas alcançando só
-`Input/<Sistema>/**/_texto/`, com o confinamento aplicado em C#.
+Buscar continua sendo necessário, e é por isso que existem `procurar_no_texto_dos_livros` (para
+o Configurador, alcançando só `Input/<Sistema>/**/_texto/`) e `procurar_no_conhecimento` (para o
+Dungeon Master, alcançando só `Sistemas/<Sistema>/`). As duas fazem o que a `Grep` faria, com o
+confinamento aplicado em C#.
 
 Duas negações são **da execução**, não do agente, e existem para não oferecer caminho que não
 leva a lugar nenhum: as fontes que a mesa não usa (`DungeonMasterLimitadoA`) e, quando falta o
 poppler, os PDFs dos livros (`ConfiguradorSemAbrirPdf`).
+
+> **A negação por caminho para no agente.** `procurar_no_conhecimento` percorre `Sistemas/` por
+> conta própria, dentro do **processo do servidor MCP** — onde a lista de `--disallowedTools` do
+> Claude Code não chega. Uma busca assim sem mais nada devolveria trecho do compêndio que o
+> usuário acabou de deixar de fora: seria a porta lateral exata que a negação existia para
+> fechar. Por isso as fontes escolhidas viajam com a sessão (`RestricaoDeFontes`, pelo bloco
+> `env` da configuração do servidor) e são conferidas lá dentro, em C#. Ferramenta MCP nova que
+> leia `Sistemas/` precisa conferi-la também.
 
 ## Estrutura da solução
 
@@ -179,7 +188,11 @@ MainForge.sln
 ├── Sistemas/            -> base de conhecimento em Markdown, gerada pelo Configurador,
 │                            com a mesma divisão por fonte, um index.md por nível e o
 │                            registro de progresso do sistema
-└── Output/Personagens/   -> fichas finais preenchidas
+├── Personagens/          -> o dossiê de cada personagem (situação, fontes da mesa, sessão e
+│                            o estado dele em texto). É o que torna a criação retomável
+└── Output/
+    ├── Personagens/      -> fichas finais preenchidas
+    └── Pacotes/          -> sistemas exportados para levar a outra máquina
 ```
 
 **Convenção de idioma:** nomes de solução, projetos e namespaces ficam em inglês (padrão do
@@ -199,7 +212,7 @@ padrão de instalação; se estiver em outro lugar, aponte a variável de ambien
 dotnet build MainForge.sln
 dotnet test MainForge.sln
 dotnet run --project src/MainForge.Cli    # o aplicativo
-./publicar.ps1 -Versao 0.1.0              # gera o .zip do release (win-x64, executável único)
+./publicar.ps1 -Versao 1.1.0              # gera o .zip do release (win-x64, executável único)
 ```
 
 Os mesmos comandos rodam no CI a cada push e pull request
@@ -238,35 +251,54 @@ Duas consequências: rodando dentro de um terminal que já estava aberto com out
 aquela janela inteira que é maximizada — a janela não é nossa, nós só pedimos; e
 `MAINFORGE_SEM_MAXIMIZAR=1` desliga tudo isso.
 
-Menu do aplicativo:
+O menu principal tem três portas, na ordem em que o trabalho acontece: primeiro o sistema de RPG
+existe, depois os personagens nascem dele, e o ambiente só interessa quando algo não funciona.
+Cada porta abre um submenu com as ações daquele assunto.
 
-1. **Ver sistemas** — o que já foi importado, o que já tem base de conhecimento e ficha, e o
-   que ficou pela metade.
-2. **Importar um sistema de RPG** — você informa o nome do sistema, os PDFs dos livros e a
-   ficha de personagem editável; o programa valida (livro legível, ficha com campos
-   preenchíveis) e copia para `Input/<Sistema>/base/` e `Templates/<Sistema>/`. Importar um
-   sistema é trazer o jogo base dele — expansão entra pela opção 3.
-3. **Adicionar livro a um sistema** — pergunta se o livro é do jogo base ou de uma expansão (e,
-   se for de uma expansão nova, o nome dela). O livro entra em `Input/<Sistema>/<fonte>/` e o
-   Configurador lê **só ele**, somando o conteúdo à base que já está pronta.
-4. **Processar um sistema** (Agente Configurador) — converte os livros para texto (veja
-   [Os livros viram texto antes](#os-livros-viram-texto-antes)), lê os livros **e a ficha em
-   branco** e gera `Sistemas/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais
-   cara em tokens; pede confirmação. Se já houver progresso, pergunta se é para continuar de
-   onde parou ou recomeçar do zero — e se não houver nada pendente, recusa e explica por quê.
-5. **Criar um personagem** (Agente Dungeon Master) — pergunta primeiro quais expansões aquela
-   mesa usa e depois é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
-   `/sair` encerra a conversa.
-6. **Verificar o Claude Code** — mostra o executável, o modelo e as permissões de cada
-   agente, abre a janela de login da sua conta Claude e faz um turno de teste para confirmar que
-   a assinatura está ativa.
-7. **Dependências do aplicativo** — o que esta máquina tem, o que falta, para que serve cada
-   coisa e o comando exato para instalar o que faltar. O processamento de sistema também passa
-   por aqui antes de começar: descobrir que falta o Claude Code depois de confirmar a operação
-   mais cara do aplicativo é o pior momento possível para essa notícia.
+### 1. Sistemas
 
-Adicionar um sistema de RPG novo não exige mexer em código: basta a opção 2 seguida da 4
+A tela abre com o panorama — o que foi importado, o que já tem base e ficha, e o que ficou pela
+metade — e abaixo dele as ações:
+
+- **Novo sistema** — você informa o nome, os PDFs dos livros do jogo base e a ficha de
+  personagem editável; o programa valida (livro legível, ficha com campos preenchíveis) e copia
+  para `Input/<Sistema>/base/` e `Templates/<Sistema>/`.
+- **Adicionar livros** — pergunta se o livro é do jogo base ou de uma expansão (e, se for de
+  uma expansão nova, o nome dela). O livro entra em `Input/<Sistema>/<fonte>/` e o Configurador
+  lê **só ele**, somando o conteúdo à base que já está pronta.
+- **Processar** (Agente Configurador) — converte os livros para texto (veja
+  [Os livros viram texto antes](#os-livros-viram-texto-antes)), lê os livros **e a ficha em
+  branco** e gera `Sistemas/<Sistema>/<fonte>/*.md`, uma pasta por fonte. É a operação mais cara
+  em tokens; pede confirmação. **Os sistemas com processamento incompleto vêm no topo da lista,
+  marcados** — continuar lê só o que falta, e essa é a única situação em que processar de novo é
+  barato. Se não houver nada pendente, o aplicativo recusa e explica por quê.
+- **Exportar** e **importar pacote** — veja
+  [Levar um sistema para outra máquina](#levar-um-sistema-para-outra-máquina).
+
+Adicionar um sistema de RPG novo não exige mexer em código: novo sistema seguido de processar
 (ou copiar as pastas na mão para `Input/` e `Templates/`).
+
+### 2. Personagens
+
+A tela lista os personagens com a situação de cada um e as ações:
+
+- **Criar** (Agente Dungeon Master) — escolhe o sistema, pergunta quais expansões aquela mesa
+  usa e daí é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
+- **Continuar** um que ficou em desenvolvimento, **evoluir** um pronto (subir de nível, mexer no
+  inventário, corrigir dados) e **descontinuar ou reativar**. Veja
+  [Personagem é um objeto do aplicativo](#personagem-é-um-objeto-do-aplicativo).
+
+`/sair` encerra qualquer conversa; o que já foi decidido fica salvo.
+
+### 3. Ambiente
+
+- **Claude Code** — mostra o executável, o modelo e as permissões de cada agente, abre a janela
+  de login da sua conta Claude e faz um turno de teste para confirmar que a assinatura está
+  ativa.
+- **Dependências** — o que esta máquina tem, o que falta, para que serve cada coisa e o comando
+  exato para instalar o que faltar. O processamento de sistema também passa por aqui antes de
+  começar: descobrir que falta o Claude Code depois de confirmar a operação mais cara do
+  aplicativo é o pior momento possível para essa notícia.
 
 O sistema `SistemaTeste` não aparece em nenhuma dessas telas: ele existe só para o harness de
 validação, que o alcança pelo nome. Esconder é da interface, não do disco — quem abre o
@@ -297,8 +329,65 @@ continuar vendo a regra intacta. As únicas exceções são `Ficha-Mapeamento.md
 inteiro e não muda com a expansão em uso.
 
 Um sistema importado por uma versão anterior do aplicativo tem tudo solto na pasta do sistema.
-A opção 1 do menu oferece movê-lo para `base/` (e o processamento exige isso antes de começar):
-é só mover arquivo, sem reler livro nenhum.
+O panorama do menu Sistemas oferece movê-lo para `base/` (e o processamento exige isso antes de
+começar): é só mover arquivo, sem reler livro nenhum.
+
+## Personagem é um objeto do aplicativo
+
+Um personagem não é só o PDF que sai no fim. Ele tem um **dossiê** em
+`Personagens/<Sistema>/<Personagem>/` e uma **situação**:
+
+| Situação | O que significa | O que dá para fazer |
+| --- | --- | --- |
+| **desenvolvendo** | a criação começou e não terminou | continuar de onde parou |
+| **concluído** | a ficha em PDF foi gerada | evoluir: nível, inventário, correções |
+| **descontinuado** | abandonado de propósito | reativar; nada é apagado do disco |
+
+São dois arquivos, com donos diferentes. O `personagem.json` é do aplicativo: situação, fontes
+que aquela mesa usa, id da conversa no Claude Code, valores da última ficha gerada e o
+histórico. O `ficha.md` é do agente, gravado pela ferramenta `registrar_personagem` a cada bloco
+de decisões fechado — atributos definidos, classe escolhida, equipamento comprado.
+
+**Por que os dois.** Retomar pela conversa é o que sai barato: o `--resume` do Claude Code traz
+de volta a base que o agente já leu, que é o gasto mais caro e o único que não dá para refazer
+de graça. Mas conversa expira, e é apagada. Quando ela não existe mais, o `ficha.md` é o que
+reconstrói o personagem sem reler a base inteira — por isso ele é escrito como estado completo,
+para quem não acompanhou a conversa, e não como um diário do que mudou.
+
+Quem fecha a criação é o PDF, não o modelo dizendo que terminou: `preencher_ficha_personagem`
+recebe o identificador do personagem e é ela que marca o dossiê como concluído. Evoluir um
+personagem gera a ficha de novo, a partir do template em branco, com os valores atualizados.
+
+As fontes da mesa ficam gravadas no dossiê e valem para sempre: subir de nível com uma expansão
+que a mesa não usava produziria um personagem que ninguém pode jogar. Uma expansão processada
+depois entra na lista de recusadas daquele personagem, em vez de aparecer liberada só por não
+ter sido negada.
+
+## Levar um sistema para outra máquina
+
+Mapear um sistema é a única operação que custa a cota da assinatura — e o resultado é o mesmo
+para todo mundo que tem aqueles livros. O menu Sistemas exporta um sistema pronto para um
+arquivo `.mainforge.zip` e o importa do outro lado.
+
+O pacote leva a **base de conhecimento em Markdown** (com os índices) e a **ficha em PDF**. Não
+leva os livros: são dezenas de MB e, sendo obra comercial, não são de quem os importou para
+redistribuir. A base destilada e a ficha em branco bastam para criar personagem, que é o
+objetivo.
+
+Três consequências:
+
+- A exportação **recusa** um sistema cujo mapeamento da ficha esteja incompleto
+  (`Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`). Sem eles o destinatário recebe uma base que
+  não preenche PDF nenhum, e descobrir isso do outro lado é tarde demais.
+- O sistema importado chega **completo e sem pendência** — não há livro por ler. Quem quiser
+  acrescentar conteúdo depois traz os PDFs por conta própria e processa: só os livros novos são
+  lidos.
+- Importar sobre um sistema de mesmo nome **pede confirmação explícita**, ou um nome alternativo.
+  A base que está lá pode ter custado horas de cota.
+
+O manifesto do pacote é lido antes de qualquer arquivo ser extraído, e todo caminho de dentro
+dele passa pelo mesmo confinamento que vale para caminho vindo do modelo: um `.zip` vem de fora
+e pode carregar `../../` (o "zip slip"), e o que escapa da pasta de destino é recusado.
 
 ## Os livros viram texto antes
 
@@ -359,12 +448,26 @@ no PATH, `python -m markitdown` e, por último, `uvx markitdown`. Depois de inst
 pasta `_texto/` do sistema para os livros serem convertidos de novo — o cache não sabe que
 apareceu um conversor melhor.
 
-## A base de conhecimento é indexada
+## A base de conhecimento é indexada — e buscável
 
 Cada pasta de `Sistemas/` ganha um `index.md` com uma linha sobre cada arquivo e cada
 subpasta dela, e `Sistemas/index.md` lista os sistemas. É por aí que o Dungeon Master navega:
 lê o índice, decide o que interessa e abre só isso, em vez de varrer a base inteira para achar
 uma regra.
+
+O índice resolve a pergunta que cai na estrutura ("que classes existem?") e desperdiça turnos na
+que é transversal ("onde está a regra de carga?"): cada nível é uma leitura paga, e no fim o
+agente ainda abre o arquivo errado uma vez ou outra. Para essas, existe
+`procurar_no_conhecimento` — arquivo, linha e seção numa chamada só, ignorando acento e
+maiúscula, já limitada às fontes daquela mesa.
+
+O Configurador recebe no prompt um **esqueleto sugerido** de pastas (criação de personagem,
+atributos, raças, classes, antecedentes, perícias, magias, equipamentos, progressão) para não
+replanejar a estrutura do zero em toda base — mas ele adapta ao sistema real, porque um jogo
+organizado por clã ou por aspecto não tem "classes". O que não muda é a granularidade: **um
+assunto por arquivo**, na unidade da escolha que o jogador faz. Um arquivo com todas as classes
+obriga a carregar todas para responder sobre uma; um arquivo por habilidade multiplica as
+leituras para montar um personagem só.
 
 Os índices são derivados, não escritos pelo agente — são regravados a cada gravação, e a
 ferramenta de escrita recusa um `index.md` vindo do modelo. O que o Configurador fornece é o
@@ -406,7 +509,7 @@ Três consequências práticas:
   os dois livros de uma base que estava inteira. O hash só é calculado quando data ou tamanho
   mudam — no caso comum, nenhum arquivo chega a ser aberto. **Mover** um livro de fonte também
   não obriga a relê-lo: o conteúdo é o mesmo, muda apenas o destino dele em `Sistemas/`.
-- Uma base que já existia antes de tudo isso é **adotada**: a opção 1 do menu oferece gerar
+- Uma base que já existia antes de tudo isso é **adotada**: o panorama do menu Sistemas oferece gerar
   índice e registro a partir do que está em disco (de graça, sem agente). Os `.md` presentes
   entram como prontos e os livros, como ainda não lidos — que é a leitura honesta de uma base
   gerada pela metade. A execução seguinte então oferece "ler só os livros ainda não
@@ -430,12 +533,12 @@ contexto. Ctrl+C cancela a espera; o que já foi gerado fica salvo de qualquer f
 Quanto o aplicativo se dispõe a esperar está em `PoliticaDeLimiteDeUso`, e depende de haver
 alguém esperando na frente do console:
 
-- **Processar um sistema** (opção 4) usa a política `ProcessamentoLongo`: espera **quantas
+- **Processar um sistema** usa a política `ProcessamentoLongo`: espera **quantas
   janelas forem necessárias, pelo tempo que for** — inclusive a semanal, que só libera dias
   depois — e retoma sozinho. Não há o que perguntar ao usuário: o consumo sai de uma cota que
   se renova sozinha, e devolver o controle jogaria fora o contexto da conversa, fazendo a
   próxima execução pagar de novo pela leitura do livro. É só deixar o aplicativo aberto.
-- **Criar um personagem** (opção 5) segue a política padrão — até 3 esperas de no máximo 6
+- **Conversar sobre um personagem** (criar, continuar, evoluir) segue a política padrão — até 3 esperas de no máximo 6
   horas. Ali o usuário está na conversa, e prendê-lo por dias não faria sentido.
 
 Quando o Claude Code não informa a hora da liberação, a espera é às cegas e vai dobrando a
@@ -478,15 +581,16 @@ com a Anthropic, com a assinatura de quem está usando.
 
 **Credenciais.** O MainForge não pede, não guarda, não lê e não copia credencial nenhuma. O login
 é do Claude Code e fica onde ele o guarda, fora do projeto — por isso ele não viaja no `.zip` e
-não vai junto se você levar a pasta para outra máquina. A opção 6 do menu abre uma janela do
+não vai junto se você levar a pasta para outra máquina. O menu Ambiente abre uma janela do
 próprio Claude Code para o `/login`, em vez de mostrar um formulário de usuário e senha: pedir a
 senha da sua conta a um programa que não tem por que vê-la é a forma de um golpe de phishing, não
 de um login legítimo. Nenhuma versão do aplicativo guarda chave de API — a que existia foi
 removida quando ele passou a usar o Claude Code.
 
 **Seus arquivos.** Livros (`Input/`), fichas em branco (`Templates/`), o texto extraído
-(`_texto/`) e os personagens gerados (`Output/`) ficam só no seu disco, e estão todos no
-`.gitignore` — não vão para o Git nem por acidente. Os agentes rodam confinados à pasta do
+(`_texto/`), os dossiês dos personagens (`Personagens/`) e o que é gerado (`Output/`, inclusive
+os pacotes exportados) ficam só no seu disco, e estão todos no `.gitignore` — não vão para o Git
+nem por acidente. Os agentes rodam confinados à pasta do
 projeto, e toda escrita passa pelo servidor MCP em C#, onde `ResolverDentroDe` rejeita qualquer
 caminho que escape do diretório permitido.
 
@@ -545,7 +649,8 @@ importar nem as bases geradas a partir deles: esse conteúdo continua sendo de q
 
 Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
 permissões por agente (verificado com o Dungeon Master tendo `Input/` negado de fato), a
-importação de sistemas e a interface em console, com 140 testes automatizados. O Configurador
+importação de sistemas, o gerenciamento de personagens (com retomada e evolução), os pacotes de
+sistema e a interface em console, com 220 testes automatizados. O Configurador
 foi validado ponta a ponta gerando `Sistemas/SistemaTeste/`.
 
 Falta: rodar a validação ponta a ponta completa incluindo o Dungeon Master

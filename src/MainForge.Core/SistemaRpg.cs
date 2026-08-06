@@ -35,6 +35,23 @@ public sealed record SistemaRpg(string Id)
             .ToList();
     }
 
+    /// <summary>
+    /// Todo sistema que o aplicativo conhece: os que têm livro em <c>Input/</c> e os que só têm
+    /// base em <c>Sistemas/</c>.
+    ///
+    /// <para><b>Por que os dois lados.</b> Um sistema que chegou por pacote não tem livro nenhum
+    /// — o pacote leva a base destilada, não os PDFs comerciais. Listar só <c>Input/</c> o fazia
+    /// sumir da tela de sistemas logo depois de ele ter sido importado com sucesso, embora dê
+    /// para criar personagem nele na mesma hora.</para>
+    /// </summary>
+    public static IReadOnlyList<SistemaRpg> DescobrirTodos(CaminhosDoProjeto caminhos) =>
+    [
+        .. DescobrirImportados(caminhos)
+            .Concat(DescobrirProntos(caminhos))
+            .DistinctBy(sistema => sistema.Id, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(sistema => sistema.Id, StringComparer.OrdinalIgnoreCase),
+    ];
+
     /// <summary>Sistemas já processados pelo Configurador, com base de conhecimento pronta.</summary>
     public static IReadOnlyList<SistemaRpg> DescobrirProntos(CaminhosDoProjeto caminhos)
     {

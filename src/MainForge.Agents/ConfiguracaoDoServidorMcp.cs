@@ -15,19 +15,36 @@ public sealed class ConfiguracaoDoServidorMcp : IDisposable
     /// <summary>Caminho do JSON a passar em <c>--mcp-config</c>.</summary>
     public string Caminho { get; }
 
-    public static ConfiguracaoDoServidorMcp Criar(CaminhosDoProjeto caminhos)
+    /// <param name="fontesDaMesa">
+    /// As fontes que valem nesta sessão, quando há uma mesa definida. Vão no bloco <c>env</c> do
+    /// servidor porque as ferramentas que leem <c>Sistemas/</c> rodam <b>neste outro processo</b>:
+    /// a negação de <c>Read</c> por caminho que aplica a escolha das expansões vale para o agente,
+    /// não para o servidor MCP. Sem isto, uma busca na base devolveria trecho de um compêndio que
+    /// o usuário deixou de fora.
+    /// </param>
+    public static ConfiguracaoDoServidorMcp Criar(CaminhosDoProjeto caminhos, RestricaoDeFontes? fontesDaMesa = null)
     {
         var (executavel, argumentos) = LocalizarServidor();
+
+        var servidor = new JsonObject
+        {
+            ["command"] = executavel,
+            ["args"] = new JsonArray([.. argumentos.Select(argumento => (JsonNode)argumento), caminhos.Raiz]),
+        };
+
+        if (fontesDaMesa is not null)
+        {
+            servidor["env"] = new JsonObject
+            {
+                [RestricaoDeFontes.VariavelDeAmbiente] = fontesDaMesa.Serializar(),
+            };
+        }
 
         var configuracao = new JsonObject
         {
             ["mcpServers"] = new JsonObject
             {
-                [DefinicaoDeAgente.NomeDoServidorMcp] = new JsonObject
-                {
-                    ["command"] = executavel,
-                    ["args"] = new JsonArray([.. argumentos.Select(argumento => (JsonNode)argumento), caminhos.Raiz]),
-                },
+                [DefinicaoDeAgente.NomeDoServidorMcp] = servidor,
             },
         };
 

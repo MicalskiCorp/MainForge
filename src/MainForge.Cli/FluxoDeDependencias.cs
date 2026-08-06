@@ -140,7 +140,7 @@ internal static class FluxoDeDependencias
             "é ele que roda os agentes, com a sua conta e a sua assinatura",
             LocalizadorDoClaudeCode.Localizar,
             ComandoDoClaudeCode,
-            "Instale de um destes jeitos e depois entre na sua conta pela opção 6 do menu:\n" +
+            "Instale de um destes jeitos e depois entre na sua conta por Ambiente > Claude Code:\n" +
             "  winget install --id Anthropic.ClaudeCode\n" +
             "  npm install -g @anthropic-ai/claude-code        (se você já usa Node)\n" +
             "  ou o instalador oficial: https://claude.com/product/claude-code\n" +

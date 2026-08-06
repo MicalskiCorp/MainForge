@@ -19,7 +19,7 @@ internal static class FluxoDeImportacao
     {
         ConsoleUi.Titulo("Importar um sistema de RPG");
         ConsoleUi.Detalhe("Arraste os arquivos para a janela do console para colar o caminho. Enter vazio cancela.");
-        ConsoleUi.Detalhe("São os livros do jogo base; compêndios e expansões entram depois, pela opção 3.");
+        ConsoleUi.Detalhe("São os livros do jogo base; compêndios e expansões entram por \"Adicionar livros\".");
 
         var nome = ConsoleUi.LerLinha("\nNome do sistema (ex.: Aventura&Cia): ");
 

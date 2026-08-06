@@ -29,7 +29,12 @@ internal static class ModoServidorMcp
         Console.InputEncoding = utf8;
         Console.OutputEncoding = utf8;
 
-        var servidor = new ServidorMcp(new CatalogoDeFerramentas(new CaminhosDoProjeto(diretorio)));
+        // As fontes que a mesa usa chegam pelo ambiente, posto pelo arquivo de configuração que
+        // o Claude Code usou para lançar este processo. Ausente significa "sem limite de fonte".
+        var restricao = RestricaoDeFontes.Ler(
+            Environment.GetEnvironmentVariable(RestricaoDeFontes.VariavelDeAmbiente));
+
+        var servidor = new ServidorMcp(new CatalogoDeFerramentas(new CaminhosDoProjeto(diretorio), restricao));
 
         using var cancelamento = new CancellationTokenSource();
 
