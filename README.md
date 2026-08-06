@@ -98,6 +98,11 @@ Quem for compilar do código-fonte encontra as instruções em [Rodando](#rodand
     ficam em C#, expostos por um servidor MCP local (`MainForge.Mcp`, stdio, lançado pelo
     próprio Claude Code).
 - **.NET 10** (LTS instalada na máquina), solução dividida em projetos por responsabilidade.
+- **Interface em console, e fica assim.** Não vem interface gráfica depois: o console é a
+  escolha, pelo ar antigo que combina com jogo de mesa e com o pedaço de papel que a ficha era
+  antes de ser PDF. Existiu um projeto WPF vazio esperando esse dia; ele foi **removido** da
+  solução, porque esboço que ninguém vai terminar só compila, engorda o pacote e faz quem chega
+  perguntar onde está a tela.
 
 ### Sobre o MCP
 
@@ -171,8 +176,7 @@ MainForge.sln
 │   │                           os índices (IndiceDeConhecimento) e o progresso (EstadoDoProcessamento)
 │   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
 │   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
-│   ├── MainForge.Cli        -> interface em console (a interface em uso hoje)
-│   └── MainForge.App        -> aplicativo WPF (interface gráfica, ainda um shell vazio)
+│   └── MainForge.Cli        -> interface em console — a interface do produto, por escolha
 ├── tests/MainForge.Tests
 ├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução), sobre o
 │                                 sistema fictício "SistemaTeste"
@@ -650,12 +654,14 @@ importar nem as bases geradas a partir deles: esse conteúdo continua sendo de q
 Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
 permissões por agente (verificado com o Dungeon Master tendo `Input/` negado de fato), a
 importação de sistemas, o gerenciamento de personagens (com retomada e evolução), os pacotes de
-sistema e a interface em console, com 220 testes automatizados. O Configurador
+sistema e a interface em console, com 222 testes automatizados. O Configurador
 foi validado ponta a ponta gerando `Sistemas/SistemaTeste/`.
 
-Falta: rodar a validação ponta a ponta completa incluindo o Dungeon Master
-(`dotnet run --project tools/ValidacaoPontaAPonta`), testar com um livro de RPG real e
-construir a interface gráfica em WPF.
+**Validado com material real.** O fluxo inteiro já rodou sobre três livros oficiais, viraram base de conhecimento com jogo base e expansão separados, o mapeamento cobriu os 334
+campos preenchíveis da ficha, o sistema foi exportado como pacote e o Dungeon Master conduziu a
+criação de personagens até o PDF preenchido — tudo pela interface em console, do menu à ficha
+final. É o teste que nenhum sistema fictício substitui: livro de verdade tem tabela embaralhada na conversão, seção repetida entre capítulos e regra de expansão que altera o jogo
+base.
 
 > Se o build ou `dotnet sln add`/`dotnet restore` falhar de forma estranha nesta máquina,
 > verifique a variável de ambiente `MSBuildSDKsPath` — se ela estiver fixada em um SDK antigo

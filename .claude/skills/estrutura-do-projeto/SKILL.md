@@ -29,7 +29,7 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 
 | Caminho | O que é | Quem escreve | Quem lê |
 | --- | --- | --- | --- |
-| `src/` | os sete projetos C# | pessoas | pessoas |
+| `src/` | os seis projetos C# | pessoas | pessoas |
 | `tests/MainForge.Tests` | testes xunit de tudo em `src/` | pessoas | `dotnet test` |
 | `tools/ValidacaoPontaAPonta` | harness manual do fluxo completo, **fora da .sln** de propósito (gasta cota real) | pessoas | `dotnet run` manual |
 | `Agents/` | prompt de sistema de cada agente, em Markdown (`Configurador.md`, `DungeonMaster.md`) | pessoas | `DefinicaoDeAgente.CarregarPromptDeSistema` |
@@ -95,11 +95,14 @@ MainForge.Core        modelos de domínio (SistemaRpg) e CaminhosDoProjeto. Não
   │    └─ MainForge.Mcp     servidor MCP stdio (executável próprio) que expõe MainForge.Tools
   │                         ao Claude Code. Só adapta: a regra mora em Tools.
   └─ MainForge.Agents       DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente (a conversa).
-       ├─ MainForge.Cli     interface em console — a que está em uso.
-       └─ MainForge.App     WPF, ainda um shell vazio.
+       └─ MainForge.Cli     interface em console — a interface do produto, por escolha.
 ```
 
-`MainForge.Cli` e `MainForge.App` referenciam `MainForge.Mcp` por dois motivos: o executável dele
+São seis projetos, e o console é a única interface: **não haverá versão gráfica**. Havia um
+`MainForge.App` em WPF, vazio, esperando esse dia; ele foi removido da solução. Interface nova
+não nasce aqui sem essa decisão ser tomada de novo.
+
+`MainForge.Cli` referencia `MainForge.Mcp` por dois motivos: o executável dele
 cai na mesma pasta de saída (`ConfiguracaoDoServidorMcp` o procura lá) e o próprio aplicativo
 sabe ser o servidor, quando lançado com `--mcp <raiz>` — é o que permite distribuir tudo num
 executável só. Essa passagem mora inteira em [ModoServidorMcp.cs](src/MainForge.Cli/ModoServidorMcp.cs);
@@ -110,7 +113,7 @@ sem eles ao lado do executável, o aplicativo baixado não tem prompt para manda
 arquivo de verdade continua sendo o de `Agents/` — nada de prompt embutido em C#.
 
 TFMs: `net10.0` na maioria; `net10.0-windows` em `Cli`, `Tests` e `ValidacaoPontaAPonta` (o
-resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`); `net10.0-windows10.0.19041.0` no WPF.
+resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`).
 
 ## Onde nasce cada coisa nova
 
@@ -127,7 +130,7 @@ resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`); `net10.0-windows10.0.1
 | arquivo de conhecimento | `Sistemas/<Sistema>/<fonte>/` pelo agente | nunca escreva ali na mão |
 | dossiê de personagem | `Personagens/<Sistema>/<Id>/` por `RepositorioDePersonagens` | nunca escreva ali na mão: o JSON é do C#, o `ficha.md` é do agente pelo MCP |
 
-Projeto `.csproj` novo só quando a responsabilidade não couber em nenhum dos sete — e aí ele
+Projeto `.csproj` novo só quando a responsabilidade não couber em nenhum dos seis — e aí ele
 entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da solução).
 
 ## Regras que a estrutura impõe
