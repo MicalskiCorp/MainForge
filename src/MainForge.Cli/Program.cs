@@ -13,9 +13,9 @@ if (args is ["--mcp", ..])
     return await ModoServidorMcp.RodarAsync(args.Length > 1 ? args[1] : null);
 }
 
-// Interface do MainForge em modo console. A interface gráfica (WPF, projeto MainForge.App)
-// virá depois — os fluxos de negócio moram nos agentes e nas ferramentas, não aqui, então
-// trocar de interface não exige reescrever nada disso.
+// Interface do MainForge em modo console — a única, por escolha, e não um passo até uma
+// gráfica. Ainda assim os fluxos de negócio moram nos agentes e nas ferramentas, não aqui:
+// o que este projeto faz é conversar com o usuário.
 ConsoleUi.Preparar();
 
 var caminhos = CaminhosDoProjeto.Descobrir();
