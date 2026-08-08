@@ -104,6 +104,23 @@ Quem for compilar do código-fonte encontra as instruções em [Rodando](#rodand
   solução, porque esboço que ninguém vai terminar só compila, engorda o pacote e faz quem chega
   perguntar onde está a tela.
 
+### O ícone é código, não um arquivo binário
+
+O executável tem ícone próprio: uma **bigorna sobre a brasa da forja**, em pixel art. Ele não vem
+de banco de ícone nenhum — é desenhado em
+[tools/gerar-icone.ps1](tools/gerar-icone.ps1), num mapa de 16x16 que se lê como um desenho em
+texto, e ampliado para os demais tamanhos por vizinho mais próximo. **Não há arte de terceiros, e
+portanto nada a creditar nem licença a cumprir.**
+
+O motivo de o desenho morar em código é o mesmo de tudo aqui ser texto: um `.ico` é a única coisa
+do projeto que ninguém consegue revisar num diff — trocá-lo seria substituir um blob por outro. E
+o estilo não é nostalgia gratuita: pixel art com paleta curta é o que continua legível a 16
+pixels, que é o tamanho em que o Windows desenha o ícone na barra de título.
+
+O arquivo `.ico` guarda seis tamanhos (16 a 256). Os pequenos vão no formato DIB e o de 256 em
+PNG: PNG dentro de `.ico` só é entendido do Windows Vista em diante, e nem todo consumidor o lê —
+o próprio `System.Drawing.Icon` do .NET Framework falha ao abrir uma entrada dessas.
+
 ### Sobre o MCP
 
 Uma versão anterior deste README dizia que MCP não agregava valor "porque tudo roda no mesmo
@@ -203,6 +220,7 @@ MainForge.sln
 ├── tests/MainForge.Tests
 ├── tools/ValidacaoPontaAPonta -> harness manual do fluxo completo (fora da solução), sobre o
 │                                 sistema fictício "SistemaTeste"
+├── tools/gerar-icone.ps1 -> desenha o ícone do executável (pixel art) e grava o .ico
 ├── .claude/skills/       -> skills do Claude Code de quem desenvolve o projeto (não dos agentes
 │                            do aplicativo, que têm `Skill` negada). `estrutura-do-projeto` é o
 │                            mapa de onde cada coisa mora e é obrigatória antes de mexer nele

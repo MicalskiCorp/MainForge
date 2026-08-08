@@ -41,6 +41,11 @@
     <SatelliteResourceLanguages>pt-BR;en</SatelliteResourceLanguages>
     <AssemblyTitle>MainForge</AssemblyTitle>
     <Product>MainForge</Product>
+    <!-- O ícone do executável: uma bigorna sobre a brasa da forja, em pixel art. Ele é gerado por
+         tools/gerar-icone.ps1, que é onde o desenho mora — o .ico aqui é o resultado, e não a
+         fonte. Sem esta propriedade o Windows mostra o ícone genérico de console, que é o que
+         quem baixa o aplicativo vê primeiro. -->
+    <ApplicationIcon>mainforge.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

@@ -64,6 +64,10 @@ appsettings.Local.json
 # de quem paga a assinatura, não do projeto.
 /_preferencias.json
 
+# Amostras de conferência do ícone (gerar-icone.ps1 -Amostra): existem para alguém olhar o
+# desenho, e o que vale no repositório é o .ico ao lado, que o script regera a qualquer momento.
+src/MainForge.Cli/amostra-*.png
+
 # Pacote gerado por publicar.ps1.
 /publicado/
 
