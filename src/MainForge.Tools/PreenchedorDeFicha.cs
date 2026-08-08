@@ -64,7 +64,7 @@ public static class PreenchedorDeFicha
         var caminhoSaida = CaminhosDoProjeto.ResolverDentroDe(caminhos.SaidaPersonagens, nomeArquivoSaida);
 
         using var documento = PdfReader.Open(caminhoModelo, PdfDocumentOpenMode.Modify);
-        var formulario = documento.AcroForm
+        var formulario = FormularioDeFicha.Obter(documento)
             ?? throw new ErroDeFerramenta(
                 $"O template '{Path.GetFileName(caminhoModelo)}' não tem campos de formulário (AcroForm).");
 

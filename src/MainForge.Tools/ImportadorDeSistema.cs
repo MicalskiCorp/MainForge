@@ -148,7 +148,7 @@ public static class ImportadorDeSistema
     {
         using var documento = PdfReader.Open(caminhoDaFicha, PdfDocumentOpenMode.Import);
 
-        var formulario = documento.AcroForm
+        var formulario = FormularioDeFicha.Obter(documento)
             ?? throw new InvalidOperationException(
                 $"'{Path.GetFileName(caminhoDaFicha)}' não tem campos de formulário (AcroForm). " +
                 "A ficha precisa ser um PDF editável/preenchível, não um PDF só de leitura ou digitalizado.");

@@ -38,7 +38,7 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
 | `Sistemas/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Personagens/<Sistema>/<Id>/` | dossiê do personagem: `personagem.json` (situação, fontes da mesa, sessão) + `ficha.md` (estado dele em texto) | `RepositorioDePersonagens` — o C# grava o JSON, o agente grava o `.md` pelo MCP | a CLI e o Dungeon Master |
-| `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
+| `Output/Personagens/` | fichas finais preenchidas e a cópia das importadas (`<Id>-importada.pdf`) | `PreenchedorDeFicha`, `ImportadorDePersonagem` | o usuário |
 | `Output/Pacotes/` | sistemas exportados (`.mainforge.zip`) para levar a outra máquina | `PacoteDeSistema` | o usuário |
 | `_preferencias.json` | escolhas de gasto de cota desta instalação (perfil de execução, teto em dólares) | `PreferenciasDoUsuario`, pelo menu Ambiente | `ContextoDoAplicativo` na abertura |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
@@ -89,9 +89,12 @@ MainForge.Core        modelos de domínio (SistemaRpg, EscopoDaSessao, ConsumoDe
   │                         EventoDeAgente, reconhece cota esgotada (LimiteDeUso) e a política
   │                         de espera (PoliticaDeLimiteDeUso), e resolve modelo + esforço por
   │                         agente (AjusteDeExecucao). Nada de RPG aqui dentro.
-  ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp, escrita em Sistemas/,
-  │                         IndiceDeConhecimento, EstadoDoProcessamento, ImportadorDeSistema,
-  │                         RepositorioDePersonagens, PacoteDeSistema, PreferenciasDoUsuario,
+  ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp nos dois sentidos
+  │                         (PreenchedorDeFicha escreve, LeitorDeFichaPreenchida lê uma ficha
+  │                         já preenchida e ImportadorDePersonagem a vira dossiê), escrita em
+  │                         Sistemas/, IndiceDeConhecimento, EstadoDoProcessamento,
+  │                         ImportadorDeSistema, RepositorioDePersonagens, PacoteDeSistema,
+  │                         PreferenciasDoUsuario,
   │                         as buscas (BuscaEmTexto e as duas que a usam) e a conversão dos
   │                         livros para texto (ConversorDeLivros -> markitdown,
   │                         ExtratorDeTextoDePdf -> PdfPig, LimpezaDoTextoDoLivro).
@@ -195,6 +198,13 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
     (`_estado-do-processamento.json`) e por personagem (`personagem.json`), e aparece em
     Ambiente > Consumo. Mudança que promete economizar cota precisa aparecer ali — o custo já foi
     descartado em silêncio uma vez, quando `total_cost_usd` era parseado e jogado fora.
+
+13. **Caminho que uma pessoa digita entra; caminho que o modelo manda, não.** Os PDFs do usuário
+    — os livros, a ficha em branco, a ficha preenchida que `ImportadorDePersonagem` importa —
+    moram fora da raiz do projeto, e exigir `ResolverDentroDe` neles inviabilizaria a única forma
+    de trazer conteúdo para cá. O que os torna seguros é a origem (uma pessoa no console) e o
+    fato de serem **copiados para dentro** antes de qualquer uso; nenhum deles chega por
+    ferramenta MCP, onde continua valendo a regra 2 sem exceção.
 
 ## Como navegar (em vez de varrer)
 
