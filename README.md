@@ -193,9 +193,10 @@ MainForge.sln
 │   ├── MainForge.ClaudeCode -> localiza e executa o Claude Code; traduz o stream-json em eventos;
 │   │                           reconhece cota esgotada (LimiteDeUso) para poder esperar a janela;
 │   │                           resolve modelo e esforço por agente (AjusteDeExecucao)
-│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), escrita em Sistemas/,
-│   │                           os índices (IndiceDeConhecimento), o progresso (EstadoDoProcessamento)
-│   │                           e a conversão dos livros para texto, com limpeza
+│   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), nos dois sentidos —
+│   │                           preencher a ficha e ler uma já preenchida (ImportadorDePersonagem);
+│   │                           escrita em Sistemas/, os índices (IndiceDeConhecimento), o progresso
+│   │                           (EstadoDoProcessamento) e a conversão dos livros para texto, com limpeza
 │   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
 │   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
 │   └── MainForge.Cli        -> interface em console — a interface do produto, por escolha
@@ -217,7 +218,7 @@ MainForge.sln
 ├── Personagens/          -> o dossiê de cada personagem (situação, fontes da mesa, sessão e
 │                            o estado dele em texto). É o que torna a criação retomável
 ├── Output/
-│   ├── Personagens/      -> fichas finais preenchidas
+│   ├── Personagens/      -> fichas finais preenchidas, e a cópia das que foram importadas
 │   └── Pacotes/          -> sistemas exportados para levar a outra máquina
 └── _preferencias.json    -> escolhas de gasto desta instalação (perfil de execução, teto em
                              dólares). Não é versionado: quem roda no Opus e quem roda no
@@ -313,6 +314,9 @@ A tela lista os personagens com a situação de cada um e as ações:
 
 - **Criar** (Agente Dungeon Master) — escolhe o sistema, pergunta quais expansões aquela mesa
   usa e daí é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
+- **Importar de uma ficha em PDF preenchida** — o personagem que você já joga entra no
+  aplicativo pelo arquivo que já existe. Veja [Importar um personagem que já
+  existe](#importar-um-personagem-que-já-existe).
 - **Continuar** um que ficou em desenvolvimento, **evoluir** um pronto (subir de nível, mexer no
   inventário, corrigir dados) e **descontinuar ou reativar**. Veja
   [Personagem é um objeto do aplicativo](#personagem-é-um-objeto-do-aplicativo).
@@ -390,10 +394,55 @@ Quem fecha a criação é o PDF, não o modelo dizendo que terminou: `preencher_
 recebe o identificador do personagem e é ela que marca o dossiê como concluído. Evoluir um
 personagem gera a ficha de novo, a partir do template em branco, com os valores atualizados.
 
+Um personagem [importado de uma ficha em PDF](#importar-um-personagem-que-já-existe) nasce nesse
+mesmo estado — tem PDF, logo está concluído —, com a diferença de que o `ficha.md` dele começa
+sendo transcrição, e não conhecimento conferido. É a conferência com o Dungeon Master que troca
+um pelo outro.
+
 As fontes da mesa ficam gravadas no dossiê e valem para sempre: subir de nível com uma expansão
 que a mesa não usava produziria um personagem que ninguém pode jogar. Uma expansão processada
 depois entra na lista de recusadas daquele personagem, em vez de aparecer liberada só por não
 ter sido negada.
+
+## Importar um personagem que já existe
+
+Quem chega aqui já joga, e já tem personagem — preenchido no PDF editável do sistema, às vezes
+há anos. **Personagens > Importar de uma ficha em PDF preenchida** pede o caminho do arquivo e
+transforma esse personagem num personagem daqui: mesmo dossiê, mesma pasta, mesmas ações. A
+alternativa era ditar a ficha inteira numa conversa — cota gasta para o agente redescobrir
+escolhas que já estavam decididas, com o risco de sair diferente do que está na mesa.
+
+A leitura é dos campos do formulário do PDF (AcroForm), em C#: **não custa cota nenhuma** e
+funciona sem Claude Code instalado. É o inverso exato de gerar a ficha, e é por isso que
+[LeitorDeFichaPreenchida](src/MainForge.Tools/LeitorDeFichaPreenchida.cs) desfaz as mesmas
+normalizações que o preenchedor aplica — separador de linha, caixa marcada. Um valor que volta
+diferente do que foi escrito é um round-trip quebrado, e a primeira evolução do personagem sairia
+com um PDF pior que o original.
+
+O que acontece na importação:
+
+1. **De que sistema é esta ficha?** Os nomes dos campos de um AcroForm são os da ficha em branco
+   de onde ele saiu, então o aplicativo compara com os templates de `Templates/` e sugere o
+   sistema mais parecido. Quem decide é o usuário: uma ficha adaptada, ou dois sistemas que
+   compartilham o modelo, dariam um palpite errado sem como corrigir.
+2. **Quais expansões esta mesa usa?** A mesma pergunta da criação, pelo mesmo motivo — ela vale
+   para sempre, e é ela que decide o que o agente vai conseguir ler nas evoluções seguintes.
+3. O personagem nasce **concluído**, com a cópia da ficha em `Output/Personagens/` e um `ficha.md`
+   com os valores transcritos campo a campo, marcado em toda linha possível como **não conferido**.
+
+Os valores que a ficha em branco do sistema não tem — outra edição, versão adaptada pela mesa —
+ficam registrados no dossiê mas **fora** dos campos de geração: `preencher_ficha_personagem`
+recusa a ficha inteira por um nome de campo desconhecido, e o valor se perderia junto.
+
+Depois disso o aplicativo oferece uma **conferência** com o Dungeon Master: ele lê os valores
+transcritos, confere contra as regras das fontes daquela mesa, aponta o que está fora (citando
+a fonte) e reescreve o dossiê. É a única etapa que gasta cota, por isso é oferta e não obrigação —
+e ela continua disponível depois, em "evoluir ou alterar". O agente não gera PDF nessa conversa:
+a ficha que existe é a que o usuário trouxe.
+
+> **Ficha digitalizada não serve.** A importação lê campos de formulário; um PDF escaneado,
+> impresso para arquivo ou com o formulário achatado não tem de onde tirar valor nenhum, e a
+> mensagem diz isso em vez de falhar genericamente.
 
 ## Levar um sistema para outra máquina
 

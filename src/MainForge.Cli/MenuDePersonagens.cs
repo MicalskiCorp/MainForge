@@ -24,9 +24,10 @@ internal static class MenuDePersonagens
 
             ConsoleUi.Titulo("Personagens");
             ConsoleUi.Info("  1) Criar personagem");
-            ConsoleUi.Info("  2) Continuar um em desenvolvimento");
-            ConsoleUi.Info("  3) Evoluir ou alterar um pronto (nível, inventário, correções)");
-            ConsoleUi.Info("  4) Descontinuar ou reativar");
+            ConsoleUi.Info("  2) Importar de uma ficha em PDF preenchida");
+            ConsoleUi.Info("  3) Continuar um em desenvolvimento");
+            ConsoleUi.Info("  4) Evoluir ou alterar um pronto (nível, inventário, correções)");
+            ConsoleUi.Info("  5) Descontinuar ou reativar");
             ConsoleUi.Info("  0) Voltar");
 
             switch (ConsoleUi.LerLinha("\nEscolha: "))
@@ -36,14 +37,18 @@ internal static class MenuDePersonagens
                     break;
 
                 case "2":
-                    await ContinuarAsync(contexto, personagens, cancelamento);
+                    await FluxoDeImportacaoDePersonagem.ExecutarAsync(contexto, cancelamento);
                     break;
 
                 case "3":
-                    await EvoluirAsync(contexto, personagens, cancelamento);
+                    await ContinuarAsync(contexto, personagens, cancelamento);
                     break;
 
                 case "4":
+                    await EvoluirAsync(contexto, personagens, cancelamento);
+                    break;
+
+                case "5":
                     MudarStatus(contexto, personagens);
                     break;
 
@@ -65,7 +70,7 @@ internal static class MenuDePersonagens
 
         if (personagens.Count == 0)
         {
-            ConsoleUi.Detalhe("Nenhum ainda. A opção 1 começa o primeiro.");
+            ConsoleUi.Detalhe("Nenhum ainda. A opção 1 começa o primeiro; a 2 traz um que já existe em PDF.");
             return;
         }
 
@@ -99,7 +104,7 @@ internal static class MenuDePersonagens
         if (emAndamento > 0)
         {
             ConsoleUi.Info("");
-            ConsoleUi.Aviso($"{emAndamento} personagem(ns) em desenvolvimento — a opção 2 continua de onde parou.");
+            ConsoleUi.Aviso($"{emAndamento} personagem(ns) em desenvolvimento — a opção 3 continua de onde parou.");
         }
 
         var consumo = personagens.Aggregate(ConsumoDeTokens.Zero, (total, personagem) => total + personagem.Consumo);

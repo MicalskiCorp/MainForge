@@ -17,6 +17,12 @@ internal enum ModoDaConversa
 
     /// <summary>Personagem pronto que vai mudar: subir de nível, trocar equipamento, corrigir algo.</summary>
     Evolucao,
+
+    /// <summary>
+    /// Personagem que entrou por uma ficha em PDF preenchida: os valores existem, mas ninguém os
+    /// conferiu contra as regras. É a primeira conversa dele.
+    /// </summary>
+    Conferencia,
 }
 
 /// <summary>
@@ -230,6 +236,7 @@ internal static class FluxoDePersonagem
     {
         ModoDaConversa.Criacao => "criando",
         ModoDaConversa.Retomada => "continuando",
+        ModoDaConversa.Conferencia => "conferindo",
         _ => "evoluindo",
     };
 
@@ -269,6 +276,29 @@ internal static class FluxoDePersonagem
                     .AppendLine()
                     .AppendLine("Ela foi interrompida. NÃO recomece: leia primeiro o dossiê abaixo, retome do ponto")
                     .AppendLine("em que ele parou e me diga em uma linha onde estávamos antes de seguir.")
+                    .AppendLine();
+                break;
+
+            case ModoDaConversa.Conferencia:
+                texto
+                    .AppendLine($"O personagem '{personagem.Rotulo}' do sistema '{sistema.Id}' entrou no aplicativo por uma")
+                    .AppendLine("ficha em PDF já preenchida, e é a primeira vez que você o vê.")
+                    .AppendLine()
+                    .AppendLine("O dossiê abaixo é a transcrição dos campos daquele PDF, campo por campo, feita em")
+                    .AppendLine("código: ninguém conferiu nada contra as regras. Os valores podem estar errados,")
+                    .AppendLine("desatualizados ou seguir um combinado da mesa que não está em livro nenhum.")
+                    .AppendLine()
+                    .AppendLine("Faça a conferência, nesta ordem:")
+                    .AppendLine("1. Confira o que as fontes desta mesa permitem conferir — atributos e modificadores,")
+                    .AppendLine("   proficiências, pontos de vida, magias conhecidas, custo e carga do equipamento.")
+                    .AppendLine("2. Me diga o que está fora da regra e o que ficou faltando, citando a fonte de cada")
+                    .AppendLine("   apontamento. NÃO corrija nada por conta própria: pergunte antes, porque a mesa pode")
+                    .AppendLine("   ter combinado diferente e a ficha é a que está valendo lá.")
+                    .AppendLine("3. Grave o resultado com registrar_personagem, no mesmo formato de dossiê que você usa")
+                    .AppendLine("   nos personagens criados aqui, com nome e resumo preenchidos.")
+                    .AppendLine()
+                    .AppendLine("Não gere a ficha em PDF: a que existe é a que o usuário trouxe, e ela só muda quando")
+                    .AppendLine("ele pedir uma alteração.")
                     .AppendLine();
                 break;
 
