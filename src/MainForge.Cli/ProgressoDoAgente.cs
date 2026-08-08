@@ -1,5 +1,6 @@
 using MainForge.Agents;
 using MainForge.ClaudeCode;
+using MainForge.Core;
 
 namespace MainForge.Cli;
 
@@ -17,12 +18,25 @@ internal static class ProgressoDoAgente
         // usuário perderia de vista o que o agente estava fazendo antes de parar.
         var ultimoRestante = TimeSpan.MaxValue;
 
+        // O agente pode pensar várias vezes num turno; uma linha por bloco de raciocínio encheria
+        // o console sem dizer nada de novo.
+        var jaAvisouQuePensa = false;
+
         return evento =>
         {
             switch (evento)
             {
                 case UsoDeFerramenta uso:
+                    jaAvisouQuePensa = false;
                     ConsoleUi.Detalhe($"    · {NomeAmigavel(uso.Nome)}({uso.Entrada})");
+                    break;
+
+                // Entre uma ferramenta e outra o agente fica mudo enquanto raciocina. Sem este
+                // sinal o console parece travado — e agora que o esforço de raciocínio é
+                // configurável, esse silêncio pode durar bem mais que antes.
+                case AgentePensando when !jaAvisouQuePensa:
+                    jaAvisouQuePensa = true;
+                    ConsoleUi.Detalhe("    · pensando...");
                     break;
 
                 // Erro de ferramenta é quase sempre o guardrail funcionando (o agente tentou algo
@@ -75,6 +89,34 @@ internal static class ProgressoDoAgente
         quando.Date == DateTimeOffset.Now.Date ? $"{quando:HH:mm}" : $"{quando:dd/MM HH:mm}";
 
     public static void Pensando(string quem) => ConsoleUi.Detalhe($"    · {quem} está pensando...");
+
+    /// <summary>
+    /// O que a operação custou de cota, e o acumulado do sistema ou personagem.
+    ///
+    /// <para>Aparece sempre, e não só quando o usuário pede: o produto inteiro é construído em
+    /// torno de gastar menos cota, e até aqui o único sinal disso que ele via era a cota
+    /// acabando. Com o número na tela, "reprocessar do zero" e "continuar de onde parou" deixam
+    /// de ser palavras e viram uma comparação.</para>
+    /// </summary>
+    /// <param name="acumulado">
+    /// O total desde sempre daquele sistema ou personagem. Omitido quando é a primeira execução —
+    /// aí ele seria igual ao da operação e só ocuparia uma linha.
+    /// </param>
+    public static void RelatarConsumo(ConsumoDeTokens operacao, ConsumoDeTokens? acumulado = null)
+    {
+        if (operacao.Vazio)
+        {
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Detalhe($"Consumo desta operação: {operacao.Descrever()}.");
+
+        if (acumulado is { Vazio: false } total && total != operacao)
+        {
+            ConsoleUi.Detalhe($"Total acumulado: {total.Descrever()}.");
+        }
+    }
 
     /// <summary>
     /// As ferramentas do servidor MCP chegam como <c>mcp__mainforge__preencher_ficha_personagem</c>;

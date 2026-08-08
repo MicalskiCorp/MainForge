@@ -60,7 +60,7 @@ public sealed class BuscaNoConhecimentoTestes : IDisposable
         File.WriteAllText(caminho, conteudo);
     }
 
-    private static RestricaoDeFontes SoABase => new(Sistema, ["base"]);
+    private static EscopoDaSessao SoABase => new(Sistema, ["base"]);
 
     [Fact]
     public void Procurar_DevolveArquivoLinhaESecao()
@@ -108,7 +108,7 @@ public sealed class BuscaNoConhecimentoTestes : IDisposable
     public void Procurar_ComRestricaoDeOutroSistema_ERecusada()
     {
         var erro = Assert.Throws<ErroDeFerramenta>(() =>
-            BuscaNoConhecimento.Procurar(_caminhos, Sistema, "espada", new RestricaoDeFontes("OutroSistema", ["base"])));
+            BuscaNoConhecimento.Procurar(_caminhos, Sistema, "espada", new EscopoDaSessao("OutroSistema", ["base"])));
 
         Assert.Contains("OutroSistema", erro.Message);
     }

@@ -58,9 +58,13 @@ public static class EscritorDeConhecimento
 
         var relativoAoSistema = Path.GetRelativePath(diretorioSistema, caminhoArquivo).Replace('\\', '/');
 
-        IndiceDeConhecimento.Reconstruir(
+        // Só a cadeia de pastas até este arquivo: nenhum índice fora dela menciona o que acabou
+        // de ser gravado. Reconstruir o sistema inteiro a cada arquivo fazia uma base de centenas
+        // de arquivos gastar mais tempo reescrevendo índice do que gerando conteúdo.
+        IndiceDeConhecimento.ReconstruirAte(
             caminhos,
             sistema,
+            relativoAoSistema,
             resumo is { Length: > 0 } ? new Dictionary<string, string> { [relativoAoSistema] = resumo } : null);
 
         var estado = EstadoDoProcessamento.Carregar(caminhos, sistema);
@@ -91,10 +95,12 @@ public static class EscritorDeConhecimento
         }
 
         var relativoAoSistema = Path.GetRelativePath(diretorioSistema, diretorio).Replace('\\', '/');
+        var chave = relativoAoSistema == "." ? "" : relativoAoSistema;
 
-        return IndiceDeConhecimento.Reconstruir(
+        return IndiceDeConhecimento.ReconstruirAte(
             caminhos,
             sistema,
-            new Dictionary<string, string> { [relativoAoSistema == "." ? "" : relativoAoSistema] = descricao });
+            chave,
+            new Dictionary<string, string> { [chave] = descricao });
     }
 }

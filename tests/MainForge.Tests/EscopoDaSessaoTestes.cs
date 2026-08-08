@@ -7,14 +7,14 @@ namespace MainForge.Tests;
 /// ambiente. O que se testa aqui é justamente a travessia: se ela se perde no caminho, uma
 /// ferramenta que lê <c>Sistemas/</c> passa a enxergar as expansões que a mesa recusou.
 /// </summary>
-public sealed class RestricaoDeFontesTestes
+public sealed class EscopoDaSessaoTestes
 {
     [Fact]
     public void Serializar_ELer_PreservamSistemaEFontes()
     {
-        var original = new RestricaoDeFontes("Aventura&Cia", ["base", "Compendio-Arcano"]);
+        var original = new EscopoDaSessao("Aventura&Cia", ["base", "Compendio-Arcano"]);
 
-        var lida = RestricaoDeFontes.Ler(original.Serializar());
+        var lida = EscopoDaSessao.Ler(original.Serializar());
 
         Assert.NotNull(lida);
         Assert.Equal("Aventura&Cia", lida.Sistema);
@@ -24,7 +24,7 @@ public sealed class RestricaoDeFontesTestes
     [Fact]
     public void Permite_SoAsFontesDaMesaEDoSistemaDaMesa()
     {
-        var restricao = new RestricaoDeFontes("Aventura&Cia", ["base"]);
+        var restricao = new EscopoDaSessao("Aventura&Cia", ["base"]);
 
         Assert.True(restricao.Permite("Aventura&Cia", "base"));
         Assert.True(restricao.Permite("aventura&cia", "BASE"));
@@ -46,6 +46,6 @@ public sealed class RestricaoDeFontesTestes
     [InlineData("""{ "sistema": "X", "fontes": [] }""")]
     public void Ler_TextoInvalido_DevolveNulo(string? texto)
     {
-        Assert.Null(RestricaoDeFontes.Ler(texto));
+        Assert.Null(EscopoDaSessao.Ler(texto));
     }
 }

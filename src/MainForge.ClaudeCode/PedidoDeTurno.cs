@@ -28,9 +28,37 @@ public sealed record PedidoDeTurno
     /// <summary>
     /// Ferramentas explicitamente concedidas (<c>--allowedTools</c>). Atenção: isto só
     /// <em>concede</em> — não restringe. O que efetivamente bloqueia é
-    /// <see cref="FerramentasNegadas"/>.
+    /// <see cref="FerramentasEmbutidas"/>, para as embutidas, e
+    /// <see cref="FerramentasNegadas"/>, para tudo o mais.
     /// </summary>
     public IReadOnlyList<string> FerramentasPermitidas { get; init; } = [];
+
+    /// <summary>
+    /// O conjunto exato de ferramentas embutidas que existem nesta sessão (<c>--tools</c>).
+    /// <c>null</c> deixa o padrão do Claude Code; uma lista vazia desliga todas.
+    ///
+    /// <para><b>Por que isto e não só a lista de negação.</b> Negar por nome exige adivinhar
+    /// tudo que existe do outro lado, e o comentário de <c>NegacoesComuns</c> conta o preço de
+    /// errar: um agente recebeu <c>PowerShell</c> porque só <c>Bash</c> estava negado. Aqui a
+    /// direção se inverte — o que não está na lista não existe na sessão, e ferramenta nova do
+    /// Claude Code não entra sozinha.</para>
+    ///
+    /// <para>Sai mais barato também: definição de ferramenta é token pago em toda requisição de
+    /// todo turno, e uma sessão que só usa <c>Read</c> e <c>Glob</c> estava carregando o esquema
+    /// de mais de uma dúzia de ferramentas que ela nunca poderia chamar.</para>
+    /// </summary>
+    public IReadOnlyList<string>? FerramentasEmbutidas { get; init; }
+
+    /// <summary>
+    /// Se as skills e os comandos de barra do usuário ficam de fora desta sessão
+    /// (<c>--disable-slash-commands</c>).
+    ///
+    /// <para>Eles vêm de <c>.claude/</c>, que aqui é a configuração de quem desenvolve o
+    /// aplicativo e fala do código dele — assunto nenhum de um agente de RPG. Negar a ferramenta
+    /// <c>Skill</c> pelo nome já ajudava; desligar o mecanismo evita depender de acertar o
+    /// nome.</para>
+    /// </summary>
+    public bool SemSkills { get; init; } = true;
 
     /// <summary>
     /// Regras de negação (<c>--disallowedTools</c>). Negação vence concessão, e é o único
@@ -51,4 +79,14 @@ public sealed record PedidoDeTurno
 
     /// <summary>Se este turno deve retomar a conversa de <see cref="IdDaSessao"/> em vez de começar uma nova.</summary>
     public bool Retomar { get; init; }
+
+    /// <summary>
+    /// Modelo e esforço de raciocínio deste agente. Vem do perfil escolhido pelo usuário cruzado
+    /// com o tipo de trabalho do agente: ler livro e conversar sobre regras não precisam do mesmo
+    /// modelo, e tratá-los igual era o maior desperdício de cota do aplicativo.
+    /// </summary>
+    public required AjusteDeExecucao Ajuste { get; init; }
+
+    /// <summary>Teto de gasto deste turno, em dólares. <c>null</c> significa sem teto.</summary>
+    public decimal? TetoDeGastoUsd { get; init; }
 }

@@ -21,8 +21,19 @@ internal static class FluxoDoClaudeCode
             return;
         }
 
+        var extracao = opcoes.AjusteDe(NaturezaDoTrabalho.Extracao);
+        var conversa = opcoes.AjusteDe(NaturezaDoTrabalho.Conversa);
+
         ConsoleUi.Info($"Executável: {opcoes.CaminhoExecutavel}");
-        ConsoleUi.Info($"Modelo:     {opcoes.Modelo}");
+        ConsoleUi.Info($"Perfil:     {opcoes.Perfil}");
+        ConsoleUi.Info($"Modelos:    {extracao.Modelo} para ler os livros, {conversa.Modelo} para conversar");
+        ConsoleUi.Detalhe("Troque o perfil em Ambiente > Consumo de cota.");
+
+        if (MemoriaNoCaminho.Aviso(contexto.Caminhos.Raiz) is { } memoria)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Aviso(memoria);
+        }
         ConsoleUi.Detalhe("Autenticação: da própria instalação do Claude Code (a sua assinatura).");
         ConsoleUi.Detalhe("O MainForge não guarda, não lê e não copia credencial nenhuma — o login mora");
         ConsoleUi.Detalhe("no Claude Code desta máquina, e é por isso que ele não viaja junto com o binário.");

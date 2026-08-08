@@ -91,7 +91,9 @@ if (!diagnostico.Autenticado)
     return 1;
 }
 
-Ok($"Versão {diagnostico.Versao} — autenticado, modelo {opcoes.Modelo}.");
+Ok($"Versão {diagnostico.Versao} — autenticado, perfil {opcoes.Perfil} " +
+   $"({opcoes.AjusteDe(NaturezaDoTrabalho.Extracao).Modelo} para extrair, " +
+   $"{opcoes.AjusteDe(NaturezaDoTrabalho.Conversa).Modelo} para conversar).");
 
 // ---------------------------------------------------------------------------
 // Etapa 3 — Configurador gera a base de conhecimento

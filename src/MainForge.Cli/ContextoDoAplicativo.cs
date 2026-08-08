@@ -1,5 +1,6 @@
 using MainForge.ClaudeCode;
 using MainForge.Core;
+using MainForge.Tools;
 
 namespace MainForge.Cli;
 
@@ -16,14 +17,41 @@ internal sealed class ContextoDoAplicativo
     public ContextoDoAplicativo(CaminhosDoProjeto caminhos)
     {
         Caminhos = caminhos;
-        Opcoes = OpcoesDoClaudeCode.Resolver();
+        Preferencias = PreferenciasDoUsuario.Carregar(caminhos);
+        Opcoes = ComPreferencias(OpcoesDoClaudeCode.Resolver());
     }
 
     public CaminhosDoProjeto Caminhos { get; }
 
-    public OpcoesDoClaudeCode? Opcoes { get; }
+    public OpcoesDoClaudeCode? Opcoes { get; private set; }
+
+    /// <summary>
+    /// As escolhas do usuário sobre gasto de cota. Ficam no contexto porque valem para todos os
+    /// fluxos e podem mudar no meio da sessão, pelo menu Ambiente.
+    /// </summary>
+    public PreferenciasDoUsuario Preferencias { get; private set; }
 
     public bool TemClaudeCode => Opcoes is not null;
+
+    /// <summary>
+    /// Troca as preferências e reaplica-as às opções de execução, para que a próxima operação já
+    /// rode com o perfil novo sem o usuário precisar reabrir o aplicativo.
+    /// </summary>
+    public void AtualizarPreferencias(PreferenciasDoUsuario preferencias)
+    {
+        Preferencias = preferencias;
+        preferencias.Salvar(Caminhos);
+        Opcoes = ComPreferencias(Opcoes);
+    }
+
+    private OpcoesDoClaudeCode? ComPreferencias(OpcoesDoClaudeCode? opcoes) => opcoes is null
+        ? null
+        : opcoes with
+        {
+            Perfil = Preferencias.Perfil,
+            ModeloForcado = Preferencias.ModeloForcado,
+            TetoDeGastoUsd = Preferencias.TetoDeGastoUsd,
+        };
 
     /// <summary>
     /// Devolve as opções de execução, ou <c>null</c> (explicando ao usuário) quando não há

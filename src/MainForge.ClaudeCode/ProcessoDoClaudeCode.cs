@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using MainForge.Core;
 
 namespace MainForge.ClaudeCode;
 
@@ -53,7 +54,7 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
         string? respostaFinal = null;
         bool falhou = false;
         string? motivo = null;
-        decimal? custo = null;
+        ConsumoDeTokens? consumo = null;
 
         try
         {
@@ -64,7 +65,7 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
                     continue;
                 }
 
-                foreach (var evento in Interpretar(linha, ref idDaSessao, ref respostaFinal, ref falhou, ref motivo, ref custo))
+                foreach (var evento in Interpretar(linha, ref idDaSessao, ref respostaFinal, ref falhou, ref motivo, ref consumo))
                 {
                     yield return evento;
                 }
@@ -92,7 +93,7 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
             ? DetectorDeLimiteDeUso.Detectar($"{motivo}\n{erros}")
             : null;
 
-        yield return new TurnoConcluido(respostaFinal ?? "", idDaSessao, falhou, motivo, custo, limite);
+        yield return new TurnoConcluido(respostaFinal ?? "", idDaSessao, falhou, motivo, consumo, limite);
     }
 
     private ProcessStartInfo MontarInicio(PedidoDeTurno pedido)
@@ -120,11 +121,46 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
         argumentos.Add("stream-json");
         argumentos.Add("--verbose");            // exigido junto de stream-json em modo -p
         argumentos.Add("--model");
-        argumentos.Add(opcoes.Modelo);
+        argumentos.Add(pedido.Ajuste.Modelo);
+
+        // O esforço de raciocínio é gasto que não aparece na contagem de entrada e aparece
+        // inteiro na conta. Deixá-lo no padrão era pagar raciocínio de problema difícil para
+        // transcrever a tabela de armas de um livro.
+        argumentos.Add("--effort");
+        argumentos.Add(pedido.Ajuste.Esforco);
+
         argumentos.Add("--system-prompt-file");
         argumentos.Add(pedido.CaminhoPromptDeSistema);
         argumentos.Add("--permission-mode");
         argumentos.Add("default");              // nunca bypassPermissions: as negações precisam valer
+
+        if (pedido.TetoDeGastoUsd is { } teto)
+        {
+            argumentos.Add("--max-budget-usd");
+            argumentos.Add(teto.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        // --tools define o que existe; --allowedTools define o que roda sem perguntar. Os dois
+        // são necessários: sem o primeiro, o modelo recebe o esquema de ferramentas que jamais
+        // poderia usar; sem o segundo, cada chamada pararia pedindo permissão a um console que
+        // não está esperando por isso.
+        if (pedido.FerramentasEmbutidas is { } embutidas)
+        {
+            argumentos.Add("--tools");
+            argumentos.Add(string.Join(",", embutidas));
+        }
+
+        if (pedido.SemSkills)
+        {
+            argumentos.Add("--disable-slash-commands");
+        }
+
+        // Nenhuma configuração de fora: nem a do usuário (~/.claude), nem a do projeto
+        // (.claude/settings.json), nem a local. Elas são de quem desenvolve o aplicativo ou de
+        // quem usa o Claude Code para outra coisa, e um hook definido lá rodaria dentro da sessão
+        // do agente de RPG — que é a última coisa que alguém esperava ao configurá-lo.
+        argumentos.Add("--setting-sources");
+        argumentos.Add("");
 
         if (pedido.FerramentasPermitidas.Count > 0)
         {
@@ -161,7 +197,7 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
         ref string? respostaFinal,
         ref bool falhou,
         ref string? motivo,
-        ref decimal? custo)
+        ref ConsumoDeTokens? consumo)
     {
         JsonDocument documento;
 
@@ -218,11 +254,7 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
                         motivo = "erro desconhecido";
                     }
 
-                    if (raiz.TryGetProperty("total_cost_usd", out var custoEl) &&
-                        custoEl.ValueKind == JsonValueKind.Number)
-                    {
-                        custo = custoEl.GetDecimal();
-                    }
+                    consumo = LerConsumo(raiz);
 
                     return [];
 
@@ -231,6 +263,47 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
             }
         }
     }
+
+    /// <summary>
+    /// O que o turno custou, do evento <c>result</c>: o bloco <c>usage</c> traz a contagem de
+    /// tokens e <c>total_cost_usd</c>, o valor.
+    ///
+    /// <para>Os quatro contadores são lidos separadamente de propósito. Somar tudo num número só
+    /// esconderia justamente o que interessa medir aqui: quanto da entrada veio do cache. Uma
+    /// conversa que reaproveita o prefixo e uma que o reescreve a cada turno têm o mesmo total de
+    /// entrada e custos muito diferentes.</para>
+    ///
+    /// <para>Um <c>result</c> sem <c>usage</c> — turno que morreu cedo, versão do CLI que não o
+    /// emite — devolve <c>null</c> em vez de zero: "não sei" e "não gastou" são coisas
+    /// diferentes para quem lê o relatório.</para>
+    /// </summary>
+    private static ConsumoDeTokens? LerConsumo(JsonElement raiz)
+    {
+        var custo = raiz.TryGetProperty("total_cost_usd", out var custoEl) &&
+                    custoEl.ValueKind == JsonValueKind.Number
+            ? custoEl.GetDecimal()
+            : (decimal?)null;
+
+        if (!raiz.TryGetProperty("usage", out var uso) || uso.ValueKind != JsonValueKind.Object)
+        {
+            return custo is null ? null : new ConsumoDeTokens(CustoUsd: custo, Turnos: 1);
+        }
+
+        return new ConsumoDeTokens(
+            Inteiro(uso, "input_tokens"),
+            Inteiro(uso, "output_tokens"),
+            Inteiro(uso, "cache_creation_input_tokens"),
+            Inteiro(uso, "cache_read_input_tokens"),
+            custo,
+            Turnos: 1);
+    }
+
+    private static long Inteiro(JsonElement objeto, string propriedade) =>
+        objeto.TryGetProperty(propriedade, out var valor) &&
+        valor.ValueKind == JsonValueKind.Number &&
+        valor.TryGetInt64(out var numero)
+            ? numero
+            : 0;
 
     private static List<EventoDeAgente> DoAssistente(JsonElement raiz)
     {

@@ -40,6 +40,7 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `Personagens/<Sistema>/<Id>/` | dossiê do personagem: `personagem.json` (situação, fontes da mesa, sessão) + `ficha.md` (estado dele em texto) | `RepositorioDePersonagens` — o C# grava o JSON, o agente grava o `.md` pelo MCP | a CLI e o Dungeon Master |
 | `Output/Personagens/` | fichas finais preenchidas | `PreenchedorDeFicha` | o usuário |
 | `Output/Pacotes/` | sistemas exportados (`.mainforge.zip`) para levar a outra máquina | `PacoteDeSistema` | o usuário |
+| `_preferencias.json` | escolhas de gasto de cota desta instalação (perfil de execução, teto em dólares) | `PreferenciasDoUsuario`, pelo menu Ambiente | `ContextoDoAplicativo` na abertura |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
 | `.github/workflows/` | fluxo que publica o binário como release | pessoas | GitHub Actions |
 | `publicar.ps1` | empacota o aplicativo (executável único, self-contained) em `publicado/` | pessoas | `./publicar.ps1` |
@@ -82,16 +83,19 @@ movendo arquivo e reapontando o registro de progresso — nunca reprocessando.
 Dependência só desce nesta lista; inverter é sinal de que a classe está no projeto errado.
 
 ```
-MainForge.Core        modelos de domínio (SistemaRpg) e CaminhosDoProjeto. Não referencia ninguém.
+MainForge.Core        modelos de domínio (SistemaRpg, EscopoDaSessao, ConsumoDeTokens,
+  │                   PerfilDeExecucao) e CaminhosDoProjeto. Não referencia ninguém.
   ├─ MainForge.ClaudeCode   localiza e executa o `claude` headless, traduz o stream-json em
   │                         EventoDeAgente, reconhece cota esgotada (LimiteDeUso) e a política
-  │                         de espera (PoliticaDeLimiteDeUso). Nada de RPG aqui dentro.
+  │                         de espera (PoliticaDeLimiteDeUso), e resolve modelo + esforço por
+  │                         agente (AjusteDeExecucao). Nada de RPG aqui dentro.
   ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp, escrita em Sistemas/,
   │                         IndiceDeConhecimento, EstadoDoProcessamento, ImportadorDeSistema,
-  │                         RepositorioDePersonagens, PacoteDeSistema, as duas buscas
-  │                         (BuscaNosLivros, BuscaNoConhecimento) e a conversão dos livros para
-  │                         texto (ConversorDeLivros -> markitdown, ExtratorDeTextoDePdf ->
-  │                         PdfPig). Sem dependência de agente nem de interface.
+  │                         RepositorioDePersonagens, PacoteDeSistema, PreferenciasDoUsuario,
+  │                         as buscas (BuscaEmTexto e as duas que a usam) e a conversão dos
+  │                         livros para texto (ConversorDeLivros -> markitdown,
+  │                         ExtratorDeTextoDePdf -> PdfPig, LimpezaDoTextoDoLivro).
+  │                         Sem dependência de agente nem de interface.
   │    └─ MainForge.Mcp     servidor MCP stdio (executável próprio) que expõe MainForge.Tools
   │                         ao Claude Code. Só adapta: a regra mora em Tools.
   └─ MainForge.Agents       DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente (a conversa).
@@ -120,7 +124,8 @@ resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`).
 | Vou criar | Vai em | E também |
 | --- | --- | --- |
 | regra de negócio que toca disco | `src/MainForge.Tools/` | um `*Testes.cs` em `tests/MainForge.Tests/` |
-| ferramenta nova para o agente | a lógica em `MainForge.Tools`, o schema em [CatalogoDeFerramentas.cs](src/MainForge.Mcp/CatalogoDeFerramentas.cs), o despacho em [ServidorMcp.cs](src/MainForge.Mcp/ServidorMcp.cs) | conceder em `DefinicaoDeAgente.FerramentasMcpPermitidas` **e** citar no `Agents/<Agente>.md` — ferramenta não anunciada no prompt não é usada. Se ela lê `Sistemas/`, precisa conferir a `RestricaoDeFontes` (veja a regra 9) |
+| ferramenta nova para o agente | a lógica em `MainForge.Tools`, o schema em [CatalogoDeFerramentas.cs](src/MainForge.Mcp/CatalogoDeFerramentas.cs), o despacho em [ServidorMcp.cs](src/MainForge.Mcp/ServidorMcp.cs) | conceder em `DefinicaoDeAgente.FerramentasMcpPermitidas`, acrescentar à lista de `ServidorMcpTestes` **e** citar no `Agents/<Agente>.md` — ferramenta não anunciada no prompt não é usada. Se ela lê `Sistemas/` ou grava personagem, precisa conferir o `EscopoDaSessao` (veja a regra 9) |
+| decisão sobre gasto de cota | modelo e esforço em [AjusteDeExecucao.cs](src/MainForge.ClaudeCode/AjusteDeExecucao.cs); flag nova do `claude` em `ProcessoDoClaudeCode.MontarInicio` | trave em `LinhaDeComandoDoClaudeCodeTestes` — nada ali quebra o build ao sumir, só volta a custar caro em silêncio |
 | opção nova de menu | um `FluxoDeXxx.cs` em `src/MainForge.Cli/`, ligado ao `MenuDeXxx.cs` do assunto (Sistemas, Personagens, Ambiente) | o menu principal tem três portas e não ganha uma quarta sem motivo forte; texto de UI sempre por `ConsoleUi`; o estado da janela do console fica em `JanelaDoConsole`, o único ponto com P/Invoke |
 | prompt/instrução de agente | `Agents/<Agente>.md` (nunca embutido em C#) | se for um agente novo, um `static readonly DefinicaoDeAgente` em [DefinicaoDeAgente.cs](src/MainForge.Agents/DefinicaoDeAgente.cs) |
 | conceito de domínio puro | `src/MainForge.Core/` | só se não depender de PDF, de agente nem de interface |
@@ -141,11 +146,13 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    projeto" é aplicado; qualquer caminho vindo do modelo passa por `ResolverDentroDe`. A raiz é
    descoberta pela presença de `Agents/` com prompts — no repositório e também numa instalação
    baixada, onde as outras pastas nascem vazias em `GarantirEstrutura`.
-3. **Escrita do agente só pelo MCP.** As ferramentas `Write`/`Edit`/`Bash`/`PowerShell` são
-   negadas a todo agente em `DefinicaoDeAgente.NegacoesComuns`. Mexer nessa lista é mexer no
-   guardrail — `DefinicaoDeAgenteTestes` trava as negações críticas. Ferramenta nova do Claude
-   Code que execute comando ou leia arquivo entra nessa lista: negar `Bash` sem negar
-   `PowerShell` já deixou um agente listar pastas e procurar texto à vontade.
+3. **Escrita do agente só pelo MCP.** O conjunto de ferramentas embutidas que existe na sessão é
+   declarado em `--tools` a partir de `DefinicaoDeAgente.FerramentasNativasPermitidas` — hoje só
+   `Read` e `Glob`. O que não está lá não é oferecido ao modelo, e é por isso que ferramenta nova
+   do Claude Code não entra sozinha. `NegacoesComuns` continua negando por nome como segunda
+   linha (negar `Bash` sem negar `PowerShell` já deixou um agente listar pastas à vontade) e é o
+   único jeito de negar **por caminho**. `DefinicaoDeAgenteTestes` e
+   `LinhaDeComandoDoClaudeCodeTestes` travam as duas camadas.
 4. **`index.md` é derivado, nunca escrito à mão** (nem pelo agente, nem por você): quem o gera
    é `IndiceDeConhecimento`, a cada gravação.
 5. **`.claude/` não é para os agentes do aplicativo.** Eles rodam com a raiz do projeto como
@@ -159,16 +166,35 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    solto na raiz do sistema — a única exceção é `SistemaRpg.ArquivosDaFicha`. Código novo que
    monte caminho de sistema passa pela fonte (`DiretorioDaFonte`,
    `DiretorioConhecimentoDaFonte`), nunca por `Path.Combine(caminhos.Sistemas, sistema, ...)`.
-9. **A negação de `Read` por caminho para no agente.** A escolha de expansões da mesa é aplicada
-   como `Read(Sistemas/<Sistema>/<fonte>/**)` negado, e isso não alcança o servidor MCP, que roda
-   em outro processo. Ferramenta MCP que percorra `Sistemas/` por conta própria precisa conferir
-   a `RestricaoDeFontes` que chega pelo ambiente (`RestricaoDeFontes.VariavelDeAmbiente`, posta no
-   bloco `env` por `ConfiguracaoDoServidorMcp`) — sem isso ela é a porta lateral para o conteúdo
-   que a negação acabou de fechar. `BuscaNoConhecimento` é o exemplo, e `BuscaNoConhecimentoTestes`
-   trava o comportamento.
+9. **O que o agente pode tocar para no agente.** A escolha de expansões da mesa é aplicada como
+   `Read(Sistemas/<Sistema>/<fonte>/**)` negado, e a identidade do personagem, só pelo prompt —
+   nenhuma das duas alcança o servidor MCP, que roda em outro processo. Ferramenta MCP que
+   percorra `Sistemas/` **ou grave um personagem** precisa conferir o `EscopoDaSessao` que chega
+   pelo ambiente (`EscopoDaSessao.VariavelDeAmbiente`, posto no bloco `env` por
+   `ConfiguracaoDoServidorMcp`) — sem isso ela é a porta lateral para o que a negação acabou de
+   fechar. São três: `BuscaNoConhecimento` (fontes), `registrar_personagem` e
+   `preencher_ficha_personagem` (sistema e personagem — a primeira grava o estado *completo* do
+   personagem, então o identificador errado apaga outro por inteiro). `BuscaNoConhecimentoTestes`
+   e `EscopoDoPersonagemTestes` travam o comportamento.
 10. **Caminho de dentro de um `.zip` é caminho vindo de fora.** A importação de pacote resolve
     cada entrada com `ResolverDentroDe` antes de extrair — um `.zip` pode carregar `../../` (o
     "zip slip") tanto quanto um caminho vindo do modelo.
+
+11. **Turno é mais caro que resultado.** Cada chamada de ferramenta é um turno, e todo turno
+    reenvia a conversa inteira ao modelo. Numa sessão que já leu meio livro, evitar uma chamada
+    vale mais que economizar no tamanho do que ela devolve — foi essa conta invertida que fazia
+    as buscas devolverem só a linha achada e mandarem o agente ler o trecho depois. Ferramenta
+    nova deve responder à pergunta inteira, não devolver o endereço da resposta.
+
+    O corolário: o que o C# consegue ler de graça não deve virar chamada de ferramenta. O dossiê
+    do personagem e o índice das fontes vão escritos na primeira mensagem por isso
+    (`FluxoDePersonagem.PrimeiraMensagem`), e o texto dos livros é limpo antes de o agente pagar
+    para lê-lo (`LimpezaDoTextoDoLivro`).
+
+12. **Medir antes de otimizar.** `ConsumoDeTokens` acumula por sistema
+    (`_estado-do-processamento.json`) e por personagem (`personagem.json`), e aparece em
+    Ambiente > Consumo. Mudança que promete economizar cota precisa aparecer ali — o custo já foi
+    descartado em silêncio uma vez, quando `total_cost_usd` era parseado e jogado fora.
 
 ## Como navegar (em vez de varrer)
 

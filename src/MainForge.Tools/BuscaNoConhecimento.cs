@@ -1,14 +1,6 @@
-using System.Text;
 using MainForge.Core;
 
 namespace MainForge.Tools;
-
-/// <summary>Uma ocorrência do termo procurado dentro da base de conhecimento de um sistema.</summary>
-/// <param name="Arquivo">Caminho do .md, relativo à raiz do projeto — é o que vai no <c>Read</c>.</param>
-/// <param name="Linha">Número da linha, para abrir o trecho com um <c>offset</c>.</param>
-/// <param name="Secao">O título Markdown mais próximo acima da linha.</param>
-/// <param name="Trecho">A linha encontrada, encurtada.</param>
-public sealed record OcorrenciaNoConhecimento(string Arquivo, int Linha, string Secao, string Trecho);
 
 /// <summary>
 /// Procura um termo dentro de <c>Sistemas/&lt;sistema&gt;/</c>, respeitando as fontes que a mesa
@@ -23,28 +15,32 @@ public sealed record OcorrenciaNoConhecimento(string Arquivo, int Linha, string 
 ///
 /// <para><b>Por que ela precisa conhecer a mesa.</b> A escolha das expansões é aplicada como
 /// negação de <c>Read</c> por caminho — e essa negação não alcança uma ferramenta MCP, que roda
-/// em outro processo. Sem a <see cref="RestricaoDeFontes"/>, esta busca devolveria trecho de um
+/// em outro processo. Sem o <see cref="EscopoDaSessao"/>, esta busca devolveria trecho de um
 /// compêndio que o usuário deixou de fora, ou seja, seria exatamente o contorno que o guardrail
 /// existe para fechar. Por isso a restrição é conferida aqui, em C#, e não é opcional para quem
 /// tem uma.</para>
 ///
-/// <para>O resultado é magro de propósito — arquivo, linha, seção e a linha achada. Devolver o
-/// contexto inteiro de cada ocorrência traria de volta o custo que se está cortando.</para>
+/// <para>O resultado pode vir com as linhas ao redor de cada ocorrência: no meio de uma conversa
+/// já longa, evitar a leitura seguinte vale mais que o texto que ela traria.</para>
 /// </summary>
 public static class BuscaNoConhecimento
 {
     public const int MaximoPadraoDeOcorrencias = 30;
 
-    /// <param name="restricao">
+    /// <param name="escopo">
     /// As fontes desta mesa. <c>null</c> significa sem limite — é o caso de quem escreve a base,
     /// não de quem cria personagem.
     /// </param>
-    public static IReadOnlyList<OcorrenciaNoConhecimento> Procurar(
+    /// <param name="linhasDeContexto">
+    /// Quantas linhas ao redor de cada ocorrência devolver. Zero devolve só a linha achada.
+    /// </param>
+    public static IReadOnlyList<Ocorrencia> Procurar(
         CaminhosDoProjeto caminhos,
         string sistema,
         string termo,
-        RestricaoDeFontes? restricao = null,
-        int maximo = MaximoPadraoDeOcorrencias)
+        EscopoDaSessao? escopo = null,
+        int maximo = MaximoPadraoDeOcorrencias,
+        int linhasDeContexto = BuscaEmTexto.ContextoPadrao)
     {
         if (string.IsNullOrWhiteSpace(termo))
         {
@@ -58,52 +54,22 @@ public static class BuscaNoConhecimento
             throw new ErroDeFerramenta($"O sistema '{sistema}' não tem base de conhecimento em Sistemas/.");
         }
 
-        if (restricao is not null && !restricao.Sistema.Equals(sistema, StringComparison.OrdinalIgnoreCase))
+        if (escopo is not null && !escopo.EhOSistema(sistema))
         {
             throw new ErroDeFerramenta(
-                $"Esta mesa é do sistema '{restricao.Sistema}' — não há como procurar em '{sistema}'.");
+                $"Esta mesa é do sistema '{escopo.Sistema}' — não há como procurar em '{sistema}'.");
         }
 
-        var procurado = TextoNormalizado.SemAcento(termo.Trim());
-        var achados = new List<OcorrenciaNoConhecimento>();
-
-        foreach (var arquivo in ArquivosVisiveis(diretorio, restricao))
-        {
-            var secao = "";
-            var numero = 0;
-
-            foreach (var linha in File.ReadLines(arquivo))
-            {
-                numero++;
-
-                if (linha.StartsWith('#'))
-                {
-                    secao = linha.TrimStart('#', ' ').Trim();
-                }
-
-                if (!TextoNormalizado.SemAcento(linha).Contains(procurado, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                achados.Add(new OcorrenciaNoConhecimento(
-                    Path.GetRelativePath(caminhos.Raiz, arquivo).Replace('\\', '/'),
-                    numero,
-                    secao,
-                    Encurtar(linha.Trim())));
-
-                if (achados.Count >= maximo)
-                {
-                    return achados;
-                }
-            }
-        }
-
-        return achados;
+        return BuscaEmTexto.Procurar(
+            ArquivosVisiveis(diretorio, escopo),
+            arquivo => Path.GetRelativePath(caminhos.Raiz, arquivo).Replace('\\', '/'),
+            termo,
+            maximo,
+            linhasDeContexto);
     }
 
     /// <summary>O mesmo resultado já formatado para o modelo ler.</summary>
-    public static string Descrever(IReadOnlyList<OcorrenciaNoConhecimento> ocorrencias, string termo, int maximo)
+    public static string Descrever(IReadOnlyList<Ocorrencia> ocorrencias, string termo, int maximo)
     {
         if (ocorrencias.Count == 0)
         {
@@ -111,28 +77,15 @@ public static class BuscaNoConhecimento
                    "Se a regra deveria existir, diga isso ao usuário — o sistema pode precisar ser reprocessado.";
         }
 
-        var texto = new StringBuilder();
-
-        texto.AppendLine(ocorrencias.Count >= maximo
-            ? $"As primeiras {ocorrencias.Count} ocorrências de '{termo}' (pode haver mais — refine o termo):"
-            : $"{ocorrencias.Count} ocorrência(s) de '{termo}':");
-
-        foreach (var grupo in ocorrencias.GroupBy(ocorrencia => ocorrencia.Arquivo))
-        {
-            texto.AppendLine();
-            texto.AppendLine(grupo.Key);
-
-            foreach (var ocorrencia in grupo)
-            {
-                var secao = ocorrencia.Secao.Length > 0 ? $" [{ocorrencia.Secao}]" : "";
-                texto.AppendLine($"  linha {ocorrencia.Linha}{secao}: {ocorrencia.Trecho}");
-            }
-        }
-
-        texto.AppendLine();
-        texto.AppendLine("Abra o arquivo com Read para ler a regra inteira antes de afirmar qualquer coisa ao usuário.");
-
-        return texto.ToString();
+        return BuscaEmTexto.Descrever(
+            ocorrencias,
+            termo,
+            maximo,
+            "na base deste sistema",
+            ocorrencias.Any(ocorrencia => ocorrencia.Contexto is { Length: > 0 })
+                ? "Se o trecho acima já responde, não abra o arquivo. Abra com Read quando precisar da regra inteira."
+                : "Abra o arquivo com Read para ler a regra inteira antes de afirmar qualquer coisa ao usuário — " +
+                  "ou repita a busca com 'contexto' para receber as linhas em volta sem outra chamada.");
     }
 
     /// <summary>
@@ -140,22 +93,22 @@ public static class BuscaNoConhecimento
     /// sistema (os dois da ficha), que valem com qualquer expansão. O <c>index.md</c> fica de
     /// fora — ele é derivado, e uma linha de tabela dele não é a regra que se procura.
     /// </summary>
-    private static IEnumerable<string> ArquivosVisiveis(string diretorioDoSistema, RestricaoDeFontes? restricao)
+    private static IEnumerable<string> ArquivosVisiveis(string diretorioDoSistema, EscopoDaSessao? escopo)
     {
         var arquivos = Directory
             .EnumerateFiles(diretorioDoSistema, "*.md", SearchOption.AllDirectories)
             .Where(arquivo => !Path.GetFileName(arquivo).Equals(IndiceDeConhecimento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.OrdinalIgnoreCase);
 
-        if (restricao is null)
+        if (escopo is null)
         {
             return arquivos;
         }
 
-        return arquivos.Where(arquivo => EstaLiberado(diretorioDoSistema, arquivo, restricao));
+        return arquivos.Where(arquivo => EstaLiberado(diretorioDoSistema, arquivo, escopo));
     }
 
-    private static bool EstaLiberado(string diretorioDoSistema, string arquivo, RestricaoDeFontes restricao)
+    private static bool EstaLiberado(string diretorioDoSistema, string arquivo, EscopoDaSessao escopo)
     {
         var relativo = Path.GetRelativePath(diretorioDoSistema, arquivo).Replace('\\', '/');
         var barra = relativo.IndexOf('/');
@@ -163,9 +116,6 @@ public static class BuscaNoConhecimento
         // Arquivo solto na raiz do sistema é do sistema inteiro (Ficha-Mapeamento, Ficha-ModeloEmTexto)
         // ou resto de uma base do layout antigo, de antes da separação por fonte: nos dois casos ele
         // não pertence a expansão nenhuma e não é o que a escolha da mesa exclui.
-        return barra <= 0 || restricao.Permite(restricao.Sistema, relativo[..barra]);
+        return barra <= 0 || escopo.Permite(escopo.Sistema, relativo[..barra]);
     }
-
-    private static string Encurtar(string linha) =>
-        linha.Length <= 160 ? linha : string.Concat(linha.AsSpan(0, 160), "...");
 }

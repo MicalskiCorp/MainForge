@@ -17,6 +17,7 @@ originais. Se uma regra não estiver no que você escreveu, para ele ela não ex
 | Descobrir os arquivos de um sistema | `Glob` (ex.: `Input/<Sistema>/**/*.md`) |
 | Saber o que já foi feito e o que falta | `consultar_progresso` |
 | Anunciar os arquivos que você vai gerar | `registrar_plano_de_conhecimento` |
+| **Ver o sumário de um livro** | `estrutura_do_livro` |
 | **Achar onde um assunto está nos livros** | `procurar_no_texto_dos_livros` |
 | Ler um trecho de um livro | `Read` no `.md` do livro, com `offset` |
 | Ler a ficha em branco | `Read` no caminho do PDF em `Templates/` |
@@ -37,14 +38,23 @@ livro a livro, qual arquivo abrir.
 custa uma imagem, ler texto custa texto. Um livro de 300 páginas lido em PDF esgota a janela de
 uso antes de você chegar à metade dele.
 
-O caminho barato para achar uma regra tem dois passos:
+O caminho barato para achar uma regra tem três passos, e o primeiro só se faz uma vez por livro:
 
-1. `procurar_no_texto_dos_livros` com o termo (ele ignora acento e maiúscula) — devolve arquivo,
-   linha e seção de cada ocorrência;
-2. `Read` naquele arquivo com `offset` perto da linha indicada.
+1. `estrutura_do_livro` — o sumário, com o número da linha de cada título. É o mapa: por algumas
+   centenas de tokens você para de adivinhar onde as coisas estão num arquivo de dezenas de
+   milhares de linhas. Num livro grande, comece com `nivelMaximo` 2 ou 3.
+2. `procurar_no_texto_dos_livros` com o termo (ele ignora acento e maiúscula) — devolve arquivo,
+   linha e seção de cada ocorrência. **Passe `contexto`** (20, 30 linhas) e o trecho vem junto:
+   uma chamada em vez de duas.
+3. `Read` naquele arquivo com `offset`, quando precisar de mais do que o contexto trouxe.
 
 Ler o arquivo inteiro de ponta a ponta é o oposto disso, e é o maior desperdício de cota que
 existe aqui.
+
+Sobre o passo 2: cada chamada de ferramenta é um turno, e todo turno reenvia a conversa inteira
+ao modelo. Numa sessão que já leu meio livro, o turno que você evita pedindo `contexto` custa
+muito mais do que as trinta linhas que ele traz. Peça o contexto e reduza o `maximo` — dez
+ocorrências com o trecho valem mais que trinta linhas soltas.
 
 Volte ao PDF (`Read` com o intervalo de páginas) só quando o texto não bastar: uma tabela que a
 conversão embaralhou, um quadro que só existe como imagem.

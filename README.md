@@ -112,25 +112,37 @@ Code), e o MCP é justamente a ponte entre os dois.
 
 ## O guardrail de ferramentas
 
-"Cada agente só pode usar certas ferramentas" continua valendo, em três camadas — nenhuma
+"Cada agente só pode usar certas ferramentas" continua valendo, em quatro camadas — nenhuma
 delas suficiente sozinha:
 
 1. **Diretório de trabalho.** O processo roda com a raiz do projeto como diretório de
    trabalho, e o Claude Code não acessa arquivos fora dele.
-2. **Negações por ferramenta e por caminho** (`--disallowedTools`, em
-   `DefinicaoDeAgente.FerramentasNegadas`). ⚠️ **`--allowedTools` apenas concede, não
-   restringe.** Ferramentas de leitura já são aprovadas por padrão, então listar
-   `Read(Sistemas/**)` *não* impede leituras fora de `Sistemas/` — só uma negação
-   explícita bloqueia. Negação vence concessão.
-3. **Confinamento em código.** Toda **escrita** passa pelo servidor MCP, onde
+2. **O conjunto fechado de ferramentas embutidas** (`--tools`, a partir de
+   `DefinicaoDeAgente.FerramentasNativasPermitidas` — hoje só `Read` e `Glob`). O que não está
+   nessa lista não é oferecido ao modelo: nem como possibilidade, nem como esquema na
+   requisição. É a camada que **não depende de adivinhar nomes** — ferramenta nova que a
+   Anthropic acrescente ao Claude Code não entra sozinha numa sessão de RPG. Sai mais barato
+   também: definição de ferramenta é token pago em toda requisição de todo turno.
+3. **Negações por ferramenta e por caminho** (`--disallowedTools`, em
+   `DefinicaoDeAgente.FerramentasNegadas`). É o único jeito de negar **por caminho** — é assim
+   que a escolha de expansões da mesa é aplicada — e a segunda linha contra nome. ⚠️
+   **`--allowedTools` apenas concede, não restringe.** Ferramentas de leitura já são aprovadas
+   por padrão, então listar `Read(Sistemas/**)` *não* impede leituras fora de `Sistemas/` — só
+   uma negação explícita bloqueia. Negação vence concessão.
+4. **Confinamento em código.** Toda **escrita** passa pelo servidor MCP, onde
    `CaminhosDoProjeto.ResolverDentroDe` rejeita qualquer caminho que escape do diretório
    permitido. É a única camada que não depende de acertar uma lista de negação — e por isso
    é onde mora a regra que realmente importa.
 
+A sessão do agente também roda com `--setting-sources` vazio e `--disable-slash-commands`:
+nenhuma configuração, hook ou skill de fora entra nela. Elas são de quem desenvolve o
+aplicativo ou de quem usa o Claude Code para outra coisa, e um hook definido lá rodaria dentro
+da conversa de RPG.
+
 | | Configurador | Dungeon Master |
 | --- | --- | --- |
 | Embutidas | `Read`, `Glob` | `Read`, `Glob` |
-| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `listar_campos_da_ficha` | `preencher_ficha_personagem`, `registrar_personagem`, `procurar_no_conhecimento` |
+| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `estrutura_do_livro`, `listar_campos_da_ficha` | `preencher_ficha_personagem`, `registrar_personagem`, `procurar_no_conhecimento` |
 | Negações próprias | `Read(Output/**)`, `Read(Personagens/**)` | `Read(Input/**)`, `Read(Templates/**)`, `Read(Output/**)` |
 
 Negado para os dois, sempre: `Bash`, `PowerShell`, `BashOutput`, `KillShell`, `Write`, `Edit`,
@@ -144,8 +156,10 @@ justamente o código-fonte que ele não pode ler.
 > `PowerShell` entrou na lista depois de acontecer: no Windows, o Configurador recebeu essa
 > ferramenta e usou `Get-ChildItem` e `Select-String` para listar pastas e procurar texto —
 > exatamente o que as negações de `Bash` e `Grep` existiam para impedir. **Negar um shell não
-> nega shell nenhum**: negação por nome é uma lista, e lista se esquece. É por isso que a camada
-> que realmente contém a escrita é o servidor MCP em C#, e não esta tabela.
+> nega shell nenhum**: negação por nome é uma lista, e lista se esquece. Foi esse episódio que
+> tirou a lista do papel de primeira linha — hoje quem decide o que existe na sessão é o
+> `--tools`, e a lista virou reforço. A camada que realmente contém a escrita continua sendo o
+> servidor MCP em C#, e não esta tabela.
 
 Buscar continua sendo necessário, e é por isso que existem `procurar_no_texto_dos_livros` (para
 o Configurador, alcançando só `Input/<Sistema>/**/_texto/`) e `procurar_no_conhecimento` (para o
@@ -156,24 +170,32 @@ Duas negações são **da execução**, não do agente, e existem para não ofer
 leva a lugar nenhum: as fontes que a mesa não usa (`DungeonMasterLimitadoA`) e, quando falta o
 poppler, os PDFs dos livros (`ConfiguradorSemAbrirPdf`).
 
-> **A negação por caminho para no agente.** `procurar_no_conhecimento` percorre `Sistemas/` por
-> conta própria, dentro do **processo do servidor MCP** — onde a lista de `--disallowedTools` do
-> Claude Code não chega. Uma busca assim sem mais nada devolveria trecho do compêndio que o
-> usuário acabou de deixar de fora: seria a porta lateral exata que a negação existia para
-> fechar. Por isso as fontes escolhidas viajam com a sessão (`RestricaoDeFontes`, pelo bloco
-> `env` da configuração do servidor) e são conferidas lá dentro, em C#. Ferramenta MCP nova que
-> leia `Sistemas/` precisa conferi-la também.
+> **O que o agente pode tocar para no agente.** As ferramentas MCP rodam **em outro processo**,
+> onde a lista de `--disallowedTools` do Claude Code não chega. `procurar_no_conhecimento`
+> percorre `Sistemas/` por conta própria e, sem mais nada, devolveria trecho do compêndio que o
+> usuário acabou de deixar de fora — a porta lateral exata que a negação existia para fechar. O
+> mesmo vale para `registrar_personagem` e `preencher_ficha_personagem`, que recebem o
+> identificador do personagem como texto: a primeira grava o estado **completo**, então um
+> identificador trocado no meio de uma evolução não corrompe um pedaço — substitui outro
+> personagem por inteiro.
+>
+> Por isso o que a sessão pode tocar (sistema, fontes e personagem) viaja com ela
+> (`EscopoDaSessao`, pelo bloco `env` da configuração do servidor) e é conferido lá dentro, em
+> C#. Ferramenta MCP nova que leia `Sistemas/` ou grave personagem precisa conferi-lo também.
 
 ## Estrutura da solução
 
 ```
 MainForge.sln
 ├── src/
-│   ├── MainForge.Core       -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco)
+│   ├── MainForge.Core       -> modelos de domínio, CaminhosDoProjeto (raiz de tudo que toca disco),
+│   │                           EscopoDaSessao (o que a sessão pode tocar) e ConsumoDeTokens
 │   ├── MainForge.ClaudeCode -> localiza e executa o Claude Code; traduz o stream-json em eventos;
-│   │                           reconhece cota esgotada (LimiteDeUso) para poder esperar a janela
+│   │                           reconhece cota esgotada (LimiteDeUso) para poder esperar a janela;
+│   │                           resolve modelo e esforço por agente (AjusteDeExecucao)
 │   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), escrita em Sistemas/,
-│   │                           os índices (IndiceDeConhecimento) e o progresso (EstadoDoProcessamento)
+│   │                           os índices (IndiceDeConhecimento), o progresso (EstadoDoProcessamento)
+│   │                           e a conversão dos livros para texto, com limpeza
 │   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
 │   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
 │   └── MainForge.Cli        -> interface em console — a interface do produto, por escolha
@@ -194,9 +216,12 @@ MainForge.sln
 │                            registro de progresso do sistema
 ├── Personagens/          -> o dossiê de cada personagem (situação, fontes da mesa, sessão e
 │                            o estado dele em texto). É o que torna a criação retomável
-└── Output/
-    ├── Personagens/      -> fichas finais preenchidas
-    └── Pacotes/          -> sistemas exportados para levar a outra máquina
+├── Output/
+│   ├── Personagens/      -> fichas finais preenchidas
+│   └── Pacotes/          -> sistemas exportados para levar a outra máquina
+└── _preferencias.json    -> escolhas de gasto desta instalação (perfil de execução, teto em
+                             dólares). Não é versionado: quem roda no Opus e quem roda no
+                             Sonnet é decisão de quem paga a assinatura
 ```
 
 **Convenção de idioma:** nomes de solução, projetos e namespaces ficam em inglês (padrão do
@@ -296,13 +321,16 @@ A tela lista os personagens com a situação de cada um e as ações:
 
 ### 3. Ambiente
 
-- **Claude Code** — mostra o executável, o modelo e as permissões de cada agente, abre a janela
+- **Claude Code** — mostra o executável, os modelos e as permissões de cada agente, abre a janela
   de login da sua conta Claude e faz um turno de teste para confirmar que a assinatura está
   ativa.
 - **Dependências** — o que esta máquina tem, o que falta, para que serve cada coisa e o comando
   exato para instalar o que faltar. O processamento de sistema também passa por aqui antes de
   começar: descobrir que falta o Claude Code depois de confirmar a operação mais cara do
   aplicativo é o pior momento possível para essa notícia.
+- **Consumo de cota e perfil de execução** — quanto cada sistema e cada personagem já custaram, e
+  quanto gastar daqui em diante. Veja [Quanto isto custa, e o perfil de
+  execução](#quanto-isto-custa-e-o-perfil-de-execução).
 
 O sistema `SistemaTeste` não aparece em nenhuma dessas telas: ele existe só para o harness de
 validação, que o alcança pelo nome. Esconder é da interface, não do disco — quem abre o
@@ -424,11 +452,22 @@ pode ser o único caminho para a operação central do produto. Na prática, os 
   refeita quando o PDF muda (data e tamanho). Apagar o `.md` manda convertê-lo de novo.
 - O texto de uma fonte fica **dentro daquela fonte**, pela mesma razão de todo o resto: o
   conteúdo de um compêndio não pode acabar valendo numa mesa que não o escolheu.
-- Achar uma regra no meio de dezenas de milhares de linhas é com `procurar_no_texto_dos_livros`
-  (arquivo, linha e seção), seguida de um `Read` com `offset` naquele ponto. Ler o arquivo de
-  ponta a ponta seria trocar um desperdício por outro.
+- Achar uma regra no meio de dezenas de milhares de linhas tem dois passos, e o primeiro se faz
+  uma vez por livro: `estrutura_do_livro` devolve o **sumário** com o número da linha de cada
+  título — o mapa que `Sistemas/` sempre teve pelos `index.md` e que `Input/` não tinha por nada.
+  Depois, `procurar_no_texto_dos_livros` com `contexto` traz a ocorrência **e as linhas em
+  volta**, dispensando o `Read` seguinte. Ler o arquivo de ponta a ponta seria trocar um
+  desperdício por outro.
 - O extrator interno marca cada página (`## Página 42`), o que dá à busca uma seção para mostrar
   e permite ao agente citar de onde tirou a regra.
+- O texto convertido ainda passa por uma **limpeza**
+  ([LimpezaDoTextoDoLivro](src/MainForge.Tools/LimpezaDoTextoDoLivro.cs)): sai o que se repete na
+  borda de cada página — título da obra no alto, nome do capítulo e número embaixo — e as
+  palavras partidas no fim da linha são rejuntadas, senão a busca por "resistência" nunca acha
+  "resis-" seguido de "tência". A limpeza é conservadora de propósito: exige repetição **e**
+  posição de borda, porque frequência sozinha apagaria uma regra que se repete. Sem marcação de
+  página não há borda que reconhecer, e ela não roda. Roda uma vez por livro, de graça, e o
+  resultado é o que o agente relê dezenas de vezes.
 - **Sem poppler, a leitura dos PDFs de `Input/` é negada ao agente naquela execução**
   (`Read(Input/**/*.pdf)`), e o prompt diz por quê. Não é capricho: enquanto ela ficava
   disponível, o agente tentava conferir no PDF a tabela que a conversão embaralhou — o que seria
@@ -463,7 +502,15 @@ O índice resolve a pergunta que cai na estrutura ("que classes existem?") e des
 que é transversal ("onde está a regra de carga?"): cada nível é uma leitura paga, e no fim o
 agente ainda abre o arquivo errado uma vez ou outra. Para essas, existe
 `procurar_no_conhecimento` — arquivo, linha e seção numa chamada só, ignorando acento e
-maiúscula, já limitada às fontes daquela mesa.
+maiúscula, já limitada às fontes daquela mesa. Com o parâmetro `contexto`, ela devolve também as
+linhas em volta, e a maioria das perguntas se resolve sem abrir arquivo nenhum.
+
+O índice é **derivado**, nunca escrito à mão: `IndiceDeConhecimento` o regenera a partir do que
+está em disco, preservando as descrições registradas. A cada arquivo gravado só a cadeia de
+pastas até ele é refeita — nenhum índice fora dessa cadeia menciona o arquivo novo, e
+reconstruir o sistema inteiro por gravação fazia uma base de centenas de arquivos gastar mais
+tempo reescrevendo índice do que gerando conteúdo. A reconstrução completa acontece no fim do
+processamento e na abertura, onde é uma vez só.
 
 O Configurador recebe no prompt um **esqueleto sugerido** de pastas (criação de personagem,
 atributos, raças, classes, antecedentes, perícias, magias, equipamentos, progressão) para não
@@ -518,6 +565,54 @@ Três consequências práticas:
   entram como prontos e os livros, como ainda não lidos — que é a leitura honesta de uma base
   gerada pela metade. A execução seguinte então oferece "ler só os livros ainda não
   incorporados", em vez de recomeçar o sistema inteiro.
+
+## Quanto isto custa, e o perfil de execução
+
+Todo o desenho deste aplicativo é sobre gastar menos cota — converter os livros para texto,
+indexar a base, retomar em vez de recomeçar, buscar em vez de ler inteiro. Mas até pouco tempo o
+único sinal disso que o usuário via era a cota acabando no meio de um processamento: o custo de
+cada turno vinha no fluxo do Claude Code e era descartado na hora de interpretá-lo.
+
+Agora ele é medido. Cada execução mostra o que consumiu, e o total fica guardado por sistema (no
+registro de processamento) e por personagem (no dossiê):
+
+```
+Consumo desta operação: 1,2M tokens de entrada, 87% em cache, 34k tokens de saída, 41 turno(s).
+Total acumulado: 3,4M tokens de entrada, 91k tokens de saída.
+```
+
+A proporção em cache é o número que mais diz: perto de 100% significa que a conversa está
+reaproveitando o prefixo; baixo significa que cada turno paga o contexto inteiro a preço cheio.
+**Ambiente > Consumo de cota** mostra tudo junto e é onde se troca o perfil.
+
+### O perfil decide o modelo de cada agente
+
+O aplicativo rodava tudo no melhor modelo disponível. Isso é a resposta certa para uma parte do
+trabalho e cara demais para a outra: o Dungeon Master conversa, valida regra contra regra e
+calcula — ali o modelo bom se paga, porque um erro vira um personagem que a mesa não aceita. O
+Configurador faz transcrição estruturada em volume: achar a seção, transpor para Markdown,
+gravar. Era ele, justamente o que mais lê, que consumia o modelo mais caro do catálogo.
+
+| Perfil | Configurador (lê os livros) | Dungeon Master (conversa) |
+| --- | --- | --- |
+| Econômico | Haiku, esforço baixo | Sonnet, esforço baixo |
+| **Equilibrado** (padrão) | **Sonnet, esforço médio** | **Opus, esforço médio** |
+| Melhor qualidade | Opus, esforço alto | Opus, esforço alto |
+
+O esforço de raciocínio anda junto com o modelo de propósito: é gasto que não aparece na
+contagem de entrada e aparece inteiro na conta, e deixá-lo no padrão era pagar raciocínio de
+problema difícil para copiar uma tabela de armas.
+
+Também dá para pôr um **teto de gasto por execução** no `_preferencias.json`
+(`tetoDeGastoUsd`): um agente que entra em laço drena a janela da assinatura sem nada que o
+interrompa, e o usuário só descobre quando a cota acaba.
+
+> **Turno é mais caro que resultado.** Cada chamada de ferramenta é um turno, e todo turno
+> reenvia a conversa inteira ao modelo. Numa sessão que já leu meio livro, evitar uma chamada
+> vale muito mais que economizar no tamanho do que ela devolve. É por isso que as buscas passaram
+> a devolver o trecho junto em vez do endereço dele, e que a primeira mensagem de uma conversa de
+> personagem já vem com o dossiê e os índices das fontes escritos dentro dela — arquivos que o
+> C# lê de graça e que custavam um turno cada, no começo de toda conversa.
 
 ## Quando a cota da assinatura acaba
 

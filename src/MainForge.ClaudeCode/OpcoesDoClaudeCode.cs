@@ -1,3 +1,5 @@
+using MainForge.Core;
+
 namespace MainForge.ClaudeCode;
 
 /// <summary>
@@ -7,15 +9,31 @@ namespace MainForge.ClaudeCode;
 /// </summary>
 public sealed record OpcoesDoClaudeCode
 {
-    /// <summary>
-    /// Modelo usado por todo agente. "Melhor modelo disponível", segundo a especificação do
-    /// produto, hoje significa Claude Opus 5.
-    /// </summary>
-    public const string ModeloPadrao = "claude-opus-5";
-
     public required string CaminhoExecutavel { get; init; }
 
-    public string Modelo { get; init; } = ModeloPadrao;
+    /// <summary>
+    /// Quanto gastar por quanta qualidade. Quem traduz isto em modelo e esforço é
+    /// <see cref="AjusteDeExecucao.Resolver"/>, que também leva em conta o tipo de trabalho do
+    /// agente — o mesmo perfil não deve rodar a leitura dos livros e a conversa com o usuário no
+    /// mesmo modelo.
+    /// </summary>
+    public PerfilDeExecucao Perfil { get; init; } = PerfilDeExecucao.Equilibrado;
+
+    /// <summary>
+    /// Um modelo específico, quando o usuário quer mandar nisso. <c>null</c> — o normal — deixa o
+    /// perfil decidir por agente.
+    /// </summary>
+    public string? ModeloForcado { get; init; }
+
+    /// <summary>
+    /// Teto de gasto por execução de agente, em dólares (<c>--max-budget-usd</c>). <c>null</c>
+    /// significa sem teto.
+    ///
+    /// <para><b>Por que existe.</b> Um agente que entra em laço — relê o mesmo trecho, insiste
+    /// numa ferramenta negada — drena a janela da assinatura sem nada que o interrompa, e o
+    /// usuário só descobre quando a cota acaba. O teto transforma isso num turno que termina.</para>
+    /// </summary>
+    public decimal? TetoDeGastoUsd { get; init; }
 
     /// <summary>
     /// Localiza o Claude Code e monta as opções, ou devolve <c>null</c> se não houver
@@ -28,5 +46,13 @@ public sealed record OpcoesDoClaudeCode
         return executavel is null
             ? null
             : new OpcoesDoClaudeCode { CaminhoExecutavel = executavel };
+    }
+
+    /// <summary>O modelo e o esforço com que um agente daquela natureza vai rodar.</summary>
+    public AjusteDeExecucao AjusteDe(NaturezaDoTrabalho natureza)
+    {
+        var ajuste = AjusteDeExecucao.Resolver(Perfil, natureza);
+
+        return ModeloForcado is { Length: > 0 } forcado ? ajuste with { Modelo = forcado } : ajuste;
     }
 }

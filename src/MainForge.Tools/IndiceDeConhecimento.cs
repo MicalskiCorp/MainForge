@@ -15,11 +15,20 @@ public sealed record ItemDoIndice(string Nome, string Descricao);
 /// por pasta, ele lê um arquivo pequeno, decide o que interessa e abre só isso. É a diferença
 /// entre carregar a base inteira no contexto e carregar três arquivos dela.</para>
 ///
-/// <para><b>Reconstrução em vez de remendo.</b> Toda gravação regenera os índices do sistema
-/// a partir do que está em disco, preservando as descrições já registradas. Sai mais caro em
-/// I/O (alguns milissegundos numa base de centenas de arquivos) e evita a classe inteira de
-/// bugs em que o índice diverge do diretório — arquivo apagado que continua listado, arquivo
-/// novo que nunca aparece.</para>
+/// <para><b>Reconstrução em vez de remendo.</b> O índice é sempre regenerado a partir do que
+/// está em disco, preservando as descrições já registradas. Isso evita a classe inteira de bugs
+/// em que o índice diverge do diretório — arquivo apagado que continua listado, arquivo novo que
+/// nunca aparece.</para>
+///
+/// <para><b>Mas não o sistema inteiro a cada arquivo.</b> A gravação de um arquivo refaz apenas
+/// a <see cref="ReconstruirAte">cadeia de pastas até ele</see>; o sistema todo se reconstrói no
+/// fim do processamento e na abertura, onde acontece uma vez só.</para>
+///
+/// <para>O motivo é aritmético: reconstruir tudo custa uma passada por todos os arquivos, e
+/// fazê-lo a cada gravação transforma uma base de 300 arquivos em dezenas de milhares de
+/// escritas de <c>index.md</c> — mais uma leitura das primeiras linhas de cada arquivo ainda sem
+/// descrição, repetida a cada volta. Uma base grande passava boa parte do processamento
+/// reescrevendo índices que ninguém tinha mudado.</para>
 /// </summary>
 public static class IndiceDeConhecimento
 {
@@ -52,19 +61,85 @@ public static class IndiceDeConhecimento
         }
 
         var gerados = new List<string>();
+        var normalizadas = Normalizar(descricoes);
 
-        ReconstruirDiretorio(
-            caminhos,
-            raizDoSistema,
-            raizDoSistema,
-            sistema,
-            Normalizar(descricoes),
-            gerados);
+        // De baixo para cima: o índice de uma pasta repete a descrição das subpastas dela, e
+        // ela é lida do index.md que a subpasta acabou de gravar.
+        foreach (var diretorio in DeBaixoParaCima(raizDoSistema))
+        {
+            ReconstruirNivel(caminhos, diretorio, raizDoSistema, sistema, normalizadas, gerados);
+        }
 
         AtualizarIndiceRaiz(caminhos);
 
         return gerados;
     }
+
+    /// <summary>
+    /// Regenera só os índices que a gravação de <paramref name="caminhoRelativo"/> pode ter
+    /// mudado: a pasta dele e a cadeia de pastas até a raiz do sistema.
+    ///
+    /// <para><b>Por que basta.</b> Um arquivo novo muda a lista de arquivos da pasta dele e, se a
+    /// pasta for nova, a lista de subpastas de cada nível acima. Nenhum índice fora dessa cadeia
+    /// menciona o arquivo — reconstruí-los produziria byte por byte o mesmo conteúdo.</para>
+    ///
+    /// <para>É a diferença entre uma passada pela árvore inteira por arquivo gravado e uma
+    /// passada pelos poucos níveis acima dele. Numa base de centenas de arquivos, a primeira
+    /// forma fazia o processamento gastar mais tempo reescrevendo índice do que gerando
+    /// conteúdo.</para>
+    /// </summary>
+    /// <param name="caminhoRelativo">
+    /// Arquivo ou pasta, relativo a <c>Sistemas/&lt;sistema&gt;/</c>. Vazio reconstrói só a raiz
+    /// do sistema.
+    /// </param>
+    public static IReadOnlyList<string> ReconstruirAte(
+        CaminhosDoProjeto caminhos,
+        string sistema,
+        string caminhoRelativo,
+        IReadOnlyDictionary<string, string>? descricoes = null)
+    {
+        var raizDoSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Conhecimento, sistema);
+
+        if (!Directory.Exists(raizDoSistema))
+        {
+            return [];
+        }
+
+        var alvo = CaminhosDoProjeto.ResolverDentroDe(raizDoSistema, caminhoRelativo);
+        var diretorio = Directory.Exists(alvo) ? alvo : Path.GetDirectoryName(alvo);
+
+        var gerados = new List<string>();
+        var normalizadas = Normalizar(descricoes);
+
+        // Da pasta do arquivo para cima, parando na raiz do sistema. Um caminho que não exista
+        // mais em disco (arquivo apagado entre a gravação e aqui) simplesmente não entra.
+        while (diretorio is not null && Directory.Exists(diretorio))
+        {
+            ReconstruirNivel(caminhos, diretorio, raizDoSistema, sistema, normalizadas, gerados);
+
+            if (diretorio.Equals(raizDoSistema, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            diretorio = Path.GetDirectoryName(diretorio);
+        }
+
+        AtualizarIndiceRaiz(caminhos);
+
+        return gerados;
+    }
+
+    /// <summary>
+    /// Os diretórios da árvore, dos mais fundos para os mais rasos. A ordem importa: o índice de
+    /// uma pasta cita a descrição das subpastas, e ela vem do index.md delas.
+    /// </summary>
+    private static IEnumerable<string> DeBaixoParaCima(string raiz) =>
+        Directory
+            .EnumerateDirectories(raiz, "*", SearchOption.AllDirectories)
+            .Append(raiz)
+            .OrderByDescending(diretorio => diretorio.Count(caractere =>
+                caractere == Path.DirectorySeparatorChar || caractere == Path.AltDirectorySeparatorChar));
 
     /// <summary>
     /// Regenera <c>Sistemas/index.md</c>, o índice de mais alto nível: um sistema por linha,
@@ -119,10 +194,11 @@ public static class IndiceDeConhecimento
     }
 
     /// <summary>
-    /// Reconstrói um diretório e, recursivamente, os que estão dentro dele. Devolve a descrição
-    /// da pasta, para o índice do nível de cima poder repeti-la sem inventá-la.
+    /// Regenera o índice de <b>um</b> nível, sem descer. A descrição de cada subpasta vem do
+    /// index.md dela — que já existe, ou porque ela foi reconstruída antes (a árvore inteira é
+    /// percorrida de baixo para cima), ou porque ela não mudou e continua valendo.
     /// </summary>
-    private static string ReconstruirDiretorio(
+    private static void ReconstruirNivel(
         CaminhosDoProjeto caminhos,
         string diretorio,
         string raizDoSistema,
@@ -146,8 +222,10 @@ public static class IndiceDeConhecimento
             var nome = Path.GetFileName(subdiretorio);
 
             var descricao = Primeiro(
-                ReconstruirDiretorio(caminhos, subdiretorio, raizDoSistema, sistema, descricoes, gerados),
-                anterior.Pastas.GetValueOrDefault(nome, ""));
+                descricoes.GetValueOrDefault(Juntar(relativoDaPasta, nome), ""),
+                LerIndice(Path.Combine(subdiretorio, NomeDoArquivo)).Descricao,
+                anterior.Pastas.GetValueOrDefault(nome, ""),
+                DerivarDaPasta(subdiretorio));
 
             pastas.Add(new ItemDoIndice(nome, descricao));
         }
@@ -176,8 +254,6 @@ public static class IndiceDeConhecimento
             Montar(sistema, relativoDaPasta, descricaoDaPasta, arquivos, pastas));
 
         gerados.Add(Path.GetRelativePath(caminhos.Raiz, caminhoDoIndice));
-
-        return descricaoDaPasta;
     }
 
     private static string Montar(

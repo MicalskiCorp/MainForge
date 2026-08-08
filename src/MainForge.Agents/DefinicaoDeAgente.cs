@@ -14,11 +14,17 @@ namespace MainForge.Agents;
 /// <list type="number">
 ///   <item><b>Diretório de trabalho.</b> O processo roda com a raiz do projeto como diretório
 ///   de trabalho, e o Claude Code não acessa arquivos fora dele.</item>
+///   <item><b>O conjunto de ferramentas embutidas que existe na sessão</b>
+///   (<see cref="FerramentasNativasPermitidas"/>, passadas em <c>--tools</c>). O que não está
+///   nessa lista não é oferecido ao modelo — nem como esquema, nem como possibilidade. É a
+///   camada que não depende de adivinhar nomes, e por isso ferramenta nova do Claude Code não
+///   entra sozinha numa sessão de RPG.</item>
 ///   <item><b>Negações por ferramenta e por caminho</b> (<see cref="FerramentasNegadas"/>).
-///   Este é o mecanismo que de fato bloqueia. <c>--allowedTools</c> apenas <em>concede</em>:
-///   ferramentas de leitura já são aprovadas por padrão, então listar
-///   <c>Read(Sistemas/**)</c> não impede leituras fora de Sistemas/ — só uma negação
-///   explícita faz isso.</item>
+///   É o que restringe <em>por caminho</em> — a escolha de expansões da mesa vira
+///   <c>Read(Sistemas/&lt;fonte&gt;/**)</c> negado — e o que continua barrando por nome, como
+///   segunda linha. <c>--allowedTools</c> apenas <em>concede</em>: ferramentas de leitura já
+///   são aprovadas por padrão, então listar <c>Read(Sistemas/**)</c> não impede leituras fora
+///   de Sistemas/ — só uma negação explícita faz isso.</item>
 ///   <item><b>Confinamento em código.</b> Toda <em>escrita</em> passa pelo servidor MCP em
 ///   C#, onde <see cref="CaminhosDoProjeto.ResolverDentroDe"/> rejeita qualquer caminho que
 ///   escape do diretório permitido. É a única camada que não depende de acertar uma lista de
@@ -44,14 +50,24 @@ public sealed record DefinicaoDeAgente(
     public const string NomeDoServidorMcp = "mainforge";
 
     /// <summary>
-    /// As fontes que valem nesta sessão, quando ela é de uma mesa. <c>null</c> significa sem
-    /// limite — é o caso do Configurador, que escreve a base inteira.
+    /// Que tipo de trabalho este agente faz. É o que, cruzado com o perfil escolhido pelo
+    /// usuário, decide em que modelo e com quanto esforço de raciocínio ele roda.
+    ///
+    /// <para>Não é detalhe de configuração: rodar a extração dos livros no mesmo modelo da
+    /// conversa era o maior desperdício de cota do aplicativo, e a diferença entre os dois
+    /// trabalhos é uma propriedade do agente, não uma preferência.</para>
+    /// </summary>
+    public NaturezaDoTrabalho Natureza { get; init; } = NaturezaDoTrabalho.Conversa;
+
+    /// <summary>
+    /// O que esta sessão pode tocar — as fontes da mesa e, quando há uma, o personagem dela.
+    /// <c>null</c> significa sem limite: é o caso do Configurador, que escreve a base inteira.
     ///
     /// <para>Existe além das negações de <c>Read</c> porque elas param no agente: uma ferramenta
-    /// MCP que leia <c>Sistemas/</c> roda em outro processo, onde a lista de negação do Claude
-    /// Code não chega. Esta restrição é o que viaja até lá.</para>
+    /// MCP que leia <c>Sistemas/</c> ou grave um dossiê roda em outro processo, onde a lista de
+    /// negação do Claude Code não chega. Este escopo é o que viaja até lá.</para>
     /// </summary>
-    public RestricaoDeFontes? FontesDaMesa { get; init; }
+    public EscopoDaSessao? Escopo { get; init; }
 
     /// <summary>
     /// Negado para todos os agentes, sem exceção. Cada item fecha um caminho pelo qual um
@@ -76,10 +92,17 @@ public sealed record DefinicaoDeAgente(
     ///   <item>o código do próprio aplicativo não interessa a nenhum agente de RPG.</item>
     /// </list>
     ///
-    /// <para><b>Negar por nome é uma lista, e lista se esquece.</b> Por isso a camada que
-    /// realmente contém a escrita é o servidor MCP em C#; esta lista é a que evita o desperdício
-    /// e os caminhos laterais de <em>leitura</em>. Ferramenta nova do Claude Code que execute
-    /// comando ou leia arquivo entra aqui.</para>
+    /// <para><b>Negar por nome é uma lista, e lista se esquece.</b> Por isso ela deixou de ser a
+    /// primeira linha: hoje o conjunto de ferramentas embutidas é declarado em
+    /// <c>--tools</c> (veja <see cref="FerramentasNativasPermitidas"/>), e o que não está lá não
+    /// existe na sessão — inclusive o que a Anthropic acrescentar depois desta lista ter sido
+    /// escrita. A camada que realmente contém a <em>escrita</em> continua sendo o servidor MCP
+    /// em C#.</para>
+    ///
+    /// <para>A lista fica porque as duas outras coisas que ela faz não têm substituto: negar por
+    /// caminho (é assim que a escolha de expansões da mesa é aplicada) e barrar de novo, por
+    /// nome, o que já não deveria existir. Custa nada e cobre o caso de <c>--tools</c> um dia
+    /// mudar de semântica.</para>
     /// </summary>
     public static readonly IReadOnlyList<string> NegacoesComuns =
     [
@@ -141,16 +164,21 @@ public sealed record DefinicaoDeAgente(
         string mensagem,
         string? caminhoConfigMcp,
         string? idDaSessao,
-        bool retomar) => new()
+        bool retomar,
+        AjusteDeExecucao ajuste,
+        decimal? tetoDeGastoUsd = null) => new()
         {
             Mensagem = mensagem,
             DiretorioDeTrabalho = caminhos.Raiz,
             CaminhoPromptDeSistema = CaminhoDoPrompt(caminhos),
             FerramentasPermitidas = FerramentasPermitidas(),
             FerramentasNegadas = FerramentasNegadas(),
+            FerramentasEmbutidas = FerramentasNativasPermitidas,
             CaminhoConfigMcp = caminhoConfigMcp,
             IdDaSessao = idDaSessao,
             Retomar = retomar,
+            Ajuste = ajuste,
+            TetoDeGastoUsd = tetoDeGastoUsd,
         };
 
     /// <summary>
@@ -162,6 +190,8 @@ public sealed record DefinicaoDeAgente(
         Nome: "Configurador",
         NomeArquivoPrompt: "Configurador.md",
         FerramentasNativasPermitidas: ["Read", "Glob"],
+        // Ler o livro e transpor a regra para Markdown é transcrição estruturada, não julgamento:
+        // é o trabalho que não justifica o modelo mais caro, e é justamente o que lê mais.
         FerramentasMcpPermitidas:
         [
             "escrever_arquivo_conhecimento",
@@ -169,12 +199,16 @@ public sealed record DefinicaoDeAgente(
             "registrar_plano_de_conhecimento",
             "consultar_progresso",
             "procurar_no_texto_dos_livros",
+            "estrutura_do_livro",
             "listar_campos_da_ficha",
         ],
         // Output/ são as fichas em PDF já entregues e Personagens/ são os dossiês delas: os dois
         // são resultado do Dungeon Master, e nada do que o Configurador faz depende de olhar
         // personagem nenhum.
-        NegacoesEspecificas: ["Read(Output/**)", "Read(Personagens/**)"]);
+        NegacoesEspecificas: ["Read(Output/**)", "Read(Personagens/**)"])
+    {
+        Natureza = NaturezaDoTrabalho.Extracao,
+    };
 
     /// <summary>
     /// O Configurador numa máquina em que abrir PDF não funciona: a leitura dos livros em
@@ -225,7 +259,7 @@ public sealed record DefinicaoDeAgente(
     /// <summary>
     /// O Dungeon Master de uma mesa que não usa todas as expansões: as fontes que o usuário não
     /// escolheu viram negação de leitura por caminho, e as que ele escolheu viajam até o servidor
-    /// MCP em <see cref="FontesDaMesa"/>.
+    /// MCP em <see cref="Escopo"/>.
     ///
     /// <para><b>Por que negar em vez de pedir.</b> "Não use o compêndio X" no prompt é um pedido
     /// — o modelo esbarra no arquivo enquanto navega pelo índice e o conteúdo entra na conversa
@@ -241,10 +275,16 @@ public sealed record DefinicaoDeAgente(
     /// <param name="sistema">Sistema em que o personagem está sendo criado.</param>
     /// <param name="fontesDaMesa">Fontes que valem — o jogo base mais as expansões marcadas.</param>
     /// <param name="fontesRecusadas">Fontes que ficam de fora — em geral, as expansões não marcadas.</param>
+    /// <param name="personagem">
+    /// O único personagem que esta conversa pode gravar. Sem isto, um identificador trocado pelo
+    /// modelo — o que acontece de verdade numa evolução, em que dois personagens do mesmo sistema
+    /// estão em jogo — sobrescreveria o dossiê de outro personagem por inteiro.
+    /// </param>
     public static DefinicaoDeAgente DungeonMasterLimitadoA(
         SistemaRpg sistema,
         IReadOnlyList<FonteDoSistema> fontesDaMesa,
-        IReadOnlyList<FonteDoSistema> fontesRecusadas) =>
+        IReadOnlyList<FonteDoSistema> fontesRecusadas,
+        string? personagem = null) =>
         DungeonMaster with
         {
             NegacoesEspecificas =
@@ -252,8 +292,11 @@ public sealed record DefinicaoDeAgente(
                 .. DungeonMaster.NegacoesEspecificas,
                 .. fontesRecusadas.Select(fonte => $"Read(Sistemas/{sistema.Id}/{fonte.Id}/**)"),
             ],
-            FontesDaMesa = new RestricaoDeFontes(
+            Escopo = new EscopoDaSessao(
                 sistema.Id,
-                [.. fontesDaMesa.Select(fonte => fonte.Id).DefaultIfEmpty(FonteDoSistema.IdDaBase)]),
+                [.. fontesDaMesa.Select(fonte => fonte.Id).DefaultIfEmpty(FonteDoSistema.IdDaBase)])
+            {
+                Personagem = personagem,
+            },
         };
 }

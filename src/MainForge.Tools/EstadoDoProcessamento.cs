@@ -26,6 +26,29 @@ public sealed record ItemDoPlano
     public string? Livro { get; init; }
 }
 
+/// <summary>
+/// O que identifica um livro dentro de um sistema: a fonte a que ele pertence mais o nome do
+/// arquivo.
+///
+/// <para><b>Por que a fonte faz parte da identidade.</b> O registro localizava livro só pelo nome
+/// do arquivo, e PDFs baixados se chamam <c>Livro-do-Jogador.pdf</c> ou <c>Core-Rulebook.pdf</c> —
+/// nomes que se repetem entre o jogo base e um compêndio. Com a chave só no nome, importar a
+/// expansão fundia os dois num registro único: o livro da base passava a constar como sendo da
+/// expansão e a marca de "já lido" vazava de um para o outro.</para>
+/// </summary>
+public readonly record struct ChaveDeLivro(string Fonte, string Arquivo)
+{
+    public bool Equals(ChaveDeLivro outra) =>
+        string.Equals(Fonte, outra.Fonte, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Arquivo, outra.Arquivo, StringComparison.OrdinalIgnoreCase);
+
+    public override int GetHashCode() => HashCode.Combine(
+        Fonte.ToUpperInvariant(),
+        Arquivo.ToUpperInvariant());
+
+    public override string ToString() => $"{Fonte}/{Arquivo}";
+}
+
 /// <summary>Um livro do sistema e se o conteúdo dele já entrou na base.</summary>
 public sealed record LivroDoSistema
 {
@@ -60,6 +83,10 @@ public sealed record LivroDoSistema
     public string Hash { get; init; } = "";
 
     public EstadoDoItem Estado { get; init; } = EstadoDoItem.Pendente;
+
+    /// <summary>Como este livro é localizado no registro.</summary>
+    [JsonIgnore]
+    public ChaveDeLivro Chave => new(Fonte, Arquivo);
 }
 
 /// <summary>
@@ -102,6 +129,16 @@ public sealed class EstadoDoProcessamento
     public List<LivroDoSistema> Livros { get; set; } = [];
 
     public List<ItemDoPlano> Plano { get; set; } = [];
+
+    /// <summary>
+    /// O que este sistema já custou de cota, somando todas as execuções do Configurador — as que
+    /// terminaram e as que foram interrompidas.
+    ///
+    /// <para>Acumular em vez de guardar só a última execução é o que responde à pergunta que o
+    /// usuário faz de verdade: "quanto custou mapear este sistema?". Uma base gerada em cinco
+    /// retomadas custou a soma das cinco, não a da última.</para>
+    /// </summary>
+    public ConsumoDeTokens Consumo { get; set; } = ConsumoDeTokens.Zero;
 
     [JsonIgnore]
     public IReadOnlyList<ItemDoPlano> Pendentes =>
@@ -187,11 +224,29 @@ public sealed class EstadoDoProcessamento
         File.WriteAllText(caminho, JsonSerializer.Serialize(this, Formato));
     }
 
+    /// <summary>
+    /// Soma o que uma execução do Configurador custou ao total do sistema.
+    ///
+    /// <para>Chamada mesmo quando a execução falhou ou foi interrompida: a cota que ela queimou
+    /// não volta, e um relatório que só conta os sucessos mentiria justamente na situação em que
+    /// o usuário mais quer saber para onde foi o gasto.</para>
+    /// </summary>
+    public void RegistrarConsumo(ConsumoDeTokens consumo)
+    {
+        if (!consumo.Vazio)
+        {
+            Consumo += consumo;
+        }
+    }
+
     /// <summary>Esquece tudo — é o "recomeçar do zero" pedido pelo usuário.</summary>
     public void Limpar()
     {
         Plano.Clear();
         Livros.Clear();
+
+        // O consumo não é zerado: o que já foi gasto foi gasto, e recomeçar do zero é
+        // exatamente a hora em que o total acumulado importa.
 
         var caminho = CaminhoDoArquivo(ExigirCaminhos(), Sistema);
 
@@ -360,16 +415,21 @@ public sealed class EstadoDoProcessamento
         }
     }
 
-    /// <summary>Marca livros como já incorporados à base. Sem argumento, marca todos.</summary>
-    public void MarcarLivrosConcluidos(IEnumerable<string>? arquivos = null)
+    /// <summary>
+    /// Marca livros como já incorporados à base. Sem argumento, marca todos.
+    ///
+    /// <para>Os alvos são identificados por fonte <em>e</em> nome, e não só pelo nome: dois
+    /// livros homônimos em fontes diferentes — <c>Livro-do-Jogador.pdf</c> no jogo base e na
+    /// expansão, que é como PDFs baixados costumam se chamar — são dois livros, e marcar um deles
+    /// não pode marcar o outro.</para>
+    /// </summary>
+    public void MarcarLivrosConcluidos(IEnumerable<ChaveDeLivro>? alvos = null)
     {
-        var alvos = arquivos is null
-            ? null
-            : new HashSet<string>(arquivos.Select(arquivo => Path.GetFileName(arquivo) ?? arquivo), StringComparer.OrdinalIgnoreCase);
+        var procurados = alvos is null ? null : new HashSet<ChaveDeLivro>(alvos);
 
         for (var indice = 0; indice < Livros.Count; indice++)
         {
-            if (alvos is null || alvos.Contains(Livros[indice].Arquivo))
+            if (procurados is null || procurados.Contains(Livros[indice].Chave))
             {
                 Livros[indice] = Livros[indice] with { Estado = EstadoDoItem.Concluido };
             }
@@ -507,16 +567,16 @@ public sealed class EstadoDoProcessamento
         foreach (var caminho in Directory.EnumerateFiles(diretorio, "*.pdf", SearchOption.AllDirectories))
         {
             var informacao = new FileInfo(caminho);
-            var nome = informacao.Name;
-            var indice = Livros.FindIndex(livro => livro.Arquivo.Equals(nome, StringComparison.OrdinalIgnoreCase));
 
             var atual = new LivroDoSistema
             {
-                Arquivo = nome,
+                Arquivo = informacao.Name,
                 Fonte = FonteDoLivro(diretorio, caminho),
                 Tamanho = informacao.Length,
                 ModificadoEm = informacao.LastWriteTimeUtc.Ticks,
             };
+
+            var indice = IndiceDoLivro(atual.Chave, atual.Tamanho);
 
             if (indice < 0)
             {
@@ -544,6 +604,50 @@ public sealed class EstadoDoProcessamento
                 ? registrado with { Fonte = atual.Fonte, ModificadoEm = atual.ModificadoEm, Hash = hash }
                 : atual with { Hash = HashDoArquivo(caminho) };
         }
+    }
+
+    /// <summary>
+    /// Onde este livro está no registro.
+    ///
+    /// <para>Procura primeiro pela chave inteira (fonte e nome). Não achando, aceita um registro
+    /// de <em>outra</em> fonte com o mesmo nome e o mesmo tamanho: é o livro que o usuário moveu
+    /// de pasta, e reaproveitar o registro dele é o que evita reler um livro só porque ele mudou
+    /// de fonte — a leitura mais cara do aplicativo, refeita para chegar ao mesmo conteúdo.</para>
+    ///
+    /// <para>O tamanho é o que separa esse caso do outro: dois livros homônimos de fontes
+    /// diferentes que <em>não</em> são o mesmo arquivo têm tamanhos diferentes, e aí cada um
+    /// ganha o seu registro. Sem essa condição, importar o compêndio fundia os dois.</para>
+    /// </summary>
+    private int IndiceDoLivro(ChaveDeLivro chave, long tamanho)
+    {
+        var exato = Livros.FindIndex(livro => livro.Chave.Equals(chave));
+
+        if (exato >= 0)
+        {
+            return exato;
+        }
+
+        return Livros.FindIndex(livro =>
+            livro.Arquivo.Equals(chave.Arquivo, StringComparison.OrdinalIgnoreCase) &&
+            livro.Tamanho == tamanho &&
+            !ExisteEmDisco(livro.Chave));
+    }
+
+    /// <summary>
+    /// O livro daquele registro ainda está no lugar onde ele foi registrado?
+    ///
+    /// <para>Se estiver, o registro é dele e não pode ser reaproveitado por um homônimo de outra
+    /// fonte: os dois arquivos existem ao mesmo tempo, e são dois livros. Se não estiver, aquele
+    /// registro ficou órfão — é o livro que mudou de pasta.</para>
+    /// </summary>
+    private bool ExisteEmDisco(ChaveDeLivro chave)
+    {
+        if (_caminhos is null)
+        {
+            return false;
+        }
+
+        return File.Exists(Path.Combine(_caminhos.Entrada, Sistema, chave.Fonte, chave.Arquivo));
     }
 
     /// <summary>
