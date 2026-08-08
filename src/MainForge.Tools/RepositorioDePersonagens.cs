@@ -224,23 +224,46 @@ public static class RepositorioDePersonagens
     /// <para>Quem chama é o servidor MCP, logo depois de <c>preencher_ficha_personagem</c>: o
     /// PDF existir é o único sinal de conclusão que não depende de o modelo declarar que
     /// terminou.</para>
+    ///
+    /// <para>É aqui também que as duas regras de arquivo valem: em <c>Output/</c> fica <b>uma</b>
+    /// ficha por personagem — a anterior, se tinha outro nome, é apagada — e no dossiê fica uma
+    /// cópia por nível concluído, que é o histórico que a regeração destruiria.</para>
     /// </summary>
+    /// <param name="nivel">
+    /// O nível em que esta ficha foi concluída, informado pelo agente. Quando não vem, é deduzido
+    /// dos campos — e, se nem isso, o registro vai para o lugar reservado a "nível não informado".
+    /// </param>
     public static void RegistrarFichaGerada(
         CaminhosDoProjeto caminhos,
         string sistema,
         string id,
         string caminhoDaFicha,
-        IReadOnlyDictionary<string, string> campos)
+        IReadOnlyDictionary<string, string> campos,
+        int? nivel = null)
     {
         var personagem = Carregar(caminhos, sistema, id)
             ?? throw new ErroDeFerramenta($"Não há personagem '{id}' em Personagens/{sistema}/.");
 
         var evolucao = personagem.Status == StatusDoPersonagem.Concluido;
+        var fichaAnterior = personagem.FichaGerada;
+        var caminhoAbsoluto = CaminhosDoProjeto.ResolverDentroDe(caminhos.Raiz, caminhoDaFicha);
 
         personagem.FichaGerada = caminhoDaFicha.Replace('\\', '/');
+        personagem.FichaGeradaEm = DateTimeOffset.Now;
         personagem.Campos = new Dictionary<string, string>(campos);
         personagem.Status = StatusDoPersonagem.Concluido;
-        personagem.Anotar(evolucao ? $"Ficha regerada: {personagem.FichaGerada}" : $"Ficha gerada: {personagem.FichaGerada}");
+
+        var registro = FichasDoPersonagem.Arquivar(
+            caminhos,
+            personagem,
+            caminhoAbsoluto,
+            nivel ?? FichasDoPersonagem.DeduzirNivel(campos));
+
+        FichasDoPersonagem.ApagarAnterior(caminhos, fichaAnterior, caminhoAbsoluto);
+
+        personagem.Anotar(
+            $"{(evolucao ? "Ficha regerada" : "Ficha gerada")}: {personagem.FichaGerada}" +
+            (registro is null ? "." : $" (guardada no histórico como {registro.Rotulo})."));
 
         Salvar(caminhos, personagem);
     }

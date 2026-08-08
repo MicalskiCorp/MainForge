@@ -23,15 +23,37 @@ internal static class FluxoDeImportacaoDePersonagem
     {
         var caminhos = contexto.Caminhos;
 
-        ConsoleUi.Titulo("Importar personagem de uma ficha em PDF");
-        ConsoleUi.Info("A ficha precisa ser o PDF editável do sistema, com os campos preenchidos —");
-        ConsoleUi.Info("é de lá que os valores são lidos. PDF digitalizado ou achatado não serve.");
+        ConsoleUi.Titulo("Importar personagem");
+        ConsoleUi.Info($"Dois caminhos, decididos pela extensão do arquivo que você informar:");
+        ConsoleUi.Info($"  .pdf  — a ficha editável do sistema, preenchida. Entra a ficha, sem passado.");
+        ConsoleUi.Info($"  .zip  — pacote exportado por outra instalação. Entra o personagem inteiro,");
+        ConsoleUi.Info($"          com o histórico de cada nível.");
+        ConsoleUi.Detalhe("PDF digitalizado ou com o formulário achatado não serve: não há campo de onde ler.");
 
-        var ficha = LerFicha();
+        FichaPreenchida ficha;
 
-        if (ficha is null)
+        // Insiste até vir um arquivo que sirva: o erro comum aqui é de digitação, e mandar o
+        // usuário de volta ao menu a cada tentativa custa mais que repetir a pergunta.
+        while (true)
         {
-            return;
+            var arquivo = PerguntarArquivo();
+
+            if (arquivo is null)
+            {
+                return;
+            }
+
+            if (arquivo.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                FluxoDePacoteDePersonagem.Importar(contexto, arquivo);
+                return;
+            }
+
+            if (LerFicha(arquivo) is { } lida)
+            {
+                ficha = lida;
+                break;
+            }
         }
 
         ConsoleUi.Info("");
@@ -82,31 +104,54 @@ internal static class FluxoDeImportacaoDePersonagem
     }
 
     /// <summary>
-    /// Pede o caminho até vir um PDF que abra e tenha formulário. Insiste em vez de voltar ao
-    /// menu porque o erro mais comum aqui é de digitação, e porque a diferença entre "não achei o
-    /// arquivo" e "este PDF não tem campos" muda o que o usuário faz a seguir.
+    /// Pede o caminho até vir um arquivo que existe e é de um dos dois tipos. Insiste em vez de
+    /// voltar ao menu porque o erro mais comum aqui é de digitação — e um caminho arrastado para
+    /// o console vem com aspas, que é o que <see cref="EntradaDeArquivos.Limpar"/> tira.
     /// </summary>
-    private static FichaPreenchida? LerFicha()
+    private static string? PerguntarArquivo()
     {
         while (true)
         {
             ConsoleUi.Info("");
-            ConsoleUi.Detalhe("Enter numa linha vazia volta ao menu.");
-            var caminho = EntradaDeArquivos.Limpar(ConsoleUi.LerLinha("Caminho do PDF da ficha: "));
+            ConsoleUi.Detalhe("Arraste o arquivo para a janela para colar o caminho. Enter vazio volta ao menu.");
+            var caminho = EntradaDeArquivos.Limpar(ConsoleUi.LerLinha("Caminho do arquivo (.pdf ou .zip): "));
 
             if (caminho.Length == 0)
             {
                 return null;
             }
 
-            try
+            if (!File.Exists(caminho))
             {
-                return LeitorDeFichaPreenchida.Ler(caminho);
+                ConsoleUi.Erro($"Não encontrei '{caminho}'.");
+                continue;
             }
-            catch (Exception excecao) when (excecao is FileNotFoundException or InvalidOperationException or IOException)
+
+            if (caminho.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ||
+                caminho.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                ConsoleUi.Erro(excecao.Message);
+                return caminho;
             }
+
+            ConsoleUi.Erro("Informe a ficha em PDF do personagem ou um pacote .zip exportado pelo MainForge.");
+        }
+    }
+
+    /// <summary>
+    /// Lê a ficha, ou mostra por que aquele PDF não serve. A diferença entre "não achei o
+    /// arquivo", "não abre como PDF" e "este PDF não tem campos" muda o que o usuário faz a
+    /// seguir, então a mensagem da leitura vai para a tela como veio.
+    /// </summary>
+    private static FichaPreenchida? LerFicha(string caminho)
+    {
+        try
+        {
+            return LeitorDeFichaPreenchida.Ler(caminho);
+        }
+        catch (Exception excecao) when (excecao is FileNotFoundException or InvalidOperationException or IOException)
+        {
+            ConsoleUi.Erro(excecao.Message);
+            return null;
         }
     }
 

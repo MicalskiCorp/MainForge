@@ -13,6 +13,24 @@ public enum StatusDoPersonagem
     Descontinuado,
 }
 
+/// <summary>
+/// A ficha que ficou pronta num nível: um registro por nível do personagem.
+///
+/// <para><b>Por que guardar.</b> <c>Output/</c> tem uma ficha por personagem — a atual —, porque
+/// é entrega: quem abre a pasta procura "a ficha do Thoradin", não escolhe entre seis arquivos
+/// para descobrir qual vale. Mas a ficha de cada nível é história que não se refaz: subir de
+/// nível reescreve o PDF, e sem cópia o estado anterior some. Voltar um nível depois de uma
+/// evolução errada, ou só rever como o personagem era, deixa de ser possível.</para>
+/// </summary>
+/// <param name="Nivel">O nível em que esta ficha foi concluída, ou <c>null</c> quando não foi informado.</param>
+/// <param name="Arquivo">Caminho do PDF guardado, relativo à raiz do projeto.</param>
+/// <param name="Em">Quando ela foi gerada.</param>
+public sealed record FichaDeNivel(int? Nivel, string Arquivo, DateTimeOffset Em)
+{
+    /// <summary>Como o nível aparece na interface — inclusive quando não se sabe qual é.</summary>
+    public string Rotulo => Nivel is { } nivel ? $"nível {nivel}" : "nível não informado";
+}
+
 /// <summary>Uma linha do histórico do personagem: quando algo aconteceu e o que foi.</summary>
 public sealed class AnotacaoDoPersonagem
 {
@@ -73,10 +91,27 @@ public sealed class Personagem
     public string? FichaGerada { get; set; }
 
     /// <summary>
+    /// Quando a ficha foi gerada da última vez.
+    ///
+    /// <para><b>Por que não basta <see cref="FichaGerada"/>.</b> É por este campo que a interface
+    /// sabe que a geração acabou de acontecer e a conversa pode encerrar. O caminho não serve para
+    /// isso: numa evolução, o agente costuma reusar o mesmo nome de arquivo, e uma ficha regerada
+    /// por cima da anterior não muda uma letra dele — a conversa ficaria aberta depois de já ter
+    /// entregado o que o usuário veio buscar.</para>
+    /// </summary>
+    public DateTimeOffset? FichaGeradaEm { get; set; }
+
+    /// <summary>
     /// Os valores com que a ficha foi preenchida da última vez, por nome de campo do PDF. É o
     /// ponto de partida de uma evolução: subir de nível muda alguns campos, não todos.
     /// </summary>
     public Dictionary<string, string> Campos { get; set; } = [];
+
+    /// <summary>
+    /// As fichas guardadas, uma por nível, da mais antiga para a mais nova. A do nível atual é a
+    /// última — e é a mesma que está em <see cref="FichaGerada"/>.
+    /// </summary>
+    public List<FichaDeNivel> Fichas { get; set; } = [];
 
     public List<AnotacaoDoPersonagem> Historico { get; set; } = [];
 

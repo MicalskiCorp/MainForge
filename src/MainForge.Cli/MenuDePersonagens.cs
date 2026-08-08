@@ -24,10 +24,11 @@ internal static class MenuDePersonagens
 
             ConsoleUi.Titulo("Personagens");
             ConsoleUi.Info("  1) Criar personagem");
-            ConsoleUi.Info("  2) Importar de uma ficha em PDF preenchida");
+            ConsoleUi.Info("  2) Importar personagem (ficha em PDF ou pacote)");
             ConsoleUi.Info("  3) Continuar um em desenvolvimento");
             ConsoleUi.Info("  4) Evoluir ou alterar um pronto (nível, inventário, correções)");
-            ConsoleUi.Info("  5) Descontinuar ou reativar");
+            ConsoleUi.Info("  5) Exportar personagem (com o histórico de níveis)");
+            ConsoleUi.Info("  6) Descontinuar ou reativar");
             ConsoleUi.Info("  0) Voltar");
 
             switch (ConsoleUi.LerLinha("\nEscolha: "))
@@ -49,6 +50,10 @@ internal static class MenuDePersonagens
                     break;
 
                 case "5":
+                    FluxoDePacoteDePersonagem.Exportar(contexto, personagens);
+                    break;
+
+                case "6":
                     MudarStatus(contexto, personagens);
                     break;
 
@@ -222,6 +227,7 @@ internal static class MenuDePersonagens
         }
 
         MostrarDossie(contexto.Caminhos, escolhido);
+        MostrarHistoricoDeFichas(escolhido);
 
         ConsoleUi.Info("");
         ConsoleUi.Detalhe("A ficha em PDF é gerada de novo ao final, com os valores atualizados.");
@@ -341,6 +347,29 @@ internal static class MenuDePersonagens
         {
             ConsoleUi.Detalhe($"... e mais {linhas.Length - 20} linha(s) em Personagens/{personagem.Sistema}/{personagem.Id}/{RepositorioDePersonagens.NomeDaFichaEmTexto}.");
         }
+    }
+
+    /// <summary>
+    /// As fichas já guardadas, uma por nível. Aparece antes de evoluir porque é a informação que
+    /// muda a decisão: quem vai subir de nível quer saber de que nível está saindo, e quem errou
+    /// a evolução anterior precisa saber que o PDF de antes ainda existe.
+    /// </summary>
+    private static void MostrarHistoricoDeFichas(Personagem personagem)
+    {
+        if (personagem.Fichas.Count == 0)
+        {
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Info($"Fichas guardadas de '{personagem.Rotulo}':");
+
+        foreach (var ficha in personagem.Fichas)
+        {
+            ConsoleUi.Detalhe($"  {ficha.Rotulo,-24} {ficha.Em:dd/MM/yyyy}  {ficha.Arquivo}");
+        }
+
+        ConsoleUi.Detalhe($"A ficha atual continua em {personagem.FichaGerada} — em Output/ fica só ela.");
     }
 
     private static string Descrever(Personagem personagem)

@@ -159,6 +159,91 @@ public sealed class EscopoDoPersonagemTestes : IDisposable
     }
 
     /// <summary>
+    /// O agente pode esquecer o parâmetro `personagem` — ele é opcional no esquema da ferramenta.
+    /// Quando isso acontecia, o PDF saía e o dossiê não fechava: o personagem ficava "em
+    /// desenvolvimento" com a ficha pronta, a interface não via a conclusão para encerrar a
+    /// conversa, e o agente emendava a próxima etapa numa criação que já tinha acabado.
+    ///
+    /// <para>A sessão sabe de quem ela é. Quando o argumento falta, é o escopo que responde.</para>
+    /// </summary>
+    [Fact]
+    public async Task PreencherFicha_SemOArgumentoPersonagem_FechaODossieDaConversa()
+    {
+        PrepararTemplate();
+
+        var resultado = await CatalogoDaConversa().ExecutarAsync(
+            "preencher_ficha_personagem",
+            new JsonObject
+            {
+                ["sistema"] = Sistema,
+                ["campos"] = new JsonObject { ["Nome"] = "Thoradin" },
+                ["nomeArquivoSaida"] = "Thoradin.pdf",
+            },
+            CancellationToken.None);
+
+        var personagem = RepositorioDePersonagens.Carregar(_caminhos, Sistema, DestaConversa);
+
+        Assert.False(resultado.Erro);
+        Assert.NotNull(personagem);
+        Assert.Equal(StatusDoPersonagem.Concluido, personagem.Status);
+        Assert.NotNull(personagem.FichaGeradaEm);
+        Assert.Equal("Thoradin", personagem.Campos["Nome"]);
+    }
+
+    /// <summary>
+    /// Numa evolução o agente costuma reusar o nome do arquivo, e a ficha regerada fica com o
+    /// caminho idêntico à anterior. É por isso que a interface olha a <b>data</b> da geração para
+    /// saber que ela aconteceu — pelo caminho, a conversa ficaria aberta depois de já ter
+    /// entregado o que o usuário pediu.
+    /// </summary>
+    [Fact]
+    public async Task PreencherFicha_MesmoNomeDeArquivo_MarcaUmaGeracaoNova()
+    {
+        PrepararTemplate();
+
+        await PreencherAsync("Thoradin.pdf");
+        var primeira = RepositorioDePersonagens.Carregar(_caminhos, Sistema, DestaConversa)!.FichaGeradaEm;
+
+        await PreencherAsync("Thoradin.pdf");
+        var segunda = RepositorioDePersonagens.Carregar(_caminhos, Sistema, DestaConversa)!;
+
+        Assert.NotNull(primeira);
+        Assert.NotEqual(primeira, segunda.FichaGeradaEm);
+        Assert.Equal("Output/Personagens/Thoradin.pdf", segunda.FichaGerada);
+    }
+
+    private async Task PreencherAsync(string nomeArquivoSaida)
+    {
+        // A data da geração vem do relógio, e duas chamadas seguidas caem no mesmo tique em
+        // máquina rápida: a espera é o que faz o teste medir a regra, e não a resolução do relógio.
+        await Task.Delay(15);
+
+        var resultado = await CatalogoDaConversa().ExecutarAsync(
+            "preencher_ficha_personagem",
+            new JsonObject
+            {
+                ["sistema"] = Sistema,
+                ["personagem"] = DestaConversa,
+                ["campos"] = new JsonObject { ["Nome"] = "Thoradin" },
+                ["nomeArquivoSaida"] = nomeArquivoSaida,
+            },
+            CancellationToken.None);
+
+        Assert.False(resultado.Erro, resultado.Texto);
+    }
+
+    private void PrepararTemplate()
+    {
+        var diretorio = Path.Combine(_caminhos.Modelos, Sistema);
+        Directory.CreateDirectory(diretorio);
+
+        File.Copy(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "FichaTeste.pdf"),
+            Path.Combine(diretorio, "Ficha.pdf"),
+            overwrite: true);
+    }
+
+    /// <summary>
     /// O escopo atravessa o processo pelo ambiente: se o personagem não sobreviver a essa
     /// viagem, a conferência não existe onde ela precisa existir.
     /// </summary>

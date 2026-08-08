@@ -216,9 +216,10 @@ MainForge.sln
 │                            com a mesma divisão por fonte, um index.md por nível e o
 │                            registro de progresso do sistema
 ├── Personagens/          -> o dossiê de cada personagem (situação, fontes da mesa, sessão e
-│                            o estado dele em texto). É o que torna a criação retomável
+│                            o estado dele em texto). É o que torna a criação retomável.
+│                            Dentro de cada um, Fichas/ guarda um PDF por nível concluído
 ├── Output/
-│   ├── Personagens/      -> fichas finais preenchidas, e a cópia das que foram importadas
+│   ├── Personagens/      -> uma ficha por personagem: a atual
 │   └── Pacotes/          -> sistemas exportados para levar a outra máquina
 └── _preferencias.json    -> escolhas de gasto desta instalação (perfil de execução, teto em
                              dólares). Não é versionado: quem roda no Opus e quem roda no
@@ -314,9 +315,9 @@ A tela lista os personagens com a situação de cada um e as ações:
 
 - **Criar** (Agente Dungeon Master) — escolhe o sistema, pergunta quais expansões aquela mesa
   usa e daí é conversa livre, até a ficha em PDF sair em `Output/Personagens/`.
-- **Importar de uma ficha em PDF preenchida** — o personagem que você já joga entra no
-  aplicativo pelo arquivo que já existe. Veja [Importar um personagem que já
-  existe](#importar-um-personagem-que-já-existe).
+- **Importar personagem** — de uma ficha em PDF preenchida ou de um pacote exportado por outra
+  instalação, e **exportar** um personagem com o histórico de níveis. Veja [Importar um
+  personagem que já existe](#importar-um-personagem-que-já-existe).
 - **Continuar** um que ficou em desenvolvimento, **evoluir** um pronto (subir de nível, mexer no
   inventário, corrigir dados) e **descontinuar ou reativar**. Veja
   [Personagem é um objeto do aplicativo](#personagem-é-um-objeto-do-aplicativo).
@@ -391,8 +392,42 @@ reconstrói o personagem sem reler a base inteira — por isso ele é escrito co
 para quem não acompanhou a conversa, e não como um diário do que mudou.
 
 Quem fecha a criação é o PDF, não o modelo dizendo que terminou: `preencher_ficha_personagem`
-recebe o identificador do personagem e é ela que marca o dossiê como concluído. Evoluir um
-personagem gera a ficha de novo, a partir do template em branco, com os valores atualizados.
+recebe o identificador do personagem e é ela que marca o dossiê como concluído. Quando o
+identificador não vem no argumento, ele vem do escopo da sessão — o PDF sair sem o dossiê fechar
+deixava o personagem "em desenvolvimento" com a ficha pronta.
+
+### Uma ficha em `Output/`, um histórico por nível
+
+`Output/Personagens/` guarda **uma ficha por personagem** — a atual, sempre no mesmo arquivo.
+Ela é entrega: quem abre a pasta procura "a ficha do Thoradin", e não escolhe entre
+`Thoradin.pdf`, `Thoradin-nivel3.pdf` e `Thoradin-importada.pdf` qual é a que vale hoje. Por
+isso o nome do arquivo é do aplicativo, não do agente: `<Personagem>.pdf`, ou
+`<Sistema>-<Personagem>.pdf` quando dois sistemas têm um personagem de mesmo nome.
+
+Mas a ficha de cada nível é história que não se refaz, e subir de nível reescreve o PDF. Antes
+disso, uma cópia vai para `Personagens/<Sistema>/<Personagem>/Fichas/`, **um registro por
+nível**:
+
+```
+Personagens/D&D5e/Thoradin/
+├── personagem.json
+├── ficha.md
+└── Fichas/
+    ├── nivel-01.pdf
+    ├── nivel-02.pdf
+    └── nivel-03.pdf
+```
+
+É um por nível, não um por geração: corrigir a ficha do nível 3 três vezes deixa **uma** ficha do
+nível 3 — a última, que foi a que ficou valendo. O nível vem do agente, que o informa junto com
+os campos; quando não vem, é lido dos campos da própria ficha, e só quando o nome do campo não
+deixa dúvida ("Nível de Magia" preenchido com 1 não faz o personagem de nível 5 virar nível 1).
+
+**A ficha gerada encerra a conversa** e devolve o usuário ao menu, com o personagem concluído.
+Era isso que ele veio fazer, e manter a conversa aberta ali é o ponto exato em que o agente
+emenda a etapa seguinte — "quer subir de nível?" — logo depois de terminar a criação. Cada
+mudança futura é uma conversa nova, aberta por "evoluir ou alterar": ela gera a ficha de novo, a
+partir do template em branco, com os valores atualizados.
 
 Um personagem [importado de uma ficha em PDF](#importar-um-personagem-que-já-existe) nasce nesse
 mesmo estado — tem PDF, logo está concluído —, com a diferença de que o `ficha.md` dele começa
@@ -427,8 +462,10 @@ O que acontece na importação:
    compartilham o modelo, dariam um palpite errado sem como corrigir.
 2. **Quais expansões esta mesa usa?** A mesma pergunta da criação, pelo mesmo motivo — ela vale
    para sempre, e é ela que decide o que o agente vai conseguir ler nas evoluções seguintes.
-3. O personagem nasce **concluído**, com a cópia da ficha em `Output/Personagens/` e um `ficha.md`
-   com os valores transcritos campo a campo, marcado em toda linha possível como **não conferido**.
+3. O personagem nasce **concluído**, com a cópia da ficha em `Output/Personagens/` (com o mesmo
+   nome que qualquer ficha dele teria — a primeira evolução substitui esta) e um `ficha.md` com os
+   valores transcritos campo a campo, marcado em toda linha possível como **não conferido**. A
+   ficha trazida abre o histórico de níveis dele.
 
 Os valores que a ficha em branco do sistema não tem — outra edição, versão adaptada pela mesa —
 ficam registrados no dossiê mas **fora** dos campos de geração: `preencher_ficha_personagem`
@@ -443,6 +480,36 @@ a ficha que existe é a que o usuário trouxe.
 > **Ficha digitalizada não serve.** A importação lê campos de formulário; um PDF escaneado,
 > impresso para arquivo ou com o formulário achatado não tem de onde tirar valor nenhum, e a
 > mensagem diz isso em vez de falhar genericamente.
+
+### Levar um personagem para outra máquina
+
+A mesma tela aceita um **pacote de personagem** (`.mainforge-personagem.zip`), e o menu de
+personagens tem a exportação que o gera. A escolha entre os dois caminhos é pela extensão do
+arquivo informado — `.pdf` traz uma ficha, `.zip` traz o personagem inteiro:
+
+| | O que entra | Quando é o seu caso |
+| --- | --- | --- |
+| Ficha em PDF | os valores da ficha, sem passado | você tem o PDF do personagem e mais nada |
+| Pacote `.zip` | dossiê, estado em texto e a ficha de **cada nível** | o personagem já foi gerenciado aqui, em outra máquina |
+
+O pacote é separado do [pacote de sistema](#levar-um-sistema-para-outra-máquina) de propósito:
+são coisas de donos diferentes. O sistema é o resultado de ler os livros — igual para todo mundo
+que tem aqueles livros, e caro de refazer. O personagem é de quem joga, e muda de máquina com a
+pessoa; juntá-los faria exportar um sistema vazar os personagens de quem o exportou.
+
+Na importação, o identificador do personagem pode colidir com um que já existe ali. O padrão é
+**recusar**: o dossiê que está lá pode ser outro personagem de mesmo nome, e o histórico dele não
+volta. Dá para importar com outro identificador ou confirmar a substituição — e, com outro
+identificador, os caminhos do histórico são reapontados para a pasta nova, senão o personagem
+importado ficaria procurando as próprias fichas na pasta da máquina de origem.
+
+A base de conhecimento **não** vai no pacote de personagem. Sem ela o personagem entra do mesmo
+jeito (perder o dossiê por causa disso seria pior), mas não dá para evoluí-lo até o sistema
+existir naquela máquina — e a tela avisa isso na hora da importação.
+
+> **Nada disso é versionado.** `Personagens/` inteiro, o histórico de níveis dentro dele e
+> `Output/Pacotes/` estão no `.gitignore`: são dados do usuário, dizem que livros ele tem e o que
+> está jogando, e mudam de máquina para máquina e de sistema para sistema.
 
 ## Levar um sistema para outra máquina
 

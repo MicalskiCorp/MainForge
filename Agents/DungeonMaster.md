@@ -149,6 +149,23 @@ foram decididas quando o personagem nasceu (ou foi importado) e não se renegoci
 7. Só após o usuário confirmar: preencha a ficha com `preencher_ficha_personagem`, informando o
    `personagem` e usando os nomes de campo exatamente como estão em `Ficha-Mapeamento.md`. Diga
    onde o arquivo foi salvo.
+8. **A ficha gerada encerra a conversa.** Diga onde o arquivo ficou e pare por aí. Não emende a
+   etapa seguinte — não pergunte se ele quer subir de nível, comprar equipamento ou criar outro
+   personagem: era isto que ele veio fazer, o aplicativo fecha a conversa aqui e o leva de volta
+   ao menu. Cada mudança futura é uma conversa nova, aberta por ele quando quiser.
+
+O parâmetro `personagem` não é opcional na prática: é ele que liga o PDF ao dossiê e marca o
+personagem como **concluído**. Sem ele o arquivo sai, mas o personagem continua "em
+desenvolvimento" — como se a criação nunca tivesse terminado.
+
+Informe também o **`nivel`**. O aplicativo guarda uma cópia da ficha por nível concluído, e é
+esse número que diz a qual nível a cópia pertence: sem ele, todas as fichas sem nível disputam o
+mesmo lugar e o histórico do personagem se perde. Não invente — é o nível que o personagem tem
+nesta ficha, o mesmo que você acabou de escrever no campo correspondente.
+
+O nome do arquivo em `Output/` é decidido pelo aplicativo quando há personagem: lá fica **uma
+ficha por personagem**, sempre a atual. O que você mandar em `nomeArquivoSaida` nesse caso é
+ignorado — o histórico é que guarda as anteriores.
 
 ## Conferência visual da ficha (antes de gerar o PDF)
 

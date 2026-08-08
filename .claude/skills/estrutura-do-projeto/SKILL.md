@@ -38,8 +38,9 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
 | `Sistemas/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Personagens/<Sistema>/<Id>/` | dossiê do personagem: `personagem.json` (situação, fontes da mesa, sessão) + `ficha.md` (estado dele em texto) | `RepositorioDePersonagens` — o C# grava o JSON, o agente grava o `.md` pelo MCP | a CLI e o Dungeon Master |
-| `Output/Personagens/` | fichas finais preenchidas e a cópia das importadas (`<Id>-importada.pdf`) | `PreenchedorDeFicha`, `ImportadorDePersonagem` | o usuário |
-| `Output/Pacotes/` | sistemas exportados (`.mainforge.zip`) para levar a outra máquina | `PacoteDeSistema` | o usuário |
+| `Personagens/<Sistema>/<Id>/Fichas/` | histórico: uma cópia do PDF por nível concluído (`nivel-03.pdf`) | `FichasDoPersonagem` | o usuário, pela CLI |
+| `Output/Personagens/` | **uma** ficha por personagem — a atual, em `<Id>.pdf` | `PreenchedorDeFicha`, `ImportadorDePersonagem` | o usuário |
+| `Output/Pacotes/` | sistemas exportados (`.mainforge.zip`) e personagens exportados com o histórico de níveis (`.mainforge-personagem.zip`) | `PacoteDeSistema`, `PacoteDePersonagem` | o usuário |
 | `_preferencias.json` | escolhas de gasto de cota desta instalação (perfil de execução, teto em dólares) | `PreferenciasDoUsuario`, pelo menu Ambiente | `ContextoDoAplicativo` na abertura |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
 | `.github/workflows/` | fluxo que publica o binário como release | pessoas | GitHub Actions |
@@ -93,8 +94,8 @@ MainForge.Core        modelos de domínio (SistemaRpg, EscopoDaSessao, ConsumoDe
   │                         (PreenchedorDeFicha escreve, LeitorDeFichaPreenchida lê uma ficha
   │                         já preenchida e ImportadorDePersonagem a vira dossiê), escrita em
   │                         Sistemas/, IndiceDeConhecimento, EstadoDoProcessamento,
-  │                         ImportadorDeSistema, RepositorioDePersonagens, PacoteDeSistema,
-  │                         PreferenciasDoUsuario,
+  │                         ImportadorDeSistema, RepositorioDePersonagens, FichasDoPersonagem,
+  │                         PacoteDeSistema, PacoteDePersonagem, PreferenciasDoUsuario,
   │                         as buscas (BuscaEmTexto e as duas que a usam) e a conversão dos
   │                         livros para texto (ConversorDeLivros -> markitdown,
   │                         ExtratorDeTextoDePdf -> PdfPig, LimpezaDoTextoDoLivro).
@@ -164,7 +165,10 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
 6. **PDF é binário no Git** (`.gitattributes`): com `core.autocrlf=true` a conversão de fim de
    linha corrompe os offsets internos do arquivo.
 7. **`Output/` é do usuário.** Nada do código lê de lá para tomar decisão, e o Configurador tem
-   `Read(Output/**)` negado.
+   `Read(Output/**)` negado. É **uma ficha por personagem**, com o nome decidido pelo aplicativo
+   (`FichasDoPersonagem.NomeNaSaida`) e não pelo modelo: quem abre a pasta procura "a ficha do
+   Thoradin", não escolhe entre quatro arquivos qual é o que vale hoje. O que a regeração
+   substituiria é guardado antes em `Personagens/<Sistema>/<Id>/Fichas/`, um PDF por nível.
 8. **Todo conteúdo mora numa fonte.** Em `Input/` e em `Sistemas/`, nada de conteúdo fica
    solto na raiz do sistema — a única exceção é `SistemaRpg.ArquivosDaFicha`. Código novo que
    monte caminho de sistema passa pela fonte (`DiretorioDaFonte`,
@@ -181,7 +185,14 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    e `EscopoDoPersonagemTestes` travam o comportamento.
 10. **Caminho de dentro de um `.zip` é caminho vindo de fora.** A importação de pacote resolve
     cada entrada com `ResolverDentroDe` antes de extrair — um `.zip` pode carregar `../../` (o
-    "zip slip") tanto quanto um caminho vindo do modelo.
+    "zip slip") tanto quanto um caminho vindo do modelo. Vale para os dois pacotes
+    (`PacoteDeSistema` e `PacoteDePersonagem`), e cada um tem teste disso.
+
+    São **dois** pacotes de propósito: o de sistema é o resultado de ler os livros, igual para
+    quem tem aqueles livros; o de personagem é de quem joga. Exportar um sistema não pode levar
+    junto os personagens de quem o exportou. Caminho gravado dentro de um pacote de personagem é
+    da instalação de origem — a importação reaponta o histórico para a pasta de destino, senão o
+    personagem chega procurando as próprias fichas na máquina de onde saiu.
 
 11. **Turno é mais caro que resultado.** Cada chamada de ferramenta é um turno, e todo turno
     reenvia a conversa inteira ao modelo. Numa sessão que já leu meio livro, evitar uma chamada

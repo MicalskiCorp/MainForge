@@ -200,14 +200,15 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
                   "type": "object",
                   "properties": {
                     "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Templates/)." },
-                    "personagem": { "type": "string", "description": "Identificador do personagem, como a mensagem inicial informou. Liga o PDF ao dossie em Personagens/ e marca a criacao como concluida. Informe sempre que a conversa tiver um." },
+                    "personagem": { "type": "string", "description": "Identificador do personagem, como a mensagem inicial informou. Liga o PDF ao dossie em Personagens/ e marca a criacao como concluida, encerrando a conversa. Informe sempre que a conversa tiver um." },
                     "arquivoModelo": { "type": "string", "description": "Nome do PDF de template dentro de Templates/<sistema>/. Só é obrigatório se houver mais de um PDF nessa pasta." },
                     "campos": {
                       "type": "object",
                       "description": "Mapa de nome do campo do formulário PDF para o valor (texto) a preencher. Campo de marcação (checkbox) aceita \"true\"/\"false\", os nomes de estado do próprio PDF (\"Yes\"/\"Off\") ou texto vazio para deixar desmarcado.",
                       "additionalProperties": { "type": "string" }
                     },
-                    "nomeArquivoSaida": { "type": "string", "description": "Nome do arquivo PDF de saída (sem caminho), ex.: \"Thoradin.pdf\". Salvo em Output/Personagens/." }
+                    "nivel": { "type": "integer", "description": "Nivel do personagem nesta ficha. Informe sempre: o aplicativo guarda uma copia por nivel concluido, e sem o numero o registro nao sabe a que nivel pertence." },
+                    "nomeArquivoSaida": { "type": "string", "description": "Nome do arquivo PDF de saída (sem caminho), ex.: \"Thoradin.pdf\". Salvo em Output/Personagens/. Quando 'personagem' e informado, quem decide o nome e o aplicativo: e uma ficha por personagem ali, sempre a atual." }
                   },
                   "required": ["sistema", "campos", "nomeArquivoSaida"]
                 }
@@ -453,25 +454,43 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
         // marcaria o dossiê alheio como concluído.
         ConferirEscopoDoPersonagem(sistema, Opcional(argumentos, "personagem"));
 
+        // Quando o argumento não vem, quem responde é o escopo da sessão. O parâmetro era só
+        // pedido no texto da ferramenta, e omiti-lo gerava o PDF sem fechar o dossiê: o
+        // personagem ficava "em desenvolvimento" com a ficha pronta, a interface não via a
+        // conclusão para encerrar a conversa, e o agente emendava a próxima etapa (subir de
+        // nível) numa criação que, para o usuário, tinha acabado.
+        var identificador = Opcional(argumentos, "personagem") ?? escopo?.Personagem;
+
+        var dossie = identificador is null
+            ? null
+            : RepositorioDePersonagens.Carregar(caminhos, sistema, identificador);
+
+        // O nome do arquivo de um personagem é do aplicativo, não do modelo: em Output/ fica uma
+        // ficha por personagem, sempre a atual. Deixar o agente nomear fazia cada evolução somar
+        // um PDF à pasta, e nada dizia qual dos quatro era o que valia hoje.
         var gerado = PreenchedorDeFicha.Preencher(
             caminhos,
             sistema,
             Opcional(argumentos, "arquivoModelo"),
             campos,
-            Obrigatorio(argumentos, "nomeArquivoSaida"));
+            dossie is null
+                ? Obrigatorio(argumentos, "nomeArquivoSaida")
+                : FichasDoPersonagem.NomeNaSaida(caminhos, dossie));
 
         // O PDF existir é o sinal de conclusão que não depende de o modelo declarar que
         // terminou — por isso é aqui, e não numa ferramenta à parte, que o dossiê fecha.
-        if (Opcional(argumentos, "personagem") is not { } personagem)
+        if (identificador is not { } personagem)
         {
             return new ResultadoDaFerramenta($"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)).");
         }
 
-        RepositorioDePersonagens.RegistrarFichaGerada(caminhos, sistema, personagem, gerado, campos);
+        RepositorioDePersonagens.RegistrarFichaGerada(
+            caminhos, sistema, personagem, gerado, campos, Inteiro(argumentos, "nivel"));
 
         return new ResultadoDaFerramenta(
             $"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)). " +
-            $"O personagem '{personagem}' está registrado como concluído e pode ser evoluído depois.");
+            $"O personagem '{personagem}' está registrado como concluído e pode ser evoluído depois. " +
+            "Uma cópia desta ficha ficou guardada no histórico de níveis dele.");
     }
 
     /// <summary>

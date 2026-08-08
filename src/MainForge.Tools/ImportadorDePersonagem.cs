@@ -152,13 +152,23 @@ public static class ImportadorDePersonagem
         var personagem = RepositorioDePersonagens.Criar(caminhos, sistema.Id, nome, fontes);
 
         var nomeDoArquivo = Path.GetFileName(ficha.Arquivo);
-        var copia = CopiarParaSaida(caminhos, ficha.Arquivo, personagem.Id);
+        var copia = CopiarParaSaida(caminhos, ficha.Arquivo, personagem);
 
         personagem.Campos = new Dictionary<string, string>(aproveitados);
-        personagem.FichaGerada = copia.Replace('\\', '/');
+        personagem.FichaGerada = Path.GetRelativePath(caminhos.Raiz, copia).Replace('\\', '/');
+        personagem.FichaGeradaEm = DateTimeOffset.Now;
         personagem.Status = StatusDoPersonagem.Concluido;
         personagem.Resumo = $"Importado de {nomeDoArquivo} — ainda não conferido contra as regras.";
-        personagem.Anotar($"Importado da ficha preenchida '{nomeDoArquivo}' ({ficha.Valores.Count} campo(s) com valor).");
+
+        // A ficha trazida é o estado do personagem no nível em que ele está hoje: ela abre o
+        // histórico. O nível sai dos próprios campos quando a ficha o diz sem ambiguidade — e a
+        // conferência com o Dungeon Master corrige o registro se ele estiver errado.
+        var registro = FichasDoPersonagem.Arquivar(
+            caminhos, personagem, copia, FichasDoPersonagem.DeduzirNivel(ficha.Valores));
+
+        personagem.Anotar(
+            $"Importado da ficha preenchida '{nomeDoArquivo}' ({ficha.Valores.Count} campo(s) com valor)" +
+            (registro is null ? "." : $", guardada no histórico como {registro.Rotulo}."));
 
         File.WriteAllText(
             RepositorioDePersonagens.CaminhoDaFichaEmTexto(caminhos, sistema.Id, personagem.Id),
@@ -220,25 +230,24 @@ public static class ImportadorDePersonagem
     ///
     /// <para><b>Por que copiar.</b> O original está numa pasta qualquer do usuário e pode ser
     /// movido, renomeado ou aberto e salvo por cima a qualquer momento; o dossiê aponta para um
-    /// caminho relativo à raiz do projeto porque tudo o mais aqui aponta. A cópia também é o
-    /// estado "antes" da primeira evolução — a próxima geração de ficha escreve um arquivo novo,
-    /// e ter de onde comparar já salvou personagem em mais de um aplicativo.</para>
+    /// caminho relativo à raiz do projeto porque tudo o mais aqui aponta.</para>
+    ///
+    /// <para>Ela entra com o mesmo nome que qualquer ficha daquele personagem teria
+    /// (<see cref="FichasDoPersonagem.NomeNaSaida"/>): <c>Output/</c> guarda uma ficha por
+    /// personagem, e a primeira evolução substitui esta. O estado "antes" não se perde — quem o
+    /// guarda é o histórico por nível, dentro do dossiê.</para>
     /// </summary>
-    private static string CopiarParaSaida(CaminhosDoProjeto caminhos, string origem, string id)
+    private static string CopiarParaSaida(CaminhosDoProjeto caminhos, string origem, Personagem personagem)
     {
         Directory.CreateDirectory(caminhos.SaidaPersonagens);
 
-        var destino = CaminhosDoProjeto.ResolverDentroDe(caminhos.SaidaPersonagens, $"{id}-importada.pdf");
-        var sufixo = 2;
+        var destino = CaminhosDoProjeto.ResolverDentroDe(
+            caminhos.SaidaPersonagens,
+            FichasDoPersonagem.NomeNaSaida(caminhos, personagem));
 
-        while (File.Exists(destino))
-        {
-            destino = CaminhosDoProjeto.ResolverDentroDe(caminhos.SaidaPersonagens, $"{id}-importada-{sufixo++}.pdf");
-        }
+        File.Copy(origem, destino, overwrite: true);
 
-        File.Copy(origem, destino);
-
-        return Path.GetRelativePath(caminhos.Raiz, destino);
+        return destino;
     }
 
     /// <summary>
