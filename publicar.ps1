@@ -9,7 +9,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Versao = "1.1.0",
+    [string]$Versao = "1.2.0",
     [string]$Destino = "publicado"
 )
 
