@@ -32,6 +32,8 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `src/` | os seis projetos C# | pessoas | pessoas |
 | `tests/MainForge.Tests` | testes xunit de tudo em `src/` | pessoas | `dotnet test` |
 | `tools/ValidacaoPontaAPonta` | harness manual do fluxo completo, **fora da .sln** de propósito (gasta cota real) | pessoas | `dotnet run` manual |
+| `tools/gerar-icone.ps1` | o desenho do ícone do executável (pixel art, 16x16) e a gravação do `.ico` | pessoas | `./tools/gerar-icone.ps1` |
+| `src/MainForge.Cli/mainforge.ico` | resultado do script acima, apontado por `<ApplicationIcon>` — **derivado, não fonte** | `gerar-icone.ps1` | o Windows |
 | `Agents/` | prompt de sistema de cada agente, em Markdown (`Configurador.md`, `DungeonMaster.md`) | pessoas | `DefinicaoDeAgente.CarregarPromptDeSistema` |
 | `Input/<Sistema>/<fonte>/` | livros oficiais em PDF, um subdiretório por sistema e, dentro, um por fonte | `ImportadorDeSistema` | agente Configurador (`Read`) |
 | `Input/<Sistema>/<fonte>/_texto/` | os mesmos livros em Markdown — é o que o Configurador lê de verdade | `ConversorDeLivros` | Configurador (`Read`, `procurar_no_texto_dos_livros`) |
@@ -131,6 +133,7 @@ resolvedor de fontes do PdfSharp lê `C:\Windows\Fonts`).
 | ferramenta nova para o agente | a lógica em `MainForge.Tools`, o schema em [CatalogoDeFerramentas.cs](src/MainForge.Mcp/CatalogoDeFerramentas.cs), o despacho em [ServidorMcp.cs](src/MainForge.Mcp/ServidorMcp.cs) | conceder em `DefinicaoDeAgente.FerramentasMcpPermitidas`, acrescentar à lista de `ServidorMcpTestes` **e** citar no `Agents/<Agente>.md` — ferramenta não anunciada no prompt não é usada. Se ela lê `Sistemas/` ou grava personagem, precisa conferir o `EscopoDaSessao` (veja a regra 9) |
 | decisão sobre gasto de cota | modelo e esforço em [AjusteDeExecucao.cs](src/MainForge.ClaudeCode/AjusteDeExecucao.cs); flag nova do `claude` em `ProcessoDoClaudeCode.MontarInicio` | trave em `LinhaDeComandoDoClaudeCodeTestes` — nada ali quebra o build ao sumir, só volta a custar caro em silêncio |
 | opção nova de menu | um `FluxoDeXxx.cs` em `src/MainForge.Cli/`, ligado ao `MenuDeXxx.cs` do assunto (Sistemas, Personagens, Ambiente) | o menu principal tem três portas e não ganha uma quarta sem motivo forte; texto de UI sempre por `ConsoleUi`; o estado da janela do console fica em `JanelaDoConsole`, o único ponto com P/Invoke |
+| mudança no ícone do aplicativo | o mapa de pixels em [gerar-icone.ps1](tools/gerar-icone.ps1), nunca o `.ico` | rode o script (`-Amostra` grava um PNG para conferir no olho) e comite o `.ico` junto — editar o binário à mão faz o desenho e o resultado divergirem para sempre |
 | prompt/instrução de agente | `Agents/<Agente>.md` (nunca embutido em C#) | se for um agente novo, um `static readonly DefinicaoDeAgente` em [DefinicaoDeAgente.cs](src/MainForge.Agents/DefinicaoDeAgente.cs) |
 | conceito de domínio puro | `src/MainForge.Core/` | só se não depender de PDF, de agente nem de interface |
 | algo sobre executar o Claude Code | `src/MainForge.ClaudeCode/` | mantenha o projeto ignorante de RPG |
