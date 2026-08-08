@@ -87,7 +87,11 @@ internal static class FluxoDePersonagem
         }
 
         var proximaMensagem = PrimeiraMensagem(modo, sistema, personagem, fontes, pedidoInicial, caminhos);
-        var fichaConhecida = personagem.FichaGerada;
+
+        // Quando a ficha atual foi gerada, para reconhecer a próxima geração como um evento desta
+        // conversa. É a data, e não o caminho: numa evolução o agente costuma reusar o nome do
+        // arquivo, e uma ficha regerada por cima da anterior tem o caminho idêntico.
+        var fichaConhecida = personagem.FichaGeradaEm;
 
         // O que a sessão já tinha somado quando o turno anterior fechou. A diferença para o total
         // atual é o gasto deste turno — é ela que vai para o dossiê, senão os primeiros turnos
@@ -123,17 +127,26 @@ internal static class FluxoDePersonagem
             ConsoleUi.EscreverColorido("Dungeon Master:", ConsoleColor.Magenta);
             ConsoleUi.Info(resposta);
 
-            if (personagem.FichaGerada is { } ficha && ficha != fichaConhecida)
+            // A ficha em PDF é o fim desta conversa, seja ela criação ou evolução: era isto que
+            // o usuário veio fazer, e o dossiê já está fechado como concluído. Perguntar
+            // "continuar?" deixava a conversa aberta no ponto em que o agente naturalmente emenda
+            // a etapa seguinte — subir de nível logo depois de terminar a criação —, e o que o
+            // usuário queria era voltar ao menu com o personagem pronto. A próxima mudança é uma
+            // conversa nova, aberta por "evoluir ou alterar", que é onde ele decide o que muda.
+            if (personagem.FichaGeradaEm is { } geradaEm && geradaEm != fichaConhecida)
             {
-                fichaConhecida = ficha;
+                ConsoleUi.Sucesso($"\nFicha gerada: {personagem.FichaGerada}");
 
-                ConsoleUi.Sucesso($"\nFicha gerada: {ficha}");
-                ConsoleUi.Detalhe($"Personagem marcado como {Personagem.DescreverStatus(personagem.Status)}.");
-
-                if (!ConsoleUi.Confirmar("Continuar a conversa?"))
+                if (personagem.Fichas.LastOrDefault() is { } registro)
                 {
-                    return;
+                    ConsoleUi.Detalhe($"Guardada no histórico ({registro.Rotulo}): {registro.Arquivo}");
                 }
+
+                ConsoleUi.Detalhe("Para subir de nível, mexer no inventário ou corrigir algo, use 'Evoluir ou");
+                ConsoleUi.Detalhe("alterar um pronto' no menu de personagens — é uma conversa nova.");
+
+                RelatarOndeParou(caminhos, personagem, sessao.Consumo);
+                return;
             }
 
             ConsoleUi.Info("");
@@ -513,9 +526,15 @@ internal static class FluxoDePersonagem
         var temDossie = RepositorioDePersonagens
             .LerFichaEmTexto(caminhos, atual.Sistema, atual.Id).Length > 0;
 
-        ConsoleUi.Sucesso(temDossie
-            ? $"'{atual.Rotulo}' está salvo como {Personagem.DescreverStatus(atual.Status)} — dá para continuar pelo menu de personagens."
-            : $"'{atual.Rotulo}' ficou registrado, mas o agente ainda não gravou nada do estado dele.");
+        ConsoleUi.Sucesso((temDossie, atual.Status) switch
+        {
+            (true, StatusDoPersonagem.Concluido) =>
+                $"'{atual.Rotulo}' está concluído — dossiê e ficha salvos.",
+            (true, _) =>
+                $"'{atual.Rotulo}' está salvo como {Personagem.DescreverStatus(atual.Status)} — dá para continuar pelo menu de personagens.",
+            _ =>
+                $"'{atual.Rotulo}' ficou registrado, mas o agente ainda não gravou nada do estado dele.",
+        });
 
         if (!temDossie)
         {
