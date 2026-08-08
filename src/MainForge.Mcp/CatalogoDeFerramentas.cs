@@ -24,12 +24,13 @@ public sealed record ResultadoDaFerramenta(string Texto, bool Erro = false);
 /// pelo <c>Read</c> nativo: uma ferramenta MCP que devolvesse o PDF só faria o Claude Code
 /// gravar o binário em disco e passar o caminho ao modelo, que não conseguiria lê-lo.
 /// </summary>
-/// <param name="restricao">
-/// As fontes que valem nesta sessão, quando há uma mesa definida. Ferramenta que lê
-/// <c>Sistemas/</c> precisa conferi-la: a escolha das expansões é aplicada como negação de
-/// <c>Read</c> por caminho, e negação de ferramenta do Claude Code não alcança este processo.
+/// <param name="escopo">
+/// O que esta sessão pode tocar — as fontes da mesa e o personagem dela —, quando há uma mesa
+/// definida. Ferramenta que lê <c>Sistemas/</c> ou grava um personagem precisa conferi-lo: a
+/// escolha das expansões e a identidade do personagem são aplicadas do lado do agente, e
+/// nenhuma dessas restrições alcança este processo.
 /// </param>
-public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoDeFontes? restricao = null)
+public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSessao? escopo = null)
 {
     public JsonArray Descrever()
     {
@@ -108,7 +109,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
 
             Ferramenta(
                 "procurar_no_texto_dos_livros",
-                "Procura um termo no texto extraído dos livros do sistema (a versão Markdown dos PDFs, em Input/<sistema>/<fonte>/_texto/) e devolve arquivo, linha e seção de cada ocorrência. Use para achar onde uma regra está antes de abrir o arquivo com Read: ler o livro inteiro para achar uma tabela é o maior desperdício de cota que existe aqui. A busca ignora acentos e maiúsculas.",
+                "Procura um termo no texto extraído dos livros do sistema (a versão Markdown dos PDFs, em Input/<sistema>/<fonte>/_texto/) e devolve arquivo, linha e seção de cada ocorrência. Use para achar onde uma regra está antes de abrir o arquivo com Read: ler o livro inteiro para achar uma tabela é o maior desperdício de cota que existe aqui. Informe 'contexto' para receber as linhas em volta e dispensar o Read seguinte. A busca ignora acentos e maiúsculas.",
                 """
                 {
                   "type": "object",
@@ -116,22 +117,40 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
                     "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Input/)." },
                     "termo": { "type": "string", "description": "Texto a procurar, ex.: \"Pontos de Vida\". Ignora acentos e maiúsculas." },
                     "livro": { "type": "string", "description": "Nome do PDF a que restringir a busca. Sem ele, procura em todos os livros do sistema." },
-                    "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." }
+                    "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." },
+                    "contexto": { "type": "integer", "description": "Linhas ao redor de cada ocorrência a devolver junto (0 a 40, padrão 0). Com um valor aqui, o trecho vem no resultado e você nao precisa de um Read depois — o que sai mais barato que a chamada extra. Combine com um 'maximo' menor." }
                   },
                   "required": ["sistema", "termo"]
                 }
                 """),
 
             Ferramenta(
+                "estrutura_do_livro",
+                "Devolve o sumário de um livro convertido: os títulos com o número da linha de cada um. Use ANTES de procurar ou ler, num livro que você ainda não conhece — é o mapa que diz onde cada assunto começa, por algumas centenas de tokens. Sem ele, achar a seção de magias num livro de 30 mil linhas é tentativa e erro.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Input/)." },
+                    "livro": { "type": "string", "description": "Nome do PDF a que restringir. Sem ele, devolve o sumário de todos os livros do sistema." },
+                    "nivelMaximo": { "type": "integer", "description": "Profundidade máxima de título (1 = só os capítulos, 6 = tudo; padrão 6). Comece raso num livro grande." },
+                    "maximo": { "type": "integer", "description": "Máximo de títulos por livro (padrão 300)." }
+                  },
+                  "required": ["sistema"]
+                }
+                """),
+
+            Ferramenta(
                 "procurar_no_conhecimento",
-                "Procura um termo na base de conhecimento do sistema (Sistemas/<sistema>/), dentro das fontes que esta mesa usa, e devolve arquivo, linha e seção de cada ocorrência. Use quando a pergunta não cai direto na estrutura do índice (\"onde está a regra de carga?\", \"que magias curam?\"): descer índice por índice custa uma leitura por nível. A busca ignora acentos e maiúsculas.",
+                "Procura um termo na base de conhecimento do sistema (Sistemas/<sistema>/), dentro das fontes que esta mesa usa, e devolve arquivo, linha e seção de cada ocorrência. Use quando a pergunta não cai direto na estrutura do índice (\"onde está a regra de carga?\", \"que magias curam?\"): descer índice por índice custa uma leitura por nível. Informe 'contexto' para receber as linhas em volta e responder sem abrir o arquivo. A busca ignora acentos e maiúsculas.",
                 """
                 {
                   "type": "object",
                   "properties": {
                     "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
                     "termo": { "type": "string", "description": "Texto a procurar, ex.: \"Pontos de Vida\". Ignora acentos e maiúsculas." },
-                    "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." }
+                    "maximo": { "type": "integer", "description": "Máximo de ocorrências a devolver (padrão 30)." },
+                    "contexto": { "type": "integer", "description": "Linhas ao redor de cada ocorrência a devolver junto (0 a 40, padrão 0). Numa conversa longa, receber o trecho aqui sai mais barato que um Read depois: cada chamada a mais reenvia a conversa inteira. Combine com um 'maximo' menor." }
                   },
                   "required": ["sistema", "termo"]
                 }
@@ -210,6 +229,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
                 "registrar_plano_de_conhecimento" => RegistrarPlano(argumentos),
                 "consultar_progresso" => ConsultarProgresso(argumentos),
                 "procurar_no_texto_dos_livros" => ProcurarNosLivros(argumentos),
+                "estrutura_do_livro" => EstruturaDoLivro(argumentos),
                 "procurar_no_conhecimento" => ProcurarNoConhecimento(argumentos),
                 "registrar_personagem" => RegistrarPersonagem(argumentos),
                 "listar_campos_da_ficha" => ListarCamposDaFicha(argumentos),
@@ -332,9 +352,31 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
             Obrigatorio(argumentos, "sistema"),
             termo,
             Opcional(argumentos, "livro"),
-            Math.Clamp(maximo, 1, 200));
+            Math.Clamp(maximo, 1, 200),
+            Inteiro(argumentos, "contexto") ?? BuscaEmTexto.ContextoPadrao);
 
         return new ResultadoDaFerramenta(BuscaNosLivros.Descrever(ocorrencias, termo, maximo));
+    }
+
+    /// <summary>
+    /// O sumário do livro: o mapa que <c>Sistemas/</c> tem por <c>index.md</c> e <c>Input/</c>
+    /// não tinha por nada.
+    /// </summary>
+    private ResultadoDaFerramenta EstruturaDoLivro(JsonObject argumentos)
+    {
+        var maximo = Math.Clamp(
+            Inteiro(argumentos, "maximo") ?? Tools.EstruturaDoLivro.MaximoPadraoDeTitulos,
+            1,
+            2000);
+
+        var livros = Tools.EstruturaDoLivro.Levantar(
+            caminhos,
+            Obrigatorio(argumentos, "sistema"),
+            Opcional(argumentos, "livro"),
+            Math.Clamp(Inteiro(argumentos, "nivelMaximo") ?? 6, 1, 6),
+            maximo);
+
+        return new ResultadoDaFerramenta(Tools.EstruturaDoLivro.Descrever(livros, maximo));
     }
 
     /// <summary>
@@ -351,18 +393,33 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
             caminhos,
             Obrigatorio(argumentos, "sistema"),
             termo,
-            restricao,
-            Math.Clamp(maximo, 1, 200));
+            escopo,
+            Math.Clamp(maximo, 1, 200),
+            Inteiro(argumentos, "contexto") ?? BuscaEmTexto.ContextoPadrao);
 
         return new ResultadoDaFerramenta(BuscaNoConhecimento.Descrever(ocorrencias, termo, maximo));
     }
 
+    /// <summary>
+    /// Grava o dossiê — e confere antes que ele é o desta conversa.
+    ///
+    /// <para><b>Por que a conferência.</b> O campo <c>ficha</c> é o estado <em>completo</em> do
+    /// personagem: gravar no dossiê errado não corrompe um pedaço, substitui o personagem
+    /// inteiro por outro. O prompt proíbe mexer em personagem alheio, mas proibição no prompt é
+    /// pedido, e o identificador chega aqui como texto que o modelo escreveu — numa evolução, com
+    /// dois personagens do mesmo sistema em jogo, trocá-lo é um erro plausível e irreversível.</para>
+    /// </summary>
     private ResultadoDaFerramenta RegistrarPersonagem(JsonObject argumentos)
     {
+        var sistema = Obrigatorio(argumentos, "sistema");
+        var id = Obrigatorio(argumentos, "personagem");
+
+        ConferirEscopoDoPersonagem(sistema, id);
+
         var personagem = RepositorioDePersonagens.Registrar(
             caminhos,
-            Obrigatorio(argumentos, "sistema"),
-            Obrigatorio(argumentos, "personagem"),
+            sistema,
+            id,
             Opcional(argumentos, "nome"),
             Opcional(argumentos, "resumo"),
             Obrigatorio(argumentos, "ficha"),
@@ -392,6 +449,10 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
         var sistema = Obrigatorio(argumentos, "sistema");
         var campos = MapaDeTexto(argumentos, "campos");
 
+        // Antes de gerar o PDF: gerar a ficha de outro personagem escreveria em Output/ e ainda
+        // marcaria o dossiê alheio como concluído.
+        ConferirEscopoDoPersonagem(sistema, Opcional(argumentos, "personagem"));
+
         var gerado = PreenchedorDeFicha.Preencher(
             caminhos,
             sistema,
@@ -411,6 +472,41 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, RestricaoD
         return new ResultadoDaFerramenta(
             $"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)). " +
             $"O personagem '{personagem}' está registrado como concluído e pode ser evoluído depois.");
+    }
+
+    /// <summary>
+    /// Esta sessão pode mexer neste personagem deste sistema?
+    ///
+    /// <para>É a regra 9 da estrutura do projeto aplicada às ferramentas de personagem: a negação
+    /// de <c>Read</c> por caminho para no agente e não alcança este processo, então o que
+    /// <em>escreve</em> precisa conferir o escopo aqui, em C#. A busca no conhecimento já fazia
+    /// isso; as duas ferramentas que gravam o personagem, não — e são elas que perdem dado.</para>
+    ///
+    /// <para>Sessão sem escopo (o Configurador, o servidor rodado à mão) não tem o que conferir e
+    /// passa direto. Quem quer confinar precisa mandar o escopo — recusar por ausência dele
+    /// quebraria todo uso legítimo sem mesa definida.</para>
+    /// </summary>
+    private void ConferirEscopoDoPersonagem(string sistema, string? personagem)
+    {
+        if (escopo is null)
+        {
+            return;
+        }
+
+        if (!escopo.EhOSistema(sistema))
+        {
+            throw new ErroDeFerramenta(
+                $"Esta conversa é do sistema '{escopo.Sistema}' — não dá para mexer em personagem " +
+                $"de '{sistema}'. Use o sistema desta conversa.");
+        }
+
+        if (personagem is not null && !escopo.PermitePersonagem(personagem))
+        {
+            throw new ErroDeFerramenta(
+                $"Esta conversa é do personagem '{escopo.Personagem}', e '{personagem}' é outro. " +
+                "Use o identificador que a mensagem inicial informou — gravar por cima do dossiê " +
+                "de outro personagem apagaria o estado inteiro dele.");
+        }
     }
 
     private static string Obrigatorio(JsonObject argumentos, string campo)

@@ -259,15 +259,38 @@ public static class RepositorioDePersonagens
         Salvar(caminhos, personagem);
     }
 
-    /// <summary>Guarda em qual conversa do Claude Code este personagem está sendo feito.</summary>
-    public static void RegistrarSessao(CaminhosDoProjeto caminhos, Personagem personagem, string? idDaSessao)
+    /// <summary>
+    /// Guarda em qual conversa do Claude Code este personagem está sendo feito e soma o que o
+    /// turno custou.
+    /// </summary>
+    /// <param name="consumoDoTurno">
+    /// Só o gasto deste turno, não o da conversa inteira: quem chama é um laço que passa por aqui
+    /// a cada resposta, e somar o acumulado da sessão contaria os primeiros turnos várias vezes.
+    /// </param>
+    public static void RegistrarSessao(
+        CaminhosDoProjeto caminhos,
+        Personagem personagem,
+        string? idDaSessao,
+        ConsumoDeTokens? consumoDoTurno = null)
     {
-        if (idDaSessao is null || personagem.IdDaSessao == idDaSessao)
+        var mudouSessao = idDaSessao is not null && personagem.IdDaSessao != idDaSessao;
+        var houveGasto = consumoDoTurno is { Vazio: false };
+
+        if (!mudouSessao && !houveGasto)
         {
             return;
         }
 
-        personagem.IdDaSessao = idDaSessao;
+        if (mudouSessao)
+        {
+            personagem.IdDaSessao = idDaSessao;
+        }
+
+        if (consumoDoTurno is { Vazio: false } gasto)
+        {
+            personagem.Consumo += gasto;
+        }
+
         Salvar(caminhos, personagem);
     }
 

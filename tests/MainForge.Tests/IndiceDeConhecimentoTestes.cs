@@ -4,6 +4,140 @@ using MainForge.Tools;
 namespace MainForge.Tests;
 
 /// <summary>
+/// A reconstrução parcial — só a cadeia de pastas até o arquivo gravado — precisa produzir o
+/// mesmo índice que a completa. É a otimização que tira o processamento de uma base grande do
+/// tempo quadrático, e ela só vale se o resultado for indistinguível.
+/// </summary>
+public sealed class IndiceParcialTestes : IDisposable
+{
+    private const string Sistema = "Aventura&Cia";
+
+    private readonly string _raiz = Path.Combine(Path.GetTempPath(), "mainforge-indice-parcial-" + Guid.NewGuid());
+    private readonly CaminhosDoProjeto _caminhos;
+
+    public IndiceParcialTestes() => _caminhos = new CaminhosDoProjeto(_raiz);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_raiz))
+        {
+            Directory.Delete(_raiz, recursive: true);
+        }
+    }
+
+    private void Gravar(string relativo, string conteudo)
+    {
+        var completo = Path.Combine(_caminhos.Conhecimento, Sistema, relativo.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(completo)!);
+        File.WriteAllText(completo, conteudo);
+    }
+
+    private string LerIndiceDe(string pasta) =>
+        File.ReadAllText(Path.Combine(
+            _caminhos.Conhecimento,
+            Sistema,
+            pasta.Replace('/', Path.DirectorySeparatorChar),
+            SistemaRpg.NomeDoIndice));
+
+    private void MontarBase()
+    {
+        Gravar("base/Criacao-de-Personagem.md", "# Criação\n\nO passo a passo.");
+        Gravar("base/Classes/Guerreiro.md", "# Guerreiro\n\nA classe marcial.");
+        Gravar("base/Classes/Mago.md", "# Mago\n\nA classe arcana.");
+        Gravar("base/Magias/Circulo-1.md", "# Círculo 1\n\nAs magias iniciais.");
+        Gravar("Compendio-Arcano/Classes/Bruxo.md", "# Bruxo\n\nA classe do pacto.");
+    }
+
+    /// <summary>
+    /// A propriedade que a otimização precisa preservar: gravar arquivo por arquivo com a
+    /// reconstrução parcial dá o mesmo resultado que reconstruir tudo no fim.
+    /// </summary>
+    [Fact]
+    public async Task ReconstrucaoParcialDaOMesmoResultadoQueACompleta()
+    {
+        await EscritorDeConhecimento.EscreverAsync(
+            _caminhos, Sistema, "base/Classes/Guerreiro.md", "# Guerreiro", "A classe marcial");
+        await EscritorDeConhecimento.EscreverAsync(
+            _caminhos, Sistema, "base/Classes/Mago.md", "# Mago", "A classe arcana");
+        await EscritorDeConhecimento.EscreverAsync(
+            _caminhos, Sistema, "Compendio-Arcano/Classes/Bruxo.md", "# Bruxo", "A classe do pacto");
+
+        var porGravacao = new[] { "", "base", "base/Classes", "Compendio-Arcano", "Compendio-Arcano/Classes" }
+            .ToDictionary(pasta => pasta, LerIndiceDe);
+
+        IndiceDeConhecimento.Reconstruir(_caminhos, Sistema);
+
+        foreach (var (pasta, esperado) in porGravacao)
+        {
+            Assert.Equal(esperado, LerIndiceDe(pasta));
+        }
+    }
+
+    /// <summary>
+    /// Uma pasta nova precisa aparecer na lista de subpastas de todos os níveis acima dela, e
+    /// não só do pai imediato.
+    /// </summary>
+    [Fact]
+    public void ReconstruirAte_PastaNova_ApareceEmTodaACadeiaAcima()
+    {
+        MontarBase();
+        IndiceDeConhecimento.Reconstruir(_caminhos, Sistema);
+
+        Gravar("base/Equipamentos/Armas.md", "# Armas\n\nA tabela de armas.");
+
+        IndiceDeConhecimento.ReconstruirAte(
+            _caminhos,
+            Sistema,
+            "base/Equipamentos/Armas.md",
+            new Dictionary<string, string> { ["base/Equipamentos/Armas.md"] = "Tabela de armas" });
+
+        Assert.Contains("Armas.md", LerIndiceDe("base/Equipamentos"));
+        Assert.Contains("Tabela de armas", LerIndiceDe("base/Equipamentos"));
+        Assert.Contains("Equipamentos", LerIndiceDe("base"));
+    }
+
+    /// <summary>
+    /// O contrário também precisa valer: o que não está na cadeia não pode ser tocado. Se fosse,
+    /// a otimização não estaria otimizando nada.
+    /// </summary>
+    [Fact]
+    public void ReconstruirAte_NaoMexeNoIndiceDeOutroRamo()
+    {
+        MontarBase();
+        IndiceDeConhecimento.Reconstruir(_caminhos, Sistema);
+
+        var outroRamo = Path.Combine(
+            _caminhos.Conhecimento, Sistema, "Compendio-Arcano", "Classes", SistemaRpg.NomeDoIndice);
+
+        var antes = File.GetLastWriteTimeUtc(outroRamo);
+
+        Gravar("base/Classes/Ladino.md", "# Ladino");
+        IndiceDeConhecimento.ReconstruirAte(_caminhos, Sistema, "base/Classes/Ladino.md");
+
+        Assert.Equal(antes, File.GetLastWriteTimeUtc(outroRamo));
+        Assert.Contains("Ladino.md", LerIndiceDe("base/Classes"));
+    }
+
+    /// <summary>
+    /// A descrição de uma subpasta é repetida no índice do nível de cima. Numa reconstrução
+    /// parcial ela não é recalculada — precisa vir do index.md que a subpasta já tem.
+    /// </summary>
+    [Fact]
+    public void ReconstruirAte_PreservaADescricaoDasSubpastasQueNaoForamRefeitas()
+    {
+        MontarBase();
+
+        EscritorDeConhecimento.DescreverPasta(
+            _caminhos, Sistema, "base/Magias", "Todas as magias por círculo.");
+
+        Gravar("base/Classes/Ladino.md", "# Ladino");
+        IndiceDeConhecimento.ReconstruirAte(_caminhos, Sistema, "base/Classes/Ladino.md");
+
+        Assert.Contains("Todas as magias por círculo.", LerIndiceDe("base"));
+    }
+}
+
+/// <summary>
 /// O índice é o que permite ao Dungeon Master achar uma regra sem abrir a base inteira, então
 /// o que estes testes protegem é a propriedade "o índice diz a verdade sobre a pasta": não
 /// perde descrição já registrada, não lista arquivo que sumiu, e não quebra com nome de

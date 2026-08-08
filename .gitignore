@@ -57,6 +57,10 @@ appsettings.Local.json
 # então versioná-lo só serviria para vazar essa lista e sujar o diff a cada execução.
 /Sistemas/index.md
 
+# Escolhas de gasto de cota desta instalação: quem roda no Opus e quem roda no Haiku é decisão
+# de quem paga a assinatura, não do projeto.
+/_preferencias.json
+
 # Pacote gerado por publicar.ps1.
 /publicado/
 

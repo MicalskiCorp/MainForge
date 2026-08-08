@@ -1,3 +1,5 @@
+using MainForge.Core;
+
 namespace MainForge.ClaudeCode;
 
 /// <summary>
@@ -44,6 +46,10 @@ public sealed record AguardandoLimiteDeUso(
 /// <paramref name="IdDaSessao"/> precisa ser guardado para retomar a conversa no turno
 /// seguinte.
 /// </summary>
+/// <param name="Consumo">
+/// O que este turno custou, quando o Claude Code informou. <c>null</c> num turno que morreu antes
+/// de o CLI fechar a conta.
+/// </param>
 /// <param name="Limite">
 /// Preenchido quando a falha foi cota da assinatura esgotada, e não erro. Quem chama decide se
 /// espera a janela virar ou desiste.
@@ -53,5 +59,5 @@ public sealed record TurnoConcluido(
     string? IdDaSessao,
     bool Falhou,
     string? MotivoDaFalha,
-    decimal? CustoUsd,
+    ConsumoDeTokens? Consumo,
     LimiteDeUso? Limite = null) : EventoDeAgente;

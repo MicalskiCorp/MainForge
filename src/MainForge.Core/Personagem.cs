@@ -80,6 +80,13 @@ public sealed class Personagem
 
     public List<AnotacaoDoPersonagem> Historico { get; set; } = [];
 
+    /// <summary>
+    /// O que este personagem já custou de cota, somando todas as conversas que o produziram.
+    /// Acumula entre sessões: criar, continuar e evoluir vão todos para a mesma conta, que é
+    /// como o usuário pensa no gasto ("quanto me custou este personagem?").
+    /// </summary>
+    public ConsumoDeTokens Consumo { get; set; } = ConsumoDeTokens.Zero;
+
     /// <summary>O nome de exibição: o do personagem, ou o identificador enquanto ele não tem nome.</summary>
     public string Rotulo => Nome.Length > 0 ? Nome : Id;
 

@@ -1,14 +1,6 @@
-using System.Text;
 using MainForge.Core;
 
 namespace MainForge.Tools;
-
-/// <summary>Uma ocorrência do termo procurado dentro do texto de um livro.</summary>
-/// <param name="Livro">Caminho do .md convertido, relativo à raiz do projeto.</param>
-/// <param name="Linha">Número da linha, para o agente abrir o trecho com <c>Read</c> e um offset.</param>
-/// <param name="Secao">O título Markdown mais próximo acima da linha — diz em que parte do livro ela está.</param>
-/// <param name="Trecho">A linha encontrada, encurtada.</param>
-public sealed record OcorrenciaNoLivro(string Livro, int Linha, string Secao, string Trecho);
 
 /// <summary>
 /// Procura um termo no texto que <see cref="ConversorDeLivros"/> extraiu dos livros de um
@@ -22,9 +14,10 @@ public sealed record OcorrenciaNoLivro(string Livro, int Linha, string Secao, st
 /// a todos os agentes, porque cada uma delas alcança qualquer arquivo da máquina; esta alcança
 /// só <c>Input/&lt;sistema&gt;/**/_texto/</c>, e o confinamento é aplicado em C#.</para>
 ///
-/// <para>O resultado é deliberadamente magro — arquivo, linha, seção e a linha encontrada. Quem
-/// decide o que abrir é o agente, com <c>Read</c> e um offset; devolver o contexto inteiro de
-/// cada ocorrência traria de volta o custo que se está tentando cortar.</para>
+/// <para><b>O resultado pode vir com contexto.</b> Antes ele era só arquivo, linha e a linha
+/// achada, e o agente precisava de um <c>Read</c> em seguida: duas chamadas para uma pergunta. Com
+/// as linhas ao redor no próprio resultado, o caso comum vira uma chamada — e um turno a menos
+/// vale mais que o texto que ele economizaria, porque cada turno reenvia a conversa inteira.</para>
 /// </summary>
 public static class BuscaNosLivros
 {
@@ -34,12 +27,16 @@ public static class BuscaNosLivros
     /// Nome do PDF (ou do .md) a que restringir a busca. Sem ele, procura em todos os livros do
     /// sistema.
     /// </param>
-    public static IReadOnlyList<OcorrenciaNoLivro> Procurar(
+    /// <param name="linhasDeContexto">
+    /// Quantas linhas ao redor de cada ocorrência devolver. Zero devolve só a linha achada.
+    /// </param>
+    public static IReadOnlyList<Ocorrencia> Procurar(
         CaminhosDoProjeto caminhos,
         string sistema,
         string termo,
         string? livro = null,
-        int maximo = MaximoPadraoDeOcorrencias)
+        int maximo = MaximoPadraoDeOcorrencias,
+        int linhasDeContexto = BuscaEmTexto.ContextoPadrao)
     {
         if (string.IsNullOrWhiteSpace(termo))
         {
@@ -63,77 +60,27 @@ public static class BuscaNosLivros
                 ". Leia o PDF com Read, ou peça ao usuário para reprocessar o sistema com o markitdown instalado.");
         }
 
-        var procurado = SemAcento(termo.Trim());
-        var achados = new List<OcorrenciaNoLivro>();
-
-        foreach (var texto in textos)
-        {
-            var secao = "";
-            var numero = 0;
-
-            foreach (var linha in File.ReadLines(texto))
-            {
-                numero++;
-
-                if (linha.StartsWith('#'))
-                {
-                    secao = linha.TrimStart('#', ' ').Trim();
-                }
-
-                if (!SemAcento(linha).Contains(procurado, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                achados.Add(new OcorrenciaNoLivro(
-                    Path.GetRelativePath(caminhos.Raiz, texto).Replace('\\', '/'),
-                    numero,
-                    secao,
-                    Encurtar(linha.Trim())));
-
-                if (achados.Count >= maximo)
-                {
-                    return achados;
-                }
-            }
-        }
-
-        return achados;
+        return BuscaEmTexto.Procurar(
+            textos,
+            arquivo => Path.GetRelativePath(caminhos.Raiz, arquivo).Replace('\\', '/'),
+            termo,
+            maximo,
+            linhasDeContexto);
     }
 
     /// <summary>O mesmo resultado já formatado para o modelo ler.</summary>
-    public static string Descrever(IReadOnlyList<OcorrenciaNoLivro> ocorrencias, string termo, int maximo)
-    {
-        if (ocorrencias.Count == 0)
-        {
-            return $"Nenhuma ocorrência de '{termo}' no texto dos livros.";
-        }
+    public static string Descrever(IReadOnlyList<Ocorrencia> ocorrencias, string termo, int maximo) =>
+        BuscaEmTexto.Descrever(
+            ocorrencias,
+            termo,
+            maximo,
+            "no texto dos livros",
+            ocorrencias.Any(ocorrencia => ocorrencia.Contexto is { Length: > 0 })
+                ? "O trecho de cada ocorrência está acima. Só abra o arquivo com Read se precisar de mais do que isso."
+                : "Abra o trecho com Read no arquivo acima, usando offset próximo da linha indicada — " +
+                  "ou repita a busca com 'contexto' para receber as linhas em volta sem outra chamada.");
 
-        var texto = new StringBuilder();
-
-        texto.AppendLine(ocorrencias.Count >= maximo
-            ? $"As primeiras {ocorrencias.Count} ocorrências de '{termo}' (pode haver mais — refine o termo):"
-            : $"{ocorrencias.Count} ocorrência(s) de '{termo}':");
-
-        foreach (var grupo in ocorrencias.GroupBy(ocorrencia => ocorrencia.Livro))
-        {
-            texto.AppendLine();
-            texto.AppendLine(grupo.Key);
-
-            foreach (var ocorrencia in grupo)
-            {
-                var secao = ocorrencia.Secao.Length > 0 ? $" [{ocorrencia.Secao}]" : "";
-                texto.AppendLine($"  linha {ocorrencia.Linha}{secao}: {ocorrencia.Trecho}");
-            }
-        }
-
-        texto.AppendLine();
-        texto.AppendLine("Abra o trecho com Read no arquivo acima, usando offset próximo da linha indicada.");
-
-        return texto.ToString();
-    }
-
-    private static IReadOnlyList<string> TextosDoSistema(string diretorioDoSistema, string? livro)
+    public static IReadOnlyList<string> TextosDoSistema(string diretorioDoSistema, string? livro)
     {
         var alvo = livro is null ? null : Path.GetFileNameWithoutExtension(livro.Trim());
 
@@ -147,9 +94,4 @@ public static class BuscaNosLivros
                 .Order(),
         ];
     }
-
-    private static string Encurtar(string linha) =>
-        linha.Length <= 160 ? linha : string.Concat(linha.AsSpan(0, 160), "...");
-
-    private static string SemAcento(string texto) => TextoNormalizado.SemAcento(texto);
 }

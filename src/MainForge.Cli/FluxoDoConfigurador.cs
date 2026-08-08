@@ -145,7 +145,15 @@ internal static class FluxoDoConfigurador
             ConsoleUi.Detalhe(LeituraDePdf.ComoInstalar);
         }
 
-        var livrosNovos = estado.LivrosPendentes.Select(livro => livro.Arquivo).ToList();
+        // Aqui, e não só no menu Ambiente: o processamento é longo, e um CLAUDE.md carregado a
+        // cada turno de um processamento longo é o lugar onde ele custa de verdade.
+        if (MemoriaNoCaminho.Aviso(caminhos.Raiz) is { } memoria)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Aviso(memoria);
+        }
+
+        var livrosNovos = estado.LivrosPendentes.Select(livro => livro.Chave).ToList();
         var conhecimentoAntes = ContarConhecimentoPorFonte(caminhos, escolhido);
         // Depois da conversão, de propósito: o prompt manda ler o .md de cada livro que passou a
         // ter um.
@@ -173,20 +181,20 @@ internal static class FluxoDoConfigurador
         }
         catch (OperationCanceledException)
         {
-            RelatarInterrupcao(caminhos, escolhido);
+            RelatarInterrupcao(caminhos, escolhido, sessao.Consumo);
             throw;
         }
         catch (Exception excecao)
         {
             ConsoleUi.Erro($"Falha ao processar '{escolhido.Id}': {excecao.Message}");
-            RelatarInterrupcao(caminhos, escolhido);
+            RelatarInterrupcao(caminhos, escolhido, sessao.Consumo);
             return;
         }
 
         ConsoleUi.Info("");
         ConsoleUi.Info(resposta);
 
-        Concluir(caminhos, escolhido, livrosNovos, conhecimentoAntes);
+        Concluir(caminhos, escolhido, livrosNovos, conhecimentoAntes, sessao.Consumo);
     }
 
     /// <summary>
@@ -240,6 +248,16 @@ internal static class FluxoDoConfigurador
                     if (resultado.Detalhe is { Length: > 0 } aviso)
                     {
                         ConsoleUi.Detalhe($"    ({aviso}; o texto saiu pelo {resultado.Conversor})");
+                    }
+
+                    // O que a limpeza tirou é cota poupada em toda leitura futura daquele livro,
+                    // e é a única economia deste aplicativo que dá para mostrar em número antes
+                    // de o agente começar.
+                    if (resultado.Limpeza is { LinhasRemovidas: > 0 } limpeza)
+                    {
+                        ConsoleUi.Detalhe(
+                            $"    limpeza: {limpeza.LinhasRemovidas} linha(s) de cabeçalho/rodapé fora, " +
+                            $"{limpeza.ProporcaoRemovida:P0} menor");
                     }
 
                     break;
@@ -314,7 +332,11 @@ internal static class FluxoDoConfigurador
         var estado = EstadoDoProcessamento.Carregar(caminhos, sistema.Id);
         estado.SincronizarComDisco();
 
-        return $"{sistema.Id}  ({estado.Resumo()})";
+        // O consumo entra aqui, e não só no fim da execução, porque é na hora de escolher entre
+        // "continuar" e "recomeçar do zero" que ele muda a decisão.
+        var consumo = estado.Consumo.Vazio ? "" : $"; já custou {estado.Consumo.Descrever()}";
+
+        return $"{sistema.Id}  ({estado.Resumo()}{consumo})";
     }
 
     private static void MostrarSituacao(
@@ -326,16 +348,22 @@ internal static class FluxoDoConfigurador
 
         foreach (var pdf in pdfs)
         {
-            var nome = Path.GetFileName(pdf);
-            var lido = estado.Livros.Any(livro =>
-                livro.Arquivo.Equals(nome, StringComparison.OrdinalIgnoreCase) &&
-                livro.Estado == EstadoDoItem.Concluido);
-
-            var situacao = lido ? "já processado" : "ainda não lido";
-
             // O caminho relativo mostra a fonte junto do nome: é o que deixa ver, de relance,
             // que um compêndio caiu na pasta do jogo base por engano.
             var relativo = Path.GetRelativePath(diretorioDoSistema, pdf);
+
+            // Pela fonte também, e não só pelo nome: com dois livros homônimos em fontes
+            // diferentes, comparar só o nome mostraria os dois como processados assim que um
+            // deles fosse.
+            var chave = new ChaveDeLivro(
+                Path.GetDirectoryName(relativo) is { Length: > 0 } pasta ? pasta : FonteDoSistema.IdDaBase,
+                Path.GetFileName(pdf));
+
+            var lido = estado.Livros.Any(livro =>
+                livro.Chave.Equals(chave) && livro.Estado == EstadoDoItem.Concluido);
+
+            var situacao = lido ? "já processado" : "ainda não lido";
+
             ConsoleUi.Detalhe($"  · {relativo} ({new FileInfo(pdf).Length / 1024} KB) — {situacao}");
         }
 
@@ -551,14 +579,16 @@ internal static class FluxoDoConfigurador
     private static void Concluir(
         CaminhosDoProjeto caminhos,
         SistemaRpg sistema,
-        IReadOnlyList<string> livrosLidos,
-        IReadOnlyDictionary<string, int> conhecimentoAntes)
+        IReadOnlyList<ChaveDeLivro> livrosLidos,
+        IReadOnlyDictionary<string, int> conhecimentoAntes,
+        ConsumoDeTokens consumo)
     {
         var diretorioConhecimento = sistema.DiretorioConhecimento(caminhos);
 
         if (!Directory.Exists(diretorioConhecimento))
         {
             ConsoleUi.Erro($"O agente terminou mas não criou {diretorioConhecimento}.");
+            RegistrarConsumo(caminhos, sistema, consumo);
             return;
         }
 
@@ -566,6 +596,7 @@ internal static class FluxoDoConfigurador
 
         var estado = EstadoDoProcessamento.Carregar(caminhos, sistema.Id);
         estado.SincronizarComDisco();
+        estado.RegistrarConsumo(consumo);
 
         // Livro só conta como lido quando o agente terminou o turno sem deixar pendência **e** a
         // fonte dele ganhou conteúdo nesta execução.
@@ -576,7 +607,8 @@ internal static class FluxoDoConfigurador
         // sistema ficava "pronto" com uma expansão que ninguém leu.
         if (estado.Pendentes.Count == 0)
         {
-            estado.MarcarLivrosConcluidos(LivrosQueRenderamConteudo(estado, livrosLidos, conhecimentoAntes, caminhos, sistema));
+            estado.MarcarLivrosConcluidos(
+                LivrosQueRenderamConteudo(livrosLidos, conhecimentoAntes, caminhos, sistema));
         }
 
         estado.Salvar();
@@ -616,6 +648,26 @@ internal static class FluxoDoConfigurador
                 $"Falta a ficha editável em Templates/{sistema.Id}/ — sem ela o Dungeon Master " +
                 "consegue criar o personagem, mas não gerar o PDF final.");
         }
+
+        ProgressoDoAgente.RelatarConsumo(consumo, estado.Consumo);
+    }
+
+    /// <summary>
+    /// Guarda o gasto quando o caminho normal não chegou até o fim. A cota queimada é a mesma,
+    /// tenha o agente terminado ou não.
+    /// </summary>
+    private static void RegistrarConsumo(CaminhosDoProjeto caminhos, SistemaRpg sistema, ConsumoDeTokens consumo)
+    {
+        if (consumo.Vazio)
+        {
+            return;
+        }
+
+        var estado = EstadoDoProcessamento.Carregar(caminhos, sistema.Id);
+        estado.RegistrarConsumo(consumo);
+        estado.Salvar();
+
+        ProgressoDoAgente.RelatarConsumo(consumo, estado.Consumo);
     }
 
     /// <summary>
@@ -626,9 +678,8 @@ internal static class FluxoDoConfigurador
     /// dizer de qual livro veio cada gravação. Erra para o lado seguro: quando dois livros da
     /// mesma fonte são lidos juntos, os dois contam; quando nada saiu, nenhum conta.</para>
     /// </summary>
-    private static IReadOnlyList<string> LivrosQueRenderamConteudo(
-        EstadoDoProcessamento estado,
-        IReadOnlyList<string> livrosLidos,
+    private static IReadOnlyList<ChaveDeLivro> LivrosQueRenderamConteudo(
+        IReadOnlyList<ChaveDeLivro> livrosLidos,
         IReadOnlyDictionary<string, int> conhecimentoAntes,
         CaminhosDoProjeto caminhos,
         SistemaRpg sistema)
@@ -637,14 +688,8 @@ internal static class FluxoDoConfigurador
 
         return
         [
-            .. livrosLidos.Where(nome =>
-            {
-                var fonte = estado.Livros
-                    .FirstOrDefault(livro => livro.Arquivo.Equals(nome, StringComparison.OrdinalIgnoreCase))
-                    ?.Fonte ?? FonteDoSistema.IdDaBase;
-
-                return depois.GetValueOrDefault(fonte) > conhecimentoAntes.GetValueOrDefault(fonte);
-            }),
+            .. livrosLidos.Where(livro =>
+                depois.GetValueOrDefault(livro.Fonte) > conhecimentoAntes.GetValueOrDefault(livro.Fonte)),
         ];
     }
 
@@ -671,10 +716,14 @@ internal static class FluxoDoConfigurador
                 StringComparer.OrdinalIgnoreCase);
     }
 
-    private static void RelatarInterrupcao(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    private static void RelatarInterrupcao(
+        CaminhosDoProjeto caminhos,
+        SistemaRpg sistema,
+        ConsumoDeTokens consumo)
     {
         if (!Directory.Exists(sistema.DiretorioConhecimento(caminhos)))
         {
+            RegistrarConsumo(caminhos, sistema, consumo);
             return;
         }
 
@@ -682,11 +731,14 @@ internal static class FluxoDoConfigurador
 
         var estado = EstadoDoProcessamento.Carregar(caminhos, sistema.Id);
         estado.SincronizarComDisco();
+        estado.RegistrarConsumo(consumo);
         estado.Salvar();
 
         ConsoleUi.Info("");
         ConsoleUi.Sucesso($"O que já saiu está salvo: {estado.Resumo()}.");
         ConsoleUi.Info("Processe o sistema de novo para continuar de onde parou.");
+
+        ProgressoDoAgente.RelatarConsumo(consumo, estado.Consumo);
     }
 
     /// <summary>

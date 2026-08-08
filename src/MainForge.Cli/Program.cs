@@ -63,7 +63,7 @@ while (true)
     ConsoleUi.Titulo("Menu principal");
     ConsoleUi.Info("  1) Sistemas     — importar livros, processar e exportar sistemas de RPG");
     ConsoleUi.Info("  2) Personagens  — criar, continuar e evoluir personagens");
-    ConsoleUi.Info($"  3) Ambiente     — Claude Code e dependências   [{contexto.DescreverClaudeCode()}]");
+    ConsoleUi.Info($"  3) Ambiente     — Claude Code, dependências e consumo de cota   [{contexto.Preferencias.Perfil}]");
     ConsoleUi.Info("  0) Sair");
 
     var escolha = ConsoleUi.LerLinha("\nEscolha: ");

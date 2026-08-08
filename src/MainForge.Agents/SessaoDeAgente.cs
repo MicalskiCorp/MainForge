@@ -31,6 +31,8 @@ public sealed class SessaoDeAgente : IDisposable
     private readonly PoliticaDeLimiteDeUso _politica;
     private readonly Func<TimeSpan, CancellationToken, Task> _dormir;
     private readonly Func<DateTimeOffset> _agora;
+    private readonly AjusteDeExecucao _ajuste;
+    private readonly decimal? _tetoDeGastoUsd;
 
     private string? _idDaSessao;
     private bool _jaIniciada;
@@ -47,7 +49,14 @@ public sealed class SessaoDeAgente : IDisposable
         CaminhosDoProjeto caminhos,
         PoliticaDeLimiteDeUso? politica = null,
         string? retomarSessao = null)
-        : this(new ProcessoDoClaudeCode(opcoes), agente, caminhos, politica, retomarSessao: retomarSessao)
+        : this(
+            new ProcessoDoClaudeCode(opcoes),
+            agente,
+            caminhos,
+            politica,
+            retomarSessao: retomarSessao,
+            ajuste: opcoes.AjusteDe(agente.Natureza),
+            tetoDeGastoUsd: opcoes.TetoDeGastoUsd)
     {
     }
 
@@ -61,12 +70,16 @@ public sealed class SessaoDeAgente : IDisposable
         PoliticaDeLimiteDeUso? politica = null,
         Func<TimeSpan, CancellationToken, Task>? dormir = null,
         Func<DateTimeOffset>? agora = null,
-        string? retomarSessao = null)
+        string? retomarSessao = null,
+        AjusteDeExecucao? ajuste = null,
+        decimal? tetoDeGastoUsd = null)
     {
         _executor = executor;
         _agente = agente;
         _caminhos = caminhos;
-        _configuracaoMcp = ConfiguracaoDoServidorMcp.Criar(caminhos, agente.FontesDaMesa);
+        _ajuste = ajuste ?? AjusteDeExecucao.Resolver(PerfilDeExecucao.Equilibrado, agente.Natureza);
+        _tetoDeGastoUsd = tetoDeGastoUsd;
+        _configuracaoMcp = ConfiguracaoDoServidorMcp.Criar(caminhos, agente.Escopo);
         _politica = politica ?? PoliticaDeLimiteDeUso.Padrao;
         _dormir = dormir ?? Task.Delay;
         _agora = agora ?? (() => DateTimeOffset.Now);
@@ -83,6 +96,15 @@ public sealed class SessaoDeAgente : IDisposable
     /// sessão depois com <c>claude --resume &lt;id&gt;</c>.
     /// </summary>
     public string? IdDaSessao => _idDaSessao;
+
+    /// <summary>
+    /// O que esta conversa custou até agora, somando todos os turnos.
+    ///
+    /// <para>Inclui os turnos que falharam: um turno que estourou a cota no meio já consumiu
+    /// tudo que leu antes de parar, e escondê-lo daria um relatório que não bate com a cota que
+    /// o usuário viu sumir.</para>
+    /// </summary>
+    public ConsumoDeTokens Consumo { get; private set; } = ConsumoDeTokens.Zero;
 
     /// <summary>
     /// Envia uma mensagem do usuário, deixa o agente resolver todas as chamadas de ferramenta
@@ -109,6 +131,11 @@ public sealed class SessaoDeAgente : IDisposable
             if (conclusao.IdDaSessao is not null)
             {
                 _idDaSessao = conclusao.IdDaSessao;
+            }
+
+            if (conclusao.Consumo is { } gasto)
+            {
+                Consumo += gasto;
             }
 
             if (!conclusao.Falhou)
@@ -146,6 +173,17 @@ public sealed class SessaoDeAgente : IDisposable
                 continue;
             }
 
+            // Cota esgotada depois de a política desistir não é "o agente falhou": o usuário
+            // precisa saber que foi a assinatura, e não um erro que ele possa consertar. A
+            // mensagem crua do CLI, embrulhada em "o agente falhou", escondia exatamente isso.
+            if (conclusao.Limite is { } esgotada)
+            {
+                throw new FalhaDoAgente(
+                    $"{esgotada.Mensagem} O aplicativo esperou {_politica.MaximoDeEsperas} janela(s) e " +
+                    "a cota continuou esgotada. O que já foi gerado está salvo: rode de novo quando " +
+                    "ela voltar e o trabalho continua de onde parou.");
+            }
+
             throw new FalhaDoAgente(
                 $"O agente '{_agente.Nome}' falhou: {conclusao.MotivoDaFalha ?? "motivo não informado"}");
         }
@@ -161,7 +199,9 @@ public sealed class SessaoDeAgente : IDisposable
             mensagem,
             _configuracaoMcp.Caminho,
             _idDaSessao,
-            retomar: _jaIniciada);
+            retomar: _jaIniciada,
+            ajuste: _ajuste,
+            tetoDeGastoUsd: _tetoDeGastoUsd);
 
         var textos = new StringBuilder();
         TurnoConcluido? conclusao = null;

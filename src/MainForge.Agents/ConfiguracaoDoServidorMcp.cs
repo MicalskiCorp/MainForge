@@ -22,7 +22,7 @@ public sealed class ConfiguracaoDoServidorMcp : IDisposable
     /// não para o servidor MCP. Sem isto, uma busca na base devolveria trecho de um compêndio que
     /// o usuário deixou de fora.
     /// </param>
-    public static ConfiguracaoDoServidorMcp Criar(CaminhosDoProjeto caminhos, RestricaoDeFontes? fontesDaMesa = null)
+    public static ConfiguracaoDoServidorMcp Criar(CaminhosDoProjeto caminhos, EscopoDaSessao? fontesDaMesa = null)
     {
         var (executavel, argumentos) = LocalizarServidor();
 
@@ -36,7 +36,7 @@ public sealed class ConfiguracaoDoServidorMcp : IDisposable
         {
             servidor["env"] = new JsonObject
             {
-                [RestricaoDeFontes.VariavelDeAmbiente] = fontesDaMesa.Serializar(),
+                [EscopoDaSessao.VariavelDeAmbiente] = fontesDaMesa.Serializar(),
             };
         }
 

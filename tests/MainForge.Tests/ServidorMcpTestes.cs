@@ -133,6 +133,7 @@ public class ServidorMcpTestes : IDisposable
                 "consultar_progresso",
                 "descrever_pasta_de_conhecimento",
                 "escrever_arquivo_conhecimento",
+                "estrutura_do_livro",
                 "listar_campos_da_ficha",
                 "preencher_ficha_personagem",
                 "procurar_no_conhecimento",

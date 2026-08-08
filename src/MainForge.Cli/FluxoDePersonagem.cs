@@ -1,5 +1,6 @@
 using System.Text;
 using MainForge.Agents;
+using MainForge.ClaudeCode;
 using MainForge.Core;
 using MainForge.Tools;
 
@@ -53,7 +54,11 @@ internal static class FluxoDePersonagem
             return;
         }
 
-        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(sistema, fontes.Escolhidas, fontes.Recusadas);
+        var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(
+            sistema,
+            fontes.Escolhidas,
+            fontes.Recusadas,
+            personagem.Id);
 
         // Retomar a conversa anterior traz de volta a base que o agente já leu — o gasto mais
         // caro desta conversa, e o único que não dá para refazer de graça. Quando ela não existe
@@ -78,6 +83,11 @@ internal static class FluxoDePersonagem
         var proximaMensagem = PrimeiraMensagem(modo, sistema, personagem, fontes, pedidoInicial, caminhos);
         var fichaConhecida = personagem.FichaGerada;
 
+        // O que a sessão já tinha somado quando o turno anterior fechou. A diferença para o total
+        // atual é o gasto deste turno — é ela que vai para o dossiê, senão os primeiros turnos
+        // seriam contados de novo a cada volta do laço.
+        var consumoJaContado = ConsumoDeTokens.Zero;
+
         while (true)
         {
             ConsoleUi.Info("");
@@ -92,13 +102,15 @@ internal static class FluxoDePersonagem
             catch (Exception excecao) when (excecao is not OperationCanceledException)
             {
                 ConsoleUi.Erro($"Falha na conversa: {excecao.Message}");
-                RelatarOndeParou(caminhos, personagem);
+                Contabilizar(caminhos, personagem, sessao, ref consumoJaContado);
+                RelatarOndeParou(caminhos, personagem, sessao.Consumo);
                 return;
             }
 
+            Contabilizar(caminhos, personagem, sessao, ref consumoJaContado);
+
             // A cada turno, porque quem grava o dossiê é o agente pelas ferramentas: reler é como
             // a interface descobre que o personagem ganhou nome, resumo ou ficha.
-            RepositorioDePersonagens.RegistrarSessao(caminhos, personagem, sessao.IdDaSessao);
             personagem = RepositorioDePersonagens.Carregar(caminhos, personagem.Sistema, personagem.Id) ?? personagem;
 
             ConsoleUi.Info("");
@@ -132,7 +144,7 @@ internal static class FluxoDePersonagem
                     ConsoleUi.Aviso("Entrada encerrada — fechando a conversa.");
                 }
 
-                RelatarOndeParou(caminhos, personagem);
+                RelatarOndeParou(caminhos, personagem, sessao.Consumo);
                 ConsoleUi.Detalhe($"A conversa fica guardada no Claude Code — dá para revê-la com 'claude --resume {sessao.IdDaSessao}'.");
                 return;
             }
@@ -226,7 +238,13 @@ internal static class FluxoDePersonagem
     /// escolhidos no menu, então não faz sentido o agente começar perguntando. Os caminhos vão
     /// escritos por extenso porque deduzi-los do nome do sistema é onde o agente erra — nome com
     /// '&amp;' ou acento vira uma leitura recusada antes de a conversa começar.
-    /// </summary>
+    ///
+    /// <para><b>Ela vem abastecida.</b> O dossiê do personagem e o índice de cada fonte da mesa
+    /// vão escritos aqui dentro, e não como caminho a abrir. São arquivos que o agente lê
+    /// obrigatoriamente antes de qualquer outra coisa, que o aplicativo consegue ler em C# sem
+    /// gastar cota nenhuma, e cada um deles custava um turno inteiro no começo de <em>toda</em>
+    /// conversa de personagem. Um turno vale o contexto inteiro reenviado — bem mais caro que o
+    /// arquivo que ele traz.</para>
     private static string PrimeiraMensagem(
         ModoDaConversa modo,
         SistemaRpg sistema,
@@ -275,10 +293,7 @@ internal static class FluxoDePersonagem
 
         if (modo != ModoDaConversa.Criacao)
         {
-            texto
-                .AppendLine("Dossiê do personagem (leia antes de qualquer outra coisa):")
-                .AppendLine($"- Personagens/{sistema.Id}/{personagem.Id}/{RepositorioDePersonagens.NomeDaFichaEmTexto}")
-                .AppendLine();
+            texto.Append(Dossie(caminhos, sistema, personagem));
         }
 
         texto.AppendLine("Esta mesa usa exatamente estas fontes de regra, e nenhuma outra:");
@@ -287,6 +302,8 @@ internal static class FluxoDePersonagem
         {
             texto.AppendLine($"- {fonte.Rotulo}: Sistemas/{sistema.Id}/{fonte.Id}/index.md");
         }
+
+        texto.Append(IndicesDasFontes(caminhos, sistema, fontes));
 
         if (fontes.Recusadas.Count > 0)
         {
@@ -314,9 +331,152 @@ internal static class FluxoDePersonagem
         return texto.ToString();
     }
 
-    private static void RelatarOndeParou(CaminhosDoProjeto caminhos, Personagem personagem)
+    /// <summary>
+    /// Acima disto, o arquivo vai como caminho em vez de conteúdo. O limite é generoso de
+    /// propósito: um dossiê ou um índice de fonte tem alguns milhares de caracteres, e passar
+    /// disso é sinal de que algo saiu do lugar — aí é melhor o agente abrir e decidir sozinho do
+    /// que a primeira mensagem carregar um arquivo enorme antes de a conversa começar.
+    /// </summary>
+    private const int LimiteDoQueVaiInline = 24_000;
+
+    /// <summary>
+    /// O dossiê do personagem, escrito na própria mensagem em vez de apontado por caminho.
+    ///
+    /// <para><b>Por que inline.</b> O aplicativo já leu este arquivo — é dele que sai a tela "onde
+    /// o personagem parou", mostrada segundos antes. Mandar o agente abri-lo de novo por
+    /// ferramenta é um turno inteiro pago para trazer bytes que já estavam na memória do
+    /// processo. E é o primeiro turno da conversa, aquele em que o usuário está olhando a tela
+    /// esperando.</para>
+    /// </summary>
+    private static string Dossie(CaminhosDoProjeto caminhos, SistemaRpg sistema, Personagem personagem)
+    {
+        var caminho = $"Personagens/{sistema.Id}/{personagem.Id}/{RepositorioDePersonagens.NomeDaFichaEmTexto}";
+        var conteudo = RepositorioDePersonagens.LerFichaEmTexto(caminhos, personagem.Sistema, personagem.Id);
+
+        var texto = new StringBuilder();
+
+        if (conteudo.Length == 0)
+        {
+            return texto
+                .AppendLine($"O dossiê ({caminho}) ainda está vazio: o agente da conversa anterior não")
+                .AppendLine("chegou a gravar o estado. Reconstrua o que puder do que eu disser e grave assim que")
+                .AppendLine("houver algo.")
+                .AppendLine()
+                .ToString();
+        }
+
+        if (conteudo.Length > LimiteDoQueVaiInline)
+        {
+            return texto
+                .AppendLine("Dossiê do personagem (leia antes de qualquer outra coisa):")
+                .AppendLine($"- {caminho}")
+                .AppendLine()
+                .ToString();
+        }
+
+        return texto
+            .AppendLine($"Dossiê do personagem, na íntegra (é o conteúdo de {caminho} — não precisa abri-lo):")
+            .AppendLine()
+            .AppendLine("```markdown")
+            .AppendLine(conteudo.TrimEnd())
+            .AppendLine("```")
+            .AppendLine()
+            .ToString();
+    }
+
+    /// <summary>
+    /// O índice de cada fonte da mesa, também na mensagem.
+    ///
+    /// <para>Ler o <c>index.md</c> de cada fonte é o primeiro passo obrigatório do agente, e é uma
+    /// chamada de ferramenta por fonte antes de a conversa sair do lugar. O arquivo é pequeno — uma
+    /// linha por assunto —, o aplicativo o lê de graça, e com ele na mensagem o agente já começa
+    /// sabendo o que existe e pode abrir direto o que interessar.</para>
+    /// </summary>
+    private static string IndicesDasFontes(CaminhosDoProjeto caminhos, SistemaRpg sistema, FontesDaMesa fontes)
+    {
+        var texto = new StringBuilder();
+
+        foreach (var fonte in fontes.Escolhidas)
+        {
+            var caminho = Path.Combine(
+                sistema.DiretorioConhecimentoDaFonte(caminhos, fonte),
+                SistemaRpg.NomeDoIndice);
+
+            var conteudo = LerSePequeno(caminho);
+
+            if (conteudo is null)
+            {
+                continue;
+            }
+
+            texto
+                .AppendLine()
+                .AppendLine($"Índice de {fonte.Rotulo} (Sistemas/{sistema.Id}/{fonte.Id}/{SistemaRpg.NomeDoIndice}), já lido para você:")
+                .AppendLine()
+                .AppendLine("```markdown")
+                .AppendLine(conteudo.TrimEnd())
+                .AppendLine("```");
+        }
+
+        if (texto.Length > 0)
+        {
+            texto
+                .AppendLine()
+                .AppendLine("Os índices acima são o nível de cima de cada fonte: não os abra de novo. Desça para")
+                .AppendLine("o index.md de uma subpasta, ou use procurar_no_conhecimento, quando a conversa chegar")
+                .AppendLine("num assunto que eles não resolvem.")
+                .AppendLine();
+        }
+
+        return texto.ToString();
+    }
+
+    private static string? LerSePequeno(string caminho)
+    {
+        try
+        {
+            if (!File.Exists(caminho) || new FileInfo(caminho).Length > LimiteDoQueVaiInline)
+            {
+                return null;
+            }
+
+            var conteudo = File.ReadAllText(caminho);
+
+            return conteudo.Trim().Length == 0 ? null : conteudo;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Soma ao dossiê o que o turno que acabou de rodar custou.
+    ///
+    /// <para>O que se grava é a diferença para o que já tinha sido contado, e não o total da
+    /// sessão: este método é chamado a cada volta do laço, e somar o acumulado cobraria os
+    /// primeiros turnos uma vez por turno seguinte.</para>
+    /// </summary>
+    private static void Contabilizar(
+        CaminhosDoProjeto caminhos,
+        Personagem personagem,
+        SessaoDeAgente sessao,
+        ref ConsumoDeTokens jaContado)
+    {
+        var doTurno = sessao.Consumo - jaContado;
+        jaContado = sessao.Consumo;
+
+        RepositorioDePersonagens.RegistrarSessao(caminhos, personagem, sessao.IdDaSessao, doTurno);
+    }
+
+    private static void RelatarOndeParou(
+        CaminhosDoProjeto caminhos,
+        Personagem personagem,
+        ConsumoDeTokens consumoDaConversa)
     {
         var atual = RepositorioDePersonagens.Carregar(caminhos, personagem.Sistema, personagem.Id) ?? personagem;
+
+        ProgressoDoAgente.RelatarConsumo(consumoDaConversa, atual.Consumo);
 
         ConsoleUi.Info("");
 

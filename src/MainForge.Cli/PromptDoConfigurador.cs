@@ -198,13 +198,12 @@ internal static class PromptDoConfigurador
 
         if (algumTexto)
         {
+            // O porquê de ler o .md e como navegar nele estão no prompt de sistema, que é cacheado.
+            // Aqui fica só o lembrete curto, porque a lista de caminhos acima é o gatilho dele.
             texto
-                .AppendLine("Os arquivos .md acima são o texto extraído dos PDFs. Leia sempre o .md em vez do PDF:")
-                .AppendLine("é o mesmo conteúdo por uma fração da cota, e é o que permite ler o livro inteiro sem")
-                .AppendLine("esgotar a janela de uso. Use procurar_no_texto_dos_livros para achar em que linha está")
-                .AppendLine("o assunto e depois Read com offset naquele ponto, em vez de ler o arquivo de ponta a")
-                .AppendLine("ponta. Só volte ao PDF quando precisar do leiaute (uma tabela que o texto embaralhou,")
-                .AppendLine("uma ilustração) — e aí leia apenas as páginas daquele trecho.")
+                .AppendLine("Os .md acima são o texto extraído dos PDFs — leia-os, não os PDFs. Comece por")
+                .AppendLine("estrutura_do_livro para ter o sumário, e use procurar_no_texto_dos_livros com")
+                .AppendLine("'contexto' para receber o trecho sem uma leitura a mais.")
                 .AppendLine();
         }
 
@@ -230,21 +229,20 @@ internal static class PromptDoConfigurador
     }
 
     /// <summary>
-    /// O bloco que explica o mapa de pastas. Repetido nos três modos de propósito: é a regra
-    /// que o agente mais tem chance de quebrar, porque a estrutura por fonte não se deduz do
-    /// conteúdo dos livros — ela vem de como o usuário importou cada um.
+    /// O mapa de pastas deste sistema: de qual pasta de <c>Input/</c> sai o conteúdo de qual
+    /// pasta de <c>Sistemas/</c>.
+    ///
+    /// <para><b>Só o mapa, e não a regra.</b> Por que a separação por fonte existe e o que
+    /// acontece ao quebrá-la está escrito no <c>Agents/Configurador.md</c>, que é o prompt de
+    /// sistema — enviado uma vez e reaproveitado pelo cache em todos os turnos. Repetir a
+    /// explicação aqui, na mensagem do usuário, era pagar por ela de novo a cada execução para
+    /// dizer o que o agente já tinha lido. O que precisa estar aqui é o que muda de sistema para
+    /// sistema: a lista concreta de fontes.</para>
     /// </summary>
     private static string SeparacaoPorFonte(SistemaRpg sistema, EstadoDoProcessamento estado)
     {
         var texto = new StringBuilder()
-            .AppendLine("Separação por fonte (obrigatória):")
-            .AppendLine()
-            .AppendLine($"Cada pasta em Input/{sistema.Id}/ é uma fonte — o jogo base ou uma expansão — e o")
-            .AppendLine($"conteúdo que sair dos livros dela vai para a pasta de mesmo nome em Sistemas/{sistema.Id}/.")
-            .AppendLine("O usuário escolhe, na hora de criar um personagem, quais expansões aquela mesa usa; o")
-            .AppendLine("que estiver na pasta errada vai valer numa mesa que não deveria, ou sumir de uma que")
-            .AppendLine("deveria. Um arquivo de uma fonte pode citar outro de outra fonte, mas nunca copiar o")
-            .AppendLine("conteúdo dele.")
+            .AppendLine("Separação por fonte (obrigatória) — o destino do conteúdo de cada pasta:")
             .AppendLine();
 
         var fontes = estado.Livros
@@ -259,8 +257,7 @@ internal static class PromptDoConfigurador
 
         return texto
             .AppendLine()
-            .AppendLine($"As duas exceções são os arquivos da ficha, que valem para o sistema inteiro e ficam na")
-            .AppendLine($"raiz de Sistemas/{sistema.Id}/, fora de qualquer pasta de fonte:")
+            .AppendLine($"Exceção: os arquivos da ficha ficam na raiz de Sistemas/{sistema.Id}/ —")
             .AppendLine($"{string.Join(" e ", SistemaRpg.ArquivosDaFicha)}.")
             .AppendLine()
             .ToString();

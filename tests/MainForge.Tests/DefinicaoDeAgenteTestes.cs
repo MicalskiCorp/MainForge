@@ -1,4 +1,5 @@
 using MainForge.Agents;
+using MainForge.ClaudeCode;
 using MainForge.Core;
 
 namespace MainForge.Tests;
@@ -197,7 +198,7 @@ public class DefinicaoDeAgenteTestes
             [FonteDoSistema.Base, new FonteDoSistema("Compendio-Arcano")],
             [new FonteDoSistema("Compendio-Sombrio")]);
 
-        var mesa = Assert.IsType<RestricaoDeFontes>(agente.FontesDaMesa);
+        var mesa = Assert.IsType<EscopoDaSessao>(agente.Escopo);
 
         Assert.True(mesa.Permite("Aventura&Cia", "base"));
         Assert.True(mesa.Permite("Aventura&Cia", "Compendio-Arcano"));
@@ -212,10 +213,57 @@ public class DefinicaoDeAgenteTestes
     /// ali seria um limite sem dono, que só apareceria como uma busca que não acha nada.
     /// </summary>
     [Fact]
-    public void Configurador_NaoTemRestricaoDeFontes()
+    public void Configurador_NaoTemEscopoDaSessao()
     {
-        Assert.Null(DefinicaoDeAgente.Configurador.FontesDaMesa);
+        Assert.Null(DefinicaoDeAgente.Configurador.Escopo);
     }
+
+    /// <summary>
+    /// O pedido tem que carregar o conjunto fechado de ferramentas embutidas. É esta camada, e
+    /// não a lista de negação, que impede uma ferramenta nova do Claude Code de aparecer numa
+    /// sessão de RPG sem ninguém ter decidido isso — e é ela que tira da requisição o esquema de
+    /// tudo que o agente nunca poderia chamar.
+    /// </summary>
+    [Fact]
+    public void OPedido_LevaOConjuntoFechadoDeFerramentasEmbutidas()
+    {
+        foreach (var agente in TodosOsAgentes)
+        {
+            var pedido = PedidoDe(agente);
+
+            var embutidas = Assert.IsAssignableFrom<IReadOnlyList<string>>(pedido.FerramentasEmbutidas);
+
+            Assert.Equal(["Read", "Glob"], embutidas);
+            Assert.True(pedido.SemSkills);
+        }
+    }
+
+    /// <summary>
+    /// Toda ferramenta embutida concedida precisa estar declarada nas duas listas: o
+    /// <c>--tools</c> a faz existir e o <c>--allowedTools</c> a faz rodar sem parar para pedir
+    /// permissão. Declarar só numa das duas produz um agente que não consegue trabalhar, e o
+    /// motivo não aparece em lugar nenhum.
+    /// </summary>
+    [Fact]
+    public void FerramentaEmbutidaConcedida_EstaNasDuasListas()
+    {
+        foreach (var agente in TodosOsAgentes)
+        {
+            var pedido = PedidoDe(agente);
+
+            Assert.All(
+                pedido.FerramentasEmbutidas!,
+                ferramenta => Assert.Contains(ferramenta, pedido.FerramentasPermitidas));
+        }
+    }
+
+    private static PedidoDeTurno PedidoDe(DefinicaoDeAgente agente) => agente.MontarPedido(
+        CaminhosDoProjeto.Descobrir(),
+        "mensagem",
+        caminhoConfigMcp: null,
+        idDaSessao: null,
+        retomar: false,
+        ajuste: AjusteDeExecucao.Resolver(PerfilDeExecucao.Equilibrado, agente.Natureza));
 
     /// <summary>
     /// Uma concessão que também aparece na lista de negação seria uma contradição silenciosa:

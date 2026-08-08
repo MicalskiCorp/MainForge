@@ -101,6 +101,14 @@ internal static class MenuDePersonagens
             ConsoleUi.Info("");
             ConsoleUi.Aviso($"{emAndamento} personagem(ns) em desenvolvimento — a opção 2 continua de onde parou.");
         }
+
+        var consumo = personagens.Aggregate(ConsumoDeTokens.Zero, (total, personagem) => total + personagem.Consumo);
+
+        if (!consumo.Vazio)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Detalhe($"Cota consumida por todos eles: {consumo.Descrever()}.");
+        }
     }
 
     private static async Task CriarAsync(ContextoDoAplicativo contexto, CancellationToken cancelamento)

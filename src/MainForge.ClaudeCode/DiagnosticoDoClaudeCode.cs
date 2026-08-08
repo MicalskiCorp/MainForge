@@ -53,7 +53,14 @@ public static class DiagnosticoDoClaudeCode
                 Mensagem = "Responda apenas: ok",
                 DiretorioDeTrabalho = Directory.GetCurrentDirectory(),
                 CaminhoPromptDeSistema = caminhoPrompt,
+                // Nenhuma ferramenta: o teste é só "a instalação responde e a assinatura está
+                // ativa". Sem ferramenta nenhuma na sessão, o turno é o menor possível.
+                FerramentasEmbutidas = [],
                 FerramentasNegadas = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "WebFetch", "WebSearch"],
+                // O teste não depende do perfil que o usuário escolheu: ele só prova que a
+                // instalação responde e que a assinatura está ativa. No modelo mais barato e sem
+                // raciocínio nenhum, conferir o ambiente para de custar cota que faz falta depois.
+                Ajuste = new AjusteDeExecucao(AjusteDeExecucao.Haiku, "low"),
             };
 
             await foreach (var evento in new ProcessoDoClaudeCode(opcoes).ExecutarAsync(pedido, cancelamento))

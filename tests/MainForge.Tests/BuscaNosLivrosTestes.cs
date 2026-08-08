@@ -50,7 +50,7 @@ public sealed class BuscaNosLivrosTestes : IDisposable
         File.WriteAllText(caminho, conteudo);
     }
 
-    private IReadOnlyList<OcorrenciaNoLivro> Procurar(string termo, string? livro = null, int maximo = 30) =>
+    private IReadOnlyList<Ocorrencia> Procurar(string termo, string? livro = null, int maximo = 30) =>
         BuscaNosLivros.Procurar(_caminhos, "Aventura&Cia", termo, livro, maximo);
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class BuscaNosLivrosTestes : IDisposable
     {
         var ocorrencia = Assert.Single(Procurar("Bola de Fogo"));
 
-        Assert.Equal("Input/Aventura&Cia/base/_texto/Livro Base.md", ocorrencia.Livro);
+        Assert.Equal("Input/Aventura&Cia/base/_texto/Livro Base.md", ocorrencia.Arquivo);
         Assert.Equal("Magias", ocorrencia.Secao);
         Assert.Contains("8d6", ocorrencia.Trecho);
         Assert.Equal(9, ocorrencia.Linha);
@@ -84,7 +84,7 @@ public sealed class BuscaNosLivrosTestes : IDisposable
 
         var ocorrencia = Assert.Single(Procurar("Bola de Fogo", livro: "Compendio-Arcano.pdf"));
 
-        Assert.Contains("Compendio-Arcano", ocorrencia.Livro);
+        Assert.Contains("Compendio-Arcano", ocorrencia.Arquivo);
     }
 
     [Fact]

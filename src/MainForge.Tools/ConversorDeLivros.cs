@@ -30,12 +30,14 @@ public enum SituacaoDaConversao
 /// <param name="CaminhoDoTexto">O .md gerado, relativo à raiz do projeto, quando houver.</param>
 /// <param name="Detalhe">Motivo da falha, quando houver.</param>
 /// <param name="Conversor">Quem extraiu o texto — o markitdown ou o extrator interno.</param>
+/// <param name="Limpeza">O que a limpeza tirou do texto, quando ela teve o que tirar.</param>
 public sealed record ConversaoDeLivro(
     string Livro,
     SituacaoDaConversao Situacao,
     string? CaminhoDoTexto = null,
     string? Detalhe = null,
-    string Conversor = "");
+    string Conversor = "",
+    ResultadoDaLimpeza? Limpeza = null);
 
 /// <summary>
 /// Converte os livros de <c>Input/</c> em Markdown com o
@@ -212,22 +214,35 @@ public static class ConversorDeLivros
     {
         if (programa is null)
         {
-            return ExtrairInternamente(caminhos, pdf, destino, cancelamento);
+            return ComTextoEnxuto(ExtrairInternamente(caminhos, pdf, destino, cancelamento), destino);
         }
 
         var pelaFerramenta = await ConverterComMarkitdownAsync(caminhos, programa, pdf, destino, cancelamento);
 
         if (pelaFerramenta.Situacao != SituacaoDaConversao.Falhou)
         {
-            return pelaFerramenta;
+            return ComTextoEnxuto(pelaFerramenta, destino);
         }
 
-        var peloExtrator = ExtrairInternamente(caminhos, pdf, destino, cancelamento);
+        var peloExtrator = ComTextoEnxuto(ExtrairInternamente(caminhos, pdf, destino, cancelamento), destino);
 
         return peloExtrator.Situacao == SituacaoDaConversao.Falhou
             ? peloExtrator with { Detalhe = $"markitdown: {pelaFerramenta.Detalhe}; extrator interno: {peloExtrator.Detalhe}" }
             : peloExtrator with { Detalhe = $"o markitdown falhou ({pelaFerramenta.Detalhe})" };
     }
+
+    /// <summary>
+    /// Tira do texto recém-convertido o que se repete página após página — cabeçalho, rodapé,
+    /// número de página — e rejunta as palavras que a conversão partiu no fim da linha.
+    ///
+    /// <para>Roda uma vez por livro, aqui na máquina, e o resultado é o que o agente vai reler
+    /// dezenas de vezes durante o processamento inteiro. É a economia mais barata que existe
+    /// neste código: não custa cota nenhuma e vale em toda leitura daquele livro.</para>
+    /// </summary>
+    private static ConversaoDeLivro ComTextoEnxuto(ConversaoDeLivro conversao, string destino) =>
+        conversao.Situacao == SituacaoDaConversao.Falhou
+            ? conversao
+            : conversao with { Limpeza = LimpezaDoTextoDoLivro.Limpar(destino) };
 
     private static ConversaoDeLivro ExtrairInternamente(
         CaminhosDoProjeto caminhos,

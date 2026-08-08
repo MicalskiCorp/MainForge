@@ -46,6 +46,70 @@ public sealed class EstadoDoProcessamentoTestes : IDisposable
         return estado;
     }
 
+    /// <summary>
+    /// Dois PDFs com o mesmo nome em fontes diferentes são dois livros.
+    ///
+    /// <para>Não é hipótese de laboratório: livros baixados se chamam <c>Livro-do-Jogador.pdf</c>
+    /// ou <c>Core-Rulebook.pdf</c>, e o mesmo nome aparece no jogo base e no compêndio. O registro
+    /// localizava livro só pelo nome, então importar a expansão fundia os dois num registro
+    /// único — e o livro da base passava a constar como sendo da expansão.</para>
+    /// </summary>
+    [Fact]
+    public void Sincronizar_LivrosHomonimosEmFontesDiferentes_SaoDoisRegistros()
+    {
+        GravarLivro("base/Livro-do-Jogador.pdf", "conteudo do jogo base");
+        GravarLivro("Compendio-Arcano/Livro-do-Jogador.pdf", "outro conteudo, do compendio");
+
+        var estado = Carregar();
+
+        Assert.Equal(2, estado.Livros.Count);
+        Assert.Contains(estado.Livros, livro => livro.Fonte == "base");
+        Assert.Contains(estado.Livros, livro => livro.Fonte == "Compendio-Arcano");
+    }
+
+    /// <summary>
+    /// E marcar um deles como lido não pode marcar o outro: seria uma expansão dada como
+    /// incorporada sem ninguém ter lido uma linha dela.
+    /// </summary>
+    [Fact]
+    public void MarcarConcluido_NaoAlcancaOHomonimoDeOutraFonte()
+    {
+        GravarLivro("base/Livro-do-Jogador.pdf", "conteudo do jogo base");
+        GravarLivro("Compendio-Arcano/Livro-do-Jogador.pdf", "outro conteudo, do compendio");
+
+        var estado = Carregar();
+        estado.MarcarLivrosConcluidos([new ChaveDeLivro("base", "Livro-do-Jogador.pdf")]);
+
+        var daBase = estado.Livros.Single(livro => livro.Fonte == "base");
+        var daExpansao = estado.Livros.Single(livro => livro.Fonte == "Compendio-Arcano");
+
+        Assert.Equal(EstadoDoItem.Concluido, daBase.Estado);
+        Assert.Equal(EstadoDoItem.Pendente, daExpansao.Estado);
+    }
+
+    /// <summary>
+    /// Mover um livro de fonte continua sendo de graça: o registro o segue em vez de tratá-lo
+    /// como livro novo, e reler um livro inteiro é a operação mais cara do aplicativo.
+    /// </summary>
+    [Fact]
+    public void Sincronizar_LivroQueMudouDeFonte_MantemOProgresso()
+    {
+        GravarLivro("base/Compendio.pdf", "o mesmo conteudo de sempre");
+
+        var antes = Carregar();
+        antes.MarcarLivrosConcluidos();
+        antes.Salvar();
+
+        File.Delete(Path.Combine(_caminhos.Entrada, "Aventura&Cia", "base", "Compendio.pdf"));
+        GravarLivro("Compendio-Arcano/Compendio.pdf", "o mesmo conteudo de sempre");
+
+        var depois = Carregar();
+
+        var livro = Assert.Single(depois.Livros);
+        Assert.Equal("Compendio-Arcano", livro.Fonte);
+        Assert.Equal(EstadoDoItem.Concluido, livro.Estado);
+    }
+
     [Fact]
     public void Sincronizar_ItemComArquivoEmDiscoContaComoConcluido()
     {
