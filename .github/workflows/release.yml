@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       versao:
-        description: "Versão a carimbar no executável (ex.: 1.2.0)"
+        description: "Versão a carimbar no executável (ex.: 1.2.1)"
         required: true
-        default: "1.2.0"
+        default: "1.2.1"
 
 permissions:
   contents: write # necessário para criar o release e anexar o .zip
