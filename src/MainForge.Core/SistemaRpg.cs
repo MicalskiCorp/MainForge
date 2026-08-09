@@ -68,13 +68,23 @@ public sealed record SistemaRpg(string Id)
             .ToList();
     }
 
+    /// <summary>O nome exato de cada campo do PDF e a fórmula de cada valor calculado.</summary>
+    public const string NomeDoMapeamentoDaFicha = "Ficha-Mapeamento.md";
+
+    /// <summary>
+    /// A ficha redesenhada em arte de texto, com um marcador <c>{{Campo}}</c> por campo
+    /// preenchível. É o que o Dungeon Master mostra preenchido antes de gerar o PDF — e o que a
+    /// interface usa para exibir a ficha de um personagem pronto sem custar cota nenhuma.
+    /// </summary>
+    public const string NomeDoModeloEmTexto = "Ficha-ModeloEmTexto.md";
+
     /// <summary>
     /// Os dois arquivos da ficha, que valem para o sistema inteiro e por isso moram na raiz de
     /// <c>Sistemas/&lt;Sistema&gt;/</c>, fora das pastas de fonte. O nome é fixo porque o
     /// Dungeon Master procura exatamente por eles.
     /// </summary>
     public static readonly IReadOnlyList<string> ArquivosDaFicha =
-        ["Ficha-Mapeamento.md", "Ficha-ModeloEmTexto.md"];
+        [NomeDoMapeamentoDaFicha, NomeDoModeloEmTexto];
 
     public string DiretorioEntrada(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Entrada, Id);
     public string DiretorioModelo(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Modelos, Id);

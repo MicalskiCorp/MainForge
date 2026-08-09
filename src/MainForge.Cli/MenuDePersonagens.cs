@@ -25,10 +25,11 @@ internal static class MenuDePersonagens
             ConsoleUi.Titulo("Personagens");
             ConsoleUi.Info("  1) Criar personagem");
             ConsoleUi.Info("  2) Importar personagem (ficha em PDF ou pacote)");
-            ConsoleUi.Info("  3) Continuar um em desenvolvimento");
-            ConsoleUi.Info("  4) Evoluir ou alterar um pronto (nível, inventário, correções)");
-            ConsoleUi.Info("  5) Exportar personagem (com o histórico de níveis)");
-            ConsoleUi.Info("  6) Descontinuar ou reativar");
+            ConsoleUi.Info("  3) Ver a ficha de um pronto (e gerar o PDF, se faltar)");
+            ConsoleUi.Info("  4) Continuar um em desenvolvimento");
+            ConsoleUi.Info("  5) Evoluir ou alterar um pronto (nível, inventário, correções)");
+            ConsoleUi.Info("  6) Exportar personagem (com o histórico de níveis)");
+            ConsoleUi.Info("  7) Descontinuar ou reativar");
             ConsoleUi.Info("  0) Voltar");
 
             switch (ConsoleUi.LerLinha("\nEscolha: "))
@@ -42,18 +43,22 @@ internal static class MenuDePersonagens
                     break;
 
                 case "3":
-                    await ContinuarAsync(contexto, personagens, cancelamento);
+                    FluxoDeFichaDoPersonagem.Executar(contexto, personagens);
                     break;
 
                 case "4":
-                    await EvoluirAsync(contexto, personagens, cancelamento);
+                    await ContinuarAsync(contexto, personagens, cancelamento);
                     break;
 
                 case "5":
-                    FluxoDePacoteDePersonagem.Exportar(contexto, personagens);
+                    await EvoluirAsync(contexto, personagens, cancelamento);
                     break;
 
                 case "6":
+                    FluxoDePacoteDePersonagem.Exportar(contexto, personagens);
+                    break;
+
+                case "7":
                     MudarStatus(contexto, personagens);
                     break;
 
@@ -109,7 +114,7 @@ internal static class MenuDePersonagens
         if (emAndamento > 0)
         {
             ConsoleUi.Info("");
-            ConsoleUi.Aviso($"{emAndamento} personagem(ns) em desenvolvimento — a opção 3 continua de onde parou.");
+            ConsoleUi.Aviso($"{emAndamento} personagem(ns) em desenvolvimento — a opção 4 continua de onde parou.");
         }
 
         var consumo = personagens.Aggregate(ConsumoDeTokens.Zero, (total, personagem) => total + personagem.Consumo);
@@ -372,7 +377,12 @@ internal static class MenuDePersonagens
         ConsoleUi.Detalhe($"A ficha atual continua em {personagem.FichaGerada} — em Output/ fica só ela.");
     }
 
-    private static string Descrever(Personagem personagem)
+    /// <summary>
+    /// Como um personagem aparece numa lista de escolha. Fica acessível ao
+    /// <see cref="FluxoDeFichaDoPersonagem"/> porque é a mesma pergunta ("qual deles?") feita da
+    /// mesma tela — duas descrições diferentes fariam o mesmo personagem parecer dois.
+    /// </summary>
+    internal static string Descrever(Personagem personagem)
     {
         var detalhes = new List<string> { personagem.Sistema };
 

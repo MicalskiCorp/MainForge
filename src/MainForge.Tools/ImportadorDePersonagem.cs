@@ -24,7 +24,12 @@ public sealed record SistemaCompativel(SistemaRpg Sistema, int CamposEmComum, in
 
 /// <summary>O que a importação produziu, para a interface poder contar ao usuário.</summary>
 /// <param name="Personagem">O dossiê recém-criado.</param>
-/// <param name="FichaCopiada">Caminho da cópia do PDF, relativo à raiz do projeto.</param>
+/// <param name="FichaNaSaida">Caminho da ficha em <c>Output/</c>, relativo à raiz do projeto.</param>
+/// <param name="GeradaNoModeloDoSistema">
+/// A ficha em <c>Output/</c> foi <b>gerada</b> na ficha em branco do sistema, e não copiada do
+/// arquivo trazido. É o caso normal; a cópia é a saída de emergência de quando não há ficha em
+/// branco para preencher.
+/// </param>
 /// <param name="CamposAproveitados">Valores que o modelo do sistema sabe reescrever.</param>
 /// <param name="CamposForaDoModelo">
 /// Valores lidos do PDF cujo campo não existe no modelo do sistema. Ficam registrados no
@@ -32,7 +37,8 @@ public sealed record SistemaCompativel(SistemaRpg Sistema, int CamposEmComum, in
 /// </param>
 public sealed record ResultadoDaImportacaoDePersonagem(
     Personagem Personagem,
-    string FichaCopiada,
+    string FichaNaSaida,
+    bool GeradaNoModeloDoSistema,
     IReadOnlyDictionary<string, string> CamposAproveitados,
     IReadOnlyDictionary<string, string> CamposForaDoModelo);
 
@@ -128,6 +134,14 @@ public static class ImportadorDePersonagem
     /// <para>O personagem nasce <b>concluído</b>: ele tem ficha em PDF, que é o sinal de conclusão
     /// que o resto do aplicativo usa. É o que faz "evoluir" valer para ele desde o primeiro
     /// minuto — que é a razão de importar.</para>
+    ///
+    /// <para><b>A ficha que fica em <c>Output/</c> é gerada, não copiada.</b> O arquivo trazido
+    /// pode ser de outra edição, de uma versão adaptada ou de um PDF que já passou por três
+    /// editores diferentes; a ficha do personagem aqui dentro é sempre a ficha em branco do
+    /// sistema preenchida com o que o dossiê guarda — a mesma que a primeira evolução produziria.
+    /// Sem isso, a pasta de entrega tinha um arquivo com uma cara na importação e outra logo
+    /// depois. A cópia continua sendo a saída quando não há ficha em branco para preencher: o
+    /// personagem entra de qualquer jeito, que é o que a importação promete.</para>
     /// </summary>
     /// <param name="fontes">As fontes que a mesa dele usa, como em qualquer personagem daqui.</param>
     public static ResultadoDaImportacaoDePersonagem Importar(
@@ -152,10 +166,11 @@ public static class ImportadorDePersonagem
         var personagem = RepositorioDePersonagens.Criar(caminhos, sistema.Id, nome, fontes);
 
         var nomeDoArquivo = Path.GetFileName(ficha.Arquivo);
-        var copia = CopiarParaSaida(caminhos, ficha.Arquivo, personagem);
-
         personagem.Campos = new Dictionary<string, string>(aproveitados);
-        personagem.FichaGerada = Path.GetRelativePath(caminhos.Raiz, copia).Replace('\\', '/');
+
+        var (naSaida, gerada) = ProduzirFichaNaSaida(caminhos, personagem, ficha.Arquivo);
+
+        personagem.FichaGerada = Path.GetRelativePath(caminhos.Raiz, naSaida).Replace('\\', '/');
         personagem.FichaGeradaEm = DateTimeOffset.Now;
         personagem.Status = StatusDoPersonagem.Concluido;
         personagem.Resumo = $"Importado de {nomeDoArquivo} — ainda não conferido contra as regras.";
@@ -164,11 +179,14 @@ public static class ImportadorDePersonagem
         // histórico. O nível sai dos próprios campos quando a ficha o diz sem ambiguidade — e a
         // conferência com o Dungeon Master corrige o registro se ele estiver errado.
         var registro = FichasDoPersonagem.Arquivar(
-            caminhos, personagem, copia, FichasDoPersonagem.DeduzirNivel(ficha.Valores));
+            caminhos, personagem, naSaida, FichasDoPersonagem.DeduzirNivel(ficha.Valores));
 
         personagem.Anotar(
-            $"Importado da ficha preenchida '{nomeDoArquivo}' ({ficha.Valores.Count} campo(s) com valor)" +
-            (registro is null ? "." : $", guardada no histórico como {registro.Rotulo}."));
+            $"Importado da ficha preenchida '{nomeDoArquivo}' ({ficha.Valores.Count} campo(s) com valor). " +
+            (gerada
+                ? $"A ficha em Output/ foi gerada na ficha em branco de {sistema.Id}"
+                : "A ficha em Output/ é uma cópia do arquivo trazido") +
+            (registro is null ? "." : $", e guardada no histórico como {registro.Rotulo}."));
 
         File.WriteAllText(
             RepositorioDePersonagens.CaminhoDaFichaEmTexto(caminhos, sistema.Id, personagem.Id),
@@ -176,7 +194,33 @@ public static class ImportadorDePersonagem
 
         RepositorioDePersonagens.Salvar(caminhos, personagem);
 
-        return new ResultadoDaImportacaoDePersonagem(personagem, personagem.FichaGerada, aproveitados, foraDoModelo);
+        return new ResultadoDaImportacaoDePersonagem(
+            personagem, personagem.FichaGerada, gerada, aproveitados, foraDoModelo);
+    }
+
+    /// <summary>
+    /// Põe a ficha do personagem em <c>Output/Personagens/</c>: gerada na ficha em branco do
+    /// sistema, ou copiada do arquivo trazido quando não houver como gerá-la.
+    ///
+    /// <para>A cópia não é o plano B de um erro qualquer — é o que atende quem importa num sistema
+    /// que chegou por pacote (nenhum <c>Templates/</c>) ou cuja ficha em branco é de outra edição.
+    /// Importar precisa funcionar nesses casos: a ficha em PDF é o que o usuário tem na mesa, e
+    /// deixá-lo sem nada em <c>Output/</c> seria pior que entregá-la como veio.</para>
+    /// </summary>
+    /// <returns>O caminho absoluto do PDF e se ele foi gerado (em vez de copiado).</returns>
+    private static (string Caminho, bool Gerada) ProduzirFichaNaSaida(
+        CaminhosDoProjeto caminhos,
+        Personagem personagem,
+        string origem)
+    {
+        var produzida = GeradorDeFichaEmPdf.Produzir(caminhos, personagem);
+
+        if (produzida is { Situacao: SituacaoDaFichaEmPdf.Gerada, Caminho: { } gerada })
+        {
+            return (CaminhosDoProjeto.ResolverDentroDe(caminhos.Raiz, gerada), true);
+        }
+
+        return (CopiarParaSaida(caminhos, origem, personagem), false);
     }
 
     /// <summary>
@@ -226,7 +270,8 @@ public static class ImportadorDePersonagem
         new(TextoNormalizado.SemAcento(nomeDoCampo).ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
     /// <summary>
-    /// Guarda uma cópia do PDF trazido em <c>Output/Personagens/</c>.
+    /// Guarda uma cópia do PDF trazido em <c>Output/Personagens/</c>, quando não deu para gerar a
+    /// ficha na ficha em branco do sistema.
     ///
     /// <para><b>Por que copiar.</b> O original está numa pasta qualquer do usuário e pode ser
     /// movido, renomeado ou aberto e salvo por cima a qualquer momento; o dossiê aponta para um

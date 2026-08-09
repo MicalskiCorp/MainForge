@@ -41,7 +41,7 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `Sistemas/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
 | `Personagens/<Sistema>/<Id>/` | dossiê do personagem: `personagem.json` (situação, fontes da mesa, sessão) + `ficha.md` (estado dele em texto) | `RepositorioDePersonagens` — o C# grava o JSON, o agente grava o `.md` pelo MCP | a CLI e o Dungeon Master |
 | `Personagens/<Sistema>/<Id>/Fichas/` | histórico: uma cópia do PDF por nível concluído (`nivel-03.pdf`) | `FichasDoPersonagem` | o usuário, pela CLI |
-| `Output/Personagens/` | **uma** ficha por personagem — a atual, em `<Id>.pdf` | `PreenchedorDeFicha`, `ImportadorDePersonagem` | o usuário |
+| `Output/Personagens/` | **uma** ficha por personagem — a atual, em `<Id>.pdf` | `PreenchedorDeFicha`, e por ele `GeradorDeFichaEmPdf` (que a refaz quando ela sumiu) e `ImportadorDePersonagem` | o usuário |
 | `Output/Pacotes/` | sistemas exportados (`.mainforge.zip`) e personagens exportados com o histórico de níveis (`.mainforge-personagem.zip`) | `PacoteDeSistema`, `PacoteDePersonagem` | o usuário |
 | `_preferencias.json` | escolhas de gasto de cota desta instalação (perfil de execução, teto em dólares) | `PreferenciasDoUsuario`, pelo menu Ambiente | `ContextoDoAplicativo` na abertura |
 | `.claude/` | configuração do Claude Code **de quem desenvolve o projeto** | pessoas | esta sessão |
@@ -94,7 +94,9 @@ MainForge.Core        modelos de domínio (SistemaRpg, EscopoDaSessao, ConsumoDe
   │                         agente (AjusteDeExecucao). Nada de RPG aqui dentro.
   ├─ MainForge.Tools        o que só o C# faz: AcroForm com PdfSharp nos dois sentidos
   │                         (PreenchedorDeFicha escreve, LeitorDeFichaPreenchida lê uma ficha
-  │                         já preenchida e ImportadorDePersonagem a vira dossiê), escrita em
+  │                         já preenchida e ImportadorDePersonagem a vira dossiê), a ficha do
+  │                         dossiê refeita sem agente (GeradorDeFichaEmPdf no PDF, FichaEmTexto
+  │                         no desenho do Ficha-ModeloEmTexto.md), escrita em
   │                         Sistemas/, IndiceDeConhecimento, EstadoDoProcessamento,
   │                         ImportadorDeSistema, RepositorioDePersonagens, FichasDoPersonagem,
   │                         PacoteDeSistema, PacoteDePersonagem, PreferenciasDoUsuario,
@@ -172,6 +174,15 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    (`FichasDoPersonagem.NomeNaSaida`) e não pelo modelo: quem abre a pasta procura "a ficha do
    Thoradin", não escolhe entre quatro arquivos qual é o que vale hoje. O que a regeração
    substituiria é guardado antes em `Personagens/<Sistema>/<Id>/Fichas/`, um PDF por nível.
+
+   **A exceção, e ela é uma só:** `GeradorDeFichaEmPdf` pergunta a `Output/` se o arquivo que o
+   dossiê aponta ainda está lá. É um `File.Exists` — existência, nunca conteúdo. O dossiê continua
+   sendo a verdade sobre o que a ficha tem dentro, e a resposta só decide entre refazer o arquivo
+   e deixá-lo em paz. **E não se pergunta ao usuário**: "o PDF sumiu, quer que eu gere de novo?" é
+   uma confirmação sem alternativa — ele veio ver a ficha, o arquivo que faltava é reconstituível
+   de graça a partir do que já está gravado, e o que está lá nunca é sobrescrito. Ler valor de
+   `Output/` seria outra coisa, e continua proibido: é cópia de saída, e o usuário pode ter editado
+   o PDF à mão.
 8. **Todo conteúdo mora numa fonte.** Em `Input/` e em `Sistemas/`, nada de conteúdo fica
    solto na raiz do sistema — a única exceção é `SistemaRpg.ArquivosDaFicha`. Código novo que
    monte caminho de sistema passa pela fonte (`DiretorioDaFonte`,

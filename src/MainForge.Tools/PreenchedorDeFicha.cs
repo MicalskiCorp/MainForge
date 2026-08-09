@@ -98,6 +98,65 @@ public static class PreenchedorDeFicha
         return Path.GetRelativePath(caminhos.Raiz, caminhoSaida);
     }
 
+    /// <summary>
+    /// Quais campos da ficha do sistema são caixas de marcação.
+    ///
+    /// <para><b>Por que a pergunta existe.</b> Metade de uma ficha de RPG é caixa de marcação, e
+    /// o valor guardado nelas (<c>true</c>, <c>Yes</c>, o nome do estado no PDF) não é o que se
+    /// escreve num desenho da ficha — ali cabe um <c>X</c> ou um espaço, e nada mais. Sem saber o
+    /// tipo do campo, quem desenha a ficha em texto teria de adivinhar pelo valor, e um campo de
+    /// texto com "Sim" escrito viraria uma caixa marcada.</para>
+    ///
+    /// <para>Devolve vazio quando o sistema não tem ficha em branco: quem chama continua
+    /// desenhando, só sem distinguir marcação de texto.</para>
+    /// </summary>
+    public static IReadOnlySet<string> ListarCamposDeMarcacao(
+        CaminhosDoProjeto caminhos,
+        string sistema,
+        string? arquivoModelo = null)
+    {
+        var marcacoes = new HashSet<string>(StringComparer.Ordinal);
+
+        string caminhoModelo;
+
+        try
+        {
+            caminhoModelo = ResolverModelo(caminhos, sistema, arquivoModelo);
+        }
+        catch (Exception excecao) when (excecao is ErroDeFerramenta or UnauthorizedAccessException)
+        {
+            return marcacoes;
+        }
+
+        try
+        {
+            using var documento = PdfReader.Open(caminhoModelo, PdfDocumentOpenMode.Import);
+            var formulario = FormularioDeFicha.Obter(documento);
+
+            if (formulario is null)
+            {
+                return marcacoes;
+            }
+
+            foreach (var nome in formulario.Fields.Names)
+            {
+                if (formulario.Fields[nome] is PdfCheckBoxField)
+                {
+                    marcacoes.Add(nome);
+                }
+            }
+        }
+        catch (Exception excecao) when (excecao is not OutOfMemoryException)
+        {
+            // Template ilegível não impede desenhar a ficha em texto — só faz as caixas de
+            // marcação saírem com o valor cru. Quem cuida de template quebrado é a importação
+            // do sistema, e derrubar a visualização por causa dela seria trocar um problema
+            // pequeno por um maior.
+        }
+
+        return marcacoes;
+    }
+
     private static string ResolverModelo(CaminhosDoProjeto caminhos, string sistema, string? arquivoModelo)
     {
         var diretorioModelo = CaminhosDoProjeto.ResolverDentroDe(caminhos.Modelos, sistema);

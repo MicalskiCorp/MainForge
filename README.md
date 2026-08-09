@@ -336,6 +336,8 @@ A tela lista os personagens com a situação de cada um e as ações:
 - **Importar personagem** — de uma ficha em PDF preenchida ou de um pacote exportado por outra
   instalação, e **exportar** um personagem com o histórico de níveis. Veja [Importar um
   personagem que já existe](#importar-um-personagem-que-já-existe).
+- **Ver a ficha** de um personagem pronto, desenhada em texto, e garantir o PDF dela em
+  `Output/`. Veja [Ver a ficha de um personagem](#ver-a-ficha-de-um-personagem).
 - **Continuar** um que ficou em desenvolvimento, **evoluir** um pronto (subir de nível, mexer no
   inventário, corrigir dados) e **descontinuar ou reativar**. Veja
   [Personagem é um objeto do aplicativo](#personagem-é-um-objeto-do-aplicativo).
@@ -457,6 +459,39 @@ que a mesa não usava produziria um personagem que ninguém pode jogar. Uma expa
 depois entra na lista de recusadas daquele personagem, em vez de aparecer liberada só por não
 ter sido negada.
 
+## Ver a ficha de um personagem
+
+**Personagens > Ver a ficha de um pronto** mostra a ficha desenhada em texto — exatamente o
+desenho que o Dungeon Master exibe na conversa antes de gerar o PDF, com os marcadores
+`{{Campo}}` do `Ficha-ModeloEmTexto.md` trocados pelos valores do personagem.
+
+**Nada disso consome cota.** Na conversa, esse desenho custa um turno: o agente lê o modelo,
+substitui campo por campo e escreve o resultado inteiro. Depois que o personagem está pronto, os
+valores já estão no `personagem.json` e o modelo já está no disco — refazer a substituição em C#
+([FichaEmTexto](src/MainForge.Tools/FichaEmTexto.cs)) dá a mesma ficha por zero token, e funciona
+com a assinatura esgotada ou sem Claude Code instalado.
+
+O desenho é arte de texto, e continuar sendo um desenho é parte do trabalho: cada valor ocupa a
+largura do marcador que substituiu. Valor curto é completado com espaços, valor longo come os
+espaços seguintes (deixando um), e caixa de marcação vira `X` ou espaço em vez do `true` que está
+gravado no dossiê — para isso o aplicativo pergunta ao próprio AcroForm quais campos são caixas.
+
+**No mesmo gesto, o PDF é conferido.** Se a ficha que o dossiê aponta não estiver em
+`Output/Personagens/`, ela é **gerada ali na hora, sem perguntar**, a partir da ficha em branco do
+sistema e dos campos guardados ([GeradorDeFichaEmPdf](src/MainForge.Tools/GeradorDeFichaEmPdf.cs))
+— e entra no histórico daquele nível como qualquer ficha gerada. É a resposta para o caso em que o
+arquivo foi apagado, movido ou nunca chegou a existir: até agora, a única forma de tê-lo de volta
+era abrir uma conversa e pagar cota para o agente reescrever valores que já estavam no disco.
+Confirmar não faria sentido — quem abriu a tela veio ver a ficha, refazer o arquivo que falta é de
+graça, e o que está lá nunca é sobrescrito.
+
+Se o PDF já está lá, **nada é refeito**: regerar substituiria a cópia daquele nível no histórico e
+trocaria, sem aviso, o arquivo que o usuário já tem na mesa.
+
+Nada disso interpreta o personagem. O que sai é o que está gravado, exatamente como iria para o
+PDF — corrigir um valor errado continua sendo conversa com o Dungeon Master, em "evoluir ou
+alterar".
+
 ## Importar um personagem que já existe
 
 Quem chega aqui já joga, e já tem personagem — preenchido no PDF editável do sistema, às vezes
@@ -480,10 +515,18 @@ O que acontece na importação:
    compartilham o modelo, dariam um palpite errado sem como corrigir.
 2. **Quais expansões esta mesa usa?** A mesma pergunta da criação, pelo mesmo motivo — ela vale
    para sempre, e é ela que decide o que o agente vai conseguir ler nas evoluções seguintes.
-3. O personagem nasce **concluído**, com a cópia da ficha em `Output/Personagens/` (com o mesmo
-   nome que qualquer ficha dele teria — a primeira evolução substitui esta) e um `ficha.md` com os
-   valores transcritos campo a campo, marcado em toda linha possível como **não conferido**. A
-   ficha trazida abre o histórico de níveis dele.
+3. O personagem nasce **concluído**, com a ficha em `Output/Personagens/` (com o mesmo nome que
+   qualquer ficha dele teria — a primeira evolução substitui esta) e um `ficha.md` com os valores
+   transcritos campo a campo, marcado em toda linha possível como **não conferido**. Essa ficha
+   abre o histórico de níveis dele.
+
+A ficha que fica em `Output/` é **gerada**, não copiada: é a ficha em branco de `Templates/<Sistema>/`
+preenchida com os valores lidos — a mesma que a primeira evolução produziria. O arquivo trazido pode
+ser de outra edição, de uma versão adaptada ou ter passado por três editores de PDF diferentes, e
+sem isso a pasta de entrega teria um arquivo com uma cara na importação e outra logo depois. Quando
+não há como gerar (sistema que chegou por pacote, sem `Templates/`), entra a **cópia** do arquivo
+trazido: importar precisa funcionar de qualquer jeito, e a ficha em PDF é o que o usuário tem na
+mesa.
 
 Os valores que a ficha em branco do sistema não tem — outra edição, versão adaptada pela mesa —
 ficam registrados no dossiê mas **fora** dos campos de geração: `preencher_ficha_personagem`
@@ -492,8 +535,7 @@ recusa a ficha inteira por um nome de campo desconhecido, e o valor se perderia 
 Depois disso o aplicativo oferece uma **conferência** com o Dungeon Master: ele lê os valores
 transcritos, confere contra as regras das fontes daquela mesa, aponta o que está fora (citando
 a fonte) e reescreve o dossiê. É a única etapa que gasta cota, por isso é oferta e não obrigação —
-e ela continua disponível depois, em "evoluir ou alterar". O agente não gera PDF nessa conversa:
-a ficha que existe é a que o usuário trouxe.
+e ela continua disponível depois, em "evoluir ou alterar".
 
 > **Ficha digitalizada não serve.** A importação lê campos de formulário; um PDF escaneado,
 > impresso para arquivo ou com o formulário achatado não tem de onde tirar valor nenhum, e a
@@ -793,6 +835,10 @@ mostra na conversa, para o usuário conferir e confirmar. Assim o usuário vê a
 vai ficar sem precisar abrir o PDF, e o mapeamento fica registrado em vez de ser redescoberto
 a cada criação de personagem.
 
+Depois que o personagem está pronto, quem refaz esse desenho é o próprio aplicativo, sem agente
+nenhum: os valores estão no dossiê e o modelo está no disco. É o que a opção
+[Ver a ficha](#ver-a-ficha-de-um-personagem) mostra — o mesmo desenho, por zero token.
+
 ### O PDF preenchido pede para ser redesenhado
 
 A ficha salva em `Output/Personagens/` sai com `/NeedAppearances` marcado, que manda o leitor de
@@ -883,10 +929,10 @@ importar nem as bases geradas a partir deles: esse conteúdo continua sendo de q
 Funcionando: a execução dos agentes pelo Claude Code, o servidor MCP, o guardrail de
 permissões por agente (verificado com o Dungeon Master tendo `Input/` negado de fato), a
 importação de sistemas, o gerenciamento de personagens (criação, retomada, evolução, importação
-de ficha em PDF preenchida e histórico de fichas por nível), os pacotes de sistema e de
-personagem, a medição de consumo de cota com perfil de execução, e a interface em console, com
-325 testes automatizados. O Configurador foi validado ponta a ponta gerando
-`Sistemas/SistemaTeste/`.
+de ficha em PDF preenchida, visualização da ficha em texto e histórico de fichas por nível), os
+pacotes de sistema e de personagem, a medição de consumo de cota com perfil de execução, e a
+interface em console, com 356 testes automatizados. O Configurador foi validado ponta a ponta
+gerando `Sistemas/SistemaTeste/`.
 
 **Validado com material real.** O fluxo inteiro já rodou sobre três livros oficiais, viraram base de conhecimento com jogo base e expansão separados, o mapeamento cobriu os 334
 campos preenchíveis da ficha, o sistema foi exportado como pacote e o Dungeon Master conduziu a

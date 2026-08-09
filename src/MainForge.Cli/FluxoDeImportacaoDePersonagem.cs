@@ -278,7 +278,16 @@ internal static class FluxoDeImportacaoDePersonagem
         ConsoleUi.Info("");
         ConsoleUi.Sucesso($"'{personagem.Rotulo}' importado em {sistema.Id}.");
         ConsoleUi.Detalhe($"Dossiê: Personagens/{sistema.Id}/{personagem.Id}/");
-        ConsoleUi.Detalhe($"Cópia da ficha: {resultado.FichaCopiada}");
+
+        if (resultado.GeradaNoModeloDoSistema)
+        {
+            ConsoleUi.Detalhe($"Ficha gerada na ficha em branco de {sistema.Id}: {resultado.FichaNaSaida}");
+        }
+        else
+        {
+            ConsoleUi.Detalhe($"Cópia da ficha trazida: {resultado.FichaNaSaida}");
+        }
+
         ConsoleUi.Detalhe($"{resultado.CamposAproveitados.Count} campo(s) guardados para a próxima geração da ficha.");
 
         if (resultado.CamposForaDoModelo.Count > 0)

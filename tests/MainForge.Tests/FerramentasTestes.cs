@@ -94,6 +94,31 @@ public class FerramentasTestes : IDisposable
     }
 
     /// <summary>
+    /// Quem desenha a ficha em texto precisa saber qual campo é caixa de marcação: ali cabe um
+    /// "X" ou um espaço, e não o "true" que está guardado no dossiê.
+    /// </summary>
+    [Fact]
+    public void ListarCamposDeMarcacao_SeparaAsCaixasDosCamposDeTexto()
+    {
+        PrepararTemplateComCheckBox();
+
+        var marcacoes = PreenchedorDeFicha.ListarCamposDeMarcacao(_caminhos, "Aventura&Cia");
+
+        Assert.Contains("Check Box 12", marcacoes);
+        Assert.DoesNotContain("Nome", marcacoes);
+    }
+
+    /// <summary>
+    /// Sem ficha em branco não há resposta, e não haver resposta não pode derrubar a exibição da
+    /// ficha: um sistema que chegou por pacote não tem <c>Templates/</c> nenhum.
+    /// </summary>
+    [Fact]
+    public void ListarCamposDeMarcacao_SistemaSemTemplate_DevolveVazio()
+    {
+        Assert.Empty(PreenchedorDeFicha.ListarCamposDeMarcacao(_caminhos, "SistemaInexistente"));
+    }
+
+    /// <summary>
     /// A ficha de fixture só tem campo de texto. As fichas reais de RPG são metade caixas de
     /// marcação (proficiências, magias preparadas), então o template de teste ganha uma —
     /// montada no dicionário do PDF na mão porque o PDFsharp 6.2 lê AcroForm, mas não oferece

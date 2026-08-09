@@ -262,6 +262,49 @@ public class ImportadorDePersonagemTestes : IDisposable
     }
 
     /// <summary>
+    /// A ficha que fica em <c>Output/</c> é a ficha em branco do sistema preenchida, e não o
+    /// arquivo trazido: é a mesma que a primeira evolução produziria. Sem isso, a pasta de
+    /// entrega tinha um PDF com uma cara na importação e outra logo depois.
+    /// </summary>
+    [Fact]
+    public void Importar_GeraAFichaNaFichaEmBrancoDoSistema()
+    {
+        PrepararTemplate(Sistema);
+        var ficha = LeitorDeFichaPreenchida.Ler(FichaPreenchidaEmDisco(new() { ["Nome"] = "Thoradin" }));
+
+        var resultado = ImportadorDePersonagem.Importar(
+            _caminhos, new SistemaRpg(Sistema), "Thoradin", ["base"], ficha);
+
+        Assert.True(resultado.GeradaNoModeloDoSistema);
+
+        var naSaida = Path.Combine(_raiz, resultado.FichaNaSaida);
+        Assert.True(File.Exists(naSaida));
+        Assert.Equal("Thoradin", LeitorDeFichaPreenchida.Ler(naSaida).Valores["Nome"]);
+    }
+
+    /// <summary>
+    /// Sem ficha em branco não há como gerar — e a importação continua tendo de funcionar: um
+    /// sistema que chegou por pacote não tem <c>Templates/</c>, e o PDF que o usuário trouxe é o
+    /// que ele tem na mesa. Deixá-lo sem nada em <c>Output/</c> seria pior que entregá-lo como
+    /// veio.
+    /// </summary>
+    [Fact]
+    public void Importar_SistemaSemFichaEmBranco_CopiaOArquivoTrazido()
+    {
+        PrepararTemplate(Sistema);
+        var trazida = FichaPreenchidaEmDisco(new() { ["Nome"] = "Thoradin" });
+
+        var resultado = ImportadorDePersonagem.Importar(
+            _caminhos, new SistemaRpg("SistemaDePacote"), "Thoradin", [], LeitorDeFichaPreenchida.Ler(trazida));
+
+        Assert.False(resultado.GeradaNoModeloDoSistema);
+
+        var naSaida = Path.Combine(_raiz, resultado.FichaNaSaida);
+        Assert.True(File.Exists(naSaida));
+        Assert.Equal(new FileInfo(trazida).Length, new FileInfo(naSaida).Length);
+    }
+
+    /// <summary>
     /// Importar duas vezes a mesma ficha são dois personagens — o mesmo que vale para dois
     /// "Thoradin" criados na mão. Uma cópia de PDF sobrescrevendo a outra apagaria a ficha do
     /// primeiro.
@@ -276,9 +319,9 @@ public class ImportadorDePersonagemTestes : IDisposable
         var segundo = ImportadorDePersonagem.Importar(_caminhos, new SistemaRpg(Sistema), "Thoradin", ["base"], ficha);
 
         Assert.NotEqual(primeiro.Personagem.Id, segundo.Personagem.Id);
-        Assert.NotEqual(primeiro.FichaCopiada, segundo.FichaCopiada);
-        Assert.True(File.Exists(Path.Combine(_raiz, primeiro.FichaCopiada)));
-        Assert.True(File.Exists(Path.Combine(_raiz, segundo.FichaCopiada)));
+        Assert.NotEqual(primeiro.FichaNaSaida, segundo.FichaNaSaida);
+        Assert.True(File.Exists(Path.Combine(_raiz, primeiro.FichaNaSaida)));
+        Assert.True(File.Exists(Path.Combine(_raiz, segundo.FichaNaSaida)));
     }
 
     /// <summary>
