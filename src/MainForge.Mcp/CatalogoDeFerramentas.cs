@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using MainForge.Core;
 using MainForge.Tools;
@@ -180,13 +181,26 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
 
             Ferramenta(
                 "listar_campos_da_ficha",
-                "Lista os nomes exatos dos campos preenchíveis (AcroForm) da ficha em Templates/<sistema>/, exatamente como devem ser informados a preencher_ficha_personagem.",
+                "Lista os campos preenchíveis (AcroForm) da ficha em Templates/<sistema>/ NA ORDEM EM QUE ESTAO IMPRESSOS, cada um com o rotulo que aparece ao lado dele na pagina e se e caixa de marcacao. O nome vai exatamente como listado para preencher_ficha_personagem. Use o rotulo, e nunca o nome do campo, para decidir o que vai em cada linha: numa ficha traduzida os dois divergem.",
                 """
                 {
                   "type": "object",
                   "properties": {
                     "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Templates/)." },
                     "arquivoModelo": { "type": "string", "description": "Nome do PDF dentro de Templates/<sistema>/. Só é obrigatório se houver mais de um PDF nessa pasta." }
+                  },
+                  "required": ["sistema"]
+                }
+                """),
+
+            Ferramenta(
+                "conferir_ficha_do_sistema",
+                "Confere o Ficha-ModeloEmTexto.md do sistema contra a ficha em PDF: para cada campo, o rotulo que o desenho em texto lhe da tem de ser o que esta impresso ao lado dele na pagina. Chame depois de gravar os dois arquivos da ficha; se acusar divergencia, corrija o modelo e confira de novo.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Templates/)." }
                   },
                   "required": ["sistema"]
                 }
@@ -234,6 +248,7 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
                 "procurar_no_conhecimento" => ProcurarNoConhecimento(argumentos),
                 "registrar_personagem" => RegistrarPersonagem(argumentos),
                 "listar_campos_da_ficha" => ListarCamposDaFicha(argumentos),
+                "conferir_ficha_do_sistema" => ConferirFichaDoSistema(argumentos),
                 "preencher_ficha_personagem" => PreencherFicha(argumentos),
                 _ => new ResultadoDaFerramenta($"Ferramenta desconhecida: '{nome}'.", Erro: true),
             };
@@ -433,17 +448,84 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
 
     private ResultadoDaFerramenta ListarCamposDaFicha(JsonObject argumentos)
     {
-        var campos = PreenchedorDeFicha.ListarCampos(
+        var campos = PreenchedorDeFicha.ListarLayoutDaFicha(
             caminhos,
             Obrigatorio(argumentos, "sistema"),
             Opcional(argumentos, "arquivoModelo"));
 
-        var lista = string.Join("\n", campos.Select(campo => $"- {campo}"));
+        var texto = new StringBuilder();
 
-        return new ResultadoDaFerramenta(
-            $"{campos.Count} campo(s) preenchível(is), exatamente como devem ser informados " +
-            $"a preencher_ficha_personagem:\n{lista}");
+        texto.AppendLine($"{campos.Count} campo(s) preenchível(is), na ordem em que estão impressos.");
+        texto.AppendLine();
+        texto.AppendLine("O nome vai exatamente como está aqui para preencher_ficha_personagem, inclusive");
+        texto.AppendLine("espaços no fim. Quem diz para que o campo serve é o ROTULO — o texto impresso ao");
+        texto.AppendLine("lado dele —, nunca o nome, que é interno do PDF e pode estar em outro idioma ou");
+        texto.AppendLine("fora de ordem. Campos de uma mesma 'linha' são a mesma entrada da ficha (a caixa");
+        texto.AppendLine("de marcação e o valor, por exemplo). A distância do rótulo vem junto: perto de");
+        texto.AppendLine("zero o pareamento é certo; distante, confira no PDF antes de confiar.");
+
+        foreach (var pagina in campos.GroupBy(campo => campo.Pagina))
+        {
+            texto.AppendLine();
+            texto.AppendLine($"## Página {pagina.Key}");
+
+            foreach (var linha in pagina.GroupBy(campo => campo.Linha))
+            {
+                texto.AppendLine($"linha {linha.Key}:");
+
+                foreach (var campo in linha)
+                {
+                    var tipo = campo.DeMarcacao ? "marcação" : "texto";
+
+                    var rotulo = campo.Direcao is DirecaoDoRotulo.Nenhum
+                        ? "(nenhum texto impresso por perto)"
+                        : $"\"{campo.Rotulo}\" ({Lado(campo.Direcao)}, {campo.DistanciaDoRotulo:0.#} pt)";
+
+                    texto.AppendLine($"  {campo.Ordem,4}. [{tipo}] {campo.Nome}  ->  {rotulo}");
+                }
+            }
+        }
+
+        return new ResultadoDaFerramenta(texto.ToString().TrimEnd());
     }
+
+    private ResultadoDaFerramenta ConferirFichaDoSistema(JsonObject argumentos)
+    {
+        var sistema = Obrigatorio(argumentos, "sistema");
+        var resultado = ConferenciaDaFicha.Conferir(caminhos, sistema);
+
+        var avisos = resultado.Avisos.Count == 0
+            ? ""
+            : "\n\nAVISOS:\n" + string.Join("\n", resultado.Avisos.Select(aviso => $"- {aviso}"));
+
+        if (resultado.Aprovada)
+        {
+            return new ResultadoDaFerramenta(
+                $"Ficha de '{sistema}' conferida: cada campo do {SistemaRpg.NomeDoModeloEmTexto} está " +
+                "na linha em que está impresso no PDF — nome e posição concordam." + avisos);
+        }
+
+        var lista = string.Join(
+            "\n",
+            resultado.Divergencias.Select(divergencia => $"- {divergencia.Descrever()}"));
+
+        // Erro, e não aviso: seguir com o modelo torto produz uma ficha em PDF errada em silêncio,
+        // que é o defeito mais caro de descobrir depois.
+        return new ResultadoDaFerramenta(
+            $"{resultado.Divergencias.Count} divergência(s) entre o {SistemaRpg.NomeDoModeloEmTexto} de " +
+            $"'{sistema}' e a ficha em PDF. O que manda é a linha impressa no PDF — corrija o modelo, " +
+            $"nunca o PDF:\n{lista}{avisos}",
+            Erro: true);
+    }
+
+    private static string Lado(DirecaoDoRotulo direcao) => direcao switch
+    {
+        DirecaoDoRotulo.Direita => "à direita",
+        DirecaoDoRotulo.Esquerda => "à esquerda",
+        DirecaoDoRotulo.Acima => "acima",
+        DirecaoDoRotulo.Abaixo => "abaixo",
+        _ => "",
+    };
 
     private ResultadoDaFerramenta PreencherFicha(JsonObject argumentos)
     {

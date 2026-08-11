@@ -45,6 +45,31 @@ public static class PreenchedorDeFicha
     }
 
     /// <summary>
+    /// Os mesmos campos de <see cref="ListarCampos"/>, mas <b>na ordem em que estão impressos</b>
+    /// e cada um com o rótulo que aparece ao lado dele na ficha.
+    ///
+    /// <para>É o que o Configurador precisa para escrever o Ficha-Mapeamento.md sem adivinhar:
+    /// só o nome do campo não diz em que linha ele está, e numa ficha traduzida os dois divergem.
+    /// Ver <see cref="LayoutDaFicha"/>.</para>
+    /// </summary>
+    public static IReadOnlyList<CampoDaFicha> ListarLayoutDaFicha(
+        CaminhosDoProjeto caminhos,
+        string sistema,
+        string? arquivoModelo)
+    {
+        var caminhoModelo = ResolverModelo(caminhos, sistema, arquivoModelo);
+
+        try
+        {
+            return LayoutDaFicha.Ler(caminhoModelo);
+        }
+        catch (InvalidOperationException excecao)
+        {
+            throw new ErroDeFerramenta(excecao.Message, excecao);
+        }
+    }
+
+    /// <summary>
     /// Preenche o template do sistema com <paramref name="campos"/> e grava o resultado em
     /// Output/Personagens/. Devolve o caminho do arquivo gerado, relativo à raiz do projeto.
     /// </summary>

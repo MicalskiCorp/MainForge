@@ -201,6 +201,7 @@ public sealed record DefinicaoDeAgente(
             "procurar_no_texto_dos_livros",
             "estrutura_do_livro",
             "listar_campos_da_ficha",
+            "conferir_ficha_do_sistema",
         ],
         // Output/ são as fichas em PDF já entregues e Personagens/ são os dossiês delas: os dois
         // são resultado do Dungeon Master, e nada do que o Configurador faz depende de olhar

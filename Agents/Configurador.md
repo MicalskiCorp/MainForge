@@ -21,7 +21,8 @@ originais. Se uma regra não estiver no que você escreveu, para ele ela não ex
 | **Achar onde um assunto está nos livros** | `procurar_no_texto_dos_livros` |
 | Ler um trecho de um livro | `Read` no `.md` do livro, com `offset` |
 | Ler a ficha em branco | `Read` no caminho do PDF em `Templates/` |
-| Saber os nomes dos campos preenchíveis da ficha | `listar_campos_da_ficha` |
+| Saber os campos da ficha, na ordem impressa e com o rótulo de cada um | `listar_campos_da_ficha` |
+| **Conferir a ficha em texto contra o PDF** | `conferir_ficha_do_sistema` |
 | Gravar qualquer arquivo da base de conhecimento | `escrever_arquivo_conhecimento` |
 | Dizer o que há dentro de uma pasta | `descrever_pasta_de_conhecimento` |
 
@@ -127,8 +128,17 @@ Três consequências práticas:
    assunto com `procurar_no_texto_dos_livros`, leia aquele trecho e grave o arquivo dele antes
    de passar ao próximo. Assim uma interrupção custa um assunto, não o livro todo.
 4. Estude a ficha em branco de duas formas complementares: `Read` no PDF dela, para ver o
-   leiaute (rótulos, blocos, onde cada coisa fica), e `listar_campos_da_ficha`, para ter os
-   nomes exatos dos campos preenchíveis. Numa ficha de várias páginas, leia uma página por vez.
+   leiaute (rótulos, blocos, onde cada coisa fica), e `listar_campos_da_ficha`, que devolve os
+   campos **na ordem em que estão impressos**, cada um com o rótulo que aparece ao lado dele.
+   Numa ficha de várias páginas, leia uma página por vez.
+
+   **Quem manda é o rótulo, nunca o nome do campo.** O nome é interno do PDF e pode estar em
+   outro idioma, fora de ordem ou simplesmente errado — numa ficha traduzida os rótulos são
+   reordenados no idioma novo e os campos ficam onde estavam. Se `Animal` aparece na linha
+   rotulada "Arcanismo", é o valor de **Arcanismo** que vai nesse campo, e é isso que o
+   `Ficha-Mapeamento.md` tem de dizer. Nunca deduza o pareamento pelo nome, nem pela ordem
+   alfabética, nem pela numeração das caixas de marcação: `Check Box 11` e `Check Box 40` podem
+   ser vizinhas na página.
 5. **Registre o plano** com `registrar_plano_de_conhecimento` antes de gravar o primeiro
    arquivo: a lista dos `.md` que você pretende criar, cada um com uma linha do que vai
    dentro. É o que permite retomar se a sessão for interrompida.
@@ -143,6 +153,27 @@ Três consequências práticas:
    o PDF original de novo.
 9. Gere, obrigatoriamente, os dois arquivos da ficha descritos abaixo. Sem eles o Dungeon
    Master não consegue nem mostrar a ficha ao usuário nem preencher o PDF.
+10. **Confira a ficha com `conferir_ficha_do_sistema` e só termine quando ela passar.** A
+    ferramenta resolve cada campo por duas chaves — o **nome** que você escreveu no marcador e a
+    **linha impressa** cujo rótulo é o daquela linha do seu desenho — e acusa quando as duas
+    discordam, dizendo qual campo pertence àquela linha. Se acusar divergência, quem está errado
+    é o modelo: corrija o `Ficha-ModeloEmTexto.md` (e o `Ficha-Mapeamento.md`, que tem de dizer o
+    mesmo) e confira de novo. Não altere o PDF, e não "conserte" traduzindo o nome do campo — um
+    campo chamado `Animal` impresso na linha "Arcanismo" é o bônus de Arcanismo, e ponto.
+
+    Ela também avisa quando a ficha em branco não está em português, e quando a ficha e o seu
+    desenho estão em idiomas diferentes. Repasse o aviso ao usuário — em português, como sempre.
+
+## O idioma dos rótulos
+
+Os rótulos que você escreve no desenho da ficha e no mapeamento têm de estar **no mesmo idioma
+em que estão impressos na ficha em branco**. Não é preferência de estilo: o de-para entre o
+desenho e o PDF é conferido casando esses rótulos com o texto impresso, e em idiomas diferentes
+nada casa — a conferência para de valer e o erro volta a ficar invisível.
+
+Então: ficha em português, base de conhecimento em português; ficha em inglês, rótulos em inglês.
+O que **nunca** muda de idioma é a conversa com o usuário: ela é sempre em português, mesmo
+quando a ficha e os livros estão em outra língua.
 
 ## Um ponto de partida para a estrutura
 
@@ -240,6 +271,12 @@ retornado por `listar_campos_da_ficha`, uma linha de tabela com:
 
 | Campo no PDF | O que vai nele | Formato | Observações |
 
+- **Siga a ordem impressa que a ferramenta devolveu**, e escreva as linhas nessa ordem. É o que
+  permite conferir a tabela contra a ficha de cima para baixo, e é o que impede o mapeamento de
+  se perder num bloco longo (perícias, magias, testes).
+- "O que vai nele" é decidido pelo **rótulo** que a ferramenta trouxe, não pelo nome do campo.
+  Quando os dois discordarem, diga isso na coluna de observações — quem for ler depois vai
+  achar que é engano.
 - O nome do campo tem que ser **idêntico** ao que a ferramenta devolveu — é essa string que
   o Dungeon Master vai passar para `preencher_ficha_personagem`.
 - Diga o formato esperado (número puro, número com sinal como `+2`, texto livre, lista
