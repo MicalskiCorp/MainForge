@@ -112,6 +112,7 @@ internal static class FluxoDeImportacao
             {
                 var campos = ImportadorDeSistema.LerCamposDaFicha(caminho);
                 ConsoleUi.Sucesso($"  {campos.Count} campo(s) preenchível(is) encontrado(s).");
+                AvisarSobreOIdioma(caminho);
                 return caminho;
             }
             catch (Exception excecao)
@@ -119,5 +120,45 @@ internal static class FluxoDeImportacao
                 ConsoleUi.Erro($"  {excecao.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Diz ao usuário, na hora em que ele escolhe a ficha, se ela não está em português.
+    ///
+    /// <para><b>Por que aqui.</b> A base de conhecimento sai no idioma dos livros e da ficha — é
+    /// isso que faz os rótulos casarem na hora de preencher o PDF. Descobrir o desencontro só no
+    /// fim, com o sistema já processado, custa a cota inteira do processamento; dito agora, é uma
+    /// linha de aviso antes de qualquer gasto. Não impede a importação: ficha em inglês com
+    /// livros em inglês é uma combinação legítima, e quem decide é o usuário.</para>
+    /// </summary>
+    private static void AvisarSobreOIdioma(string caminhoDaFicha)
+    {
+        IdiomaDetectado idioma;
+
+        try
+        {
+            idioma = IdiomaDaFicha.Detectar(
+                LayoutDaFicha.Ler(caminhoDaFicha)
+                    .Where(campo => campo.Rotulo is { Length: > 0 })
+                    .Select(campo => campo.Rotulo!));
+        }
+        catch (Exception excecao) when (excecao is not OutOfMemoryException)
+        {
+            // Não conseguir ler os rótulos não impede importar: o aviso é conveniência, e a
+            // validação de verdade é a do formulário, que já passou acima.
+            return;
+        }
+
+        if (idioma is IdiomaDetectado.Portugues or IdiomaDetectado.Indeterminado)
+        {
+            return;
+        }
+
+        ConsoleUi.Aviso(
+            $"  Esta ficha está em {IdiomaDaFicha.Nome(idioma)}, não em português.");
+        ConsoleUi.Aviso(
+            "  A base de conhecimento será gerada no idioma da ficha e dos livros — é o que faz os");
+        ConsoleUi.Aviso(
+            "  rótulos casarem ao preencher o PDF. A conversa com você continua sempre em português.");
     }
 }

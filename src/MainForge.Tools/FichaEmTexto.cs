@@ -103,8 +103,12 @@ public static class FichaEmTexto
     ///
     /// <para>Um modelo que não siga essa forma cai na regra de reserva: valem os blocos que têm
     /// marcador dentro, porque só o desenho os tem.</para>
+    ///
+    /// <para>É público porque <see cref="ConferenciaDaFicha"/> precisa conferir exatamente os
+    /// blocos que vão virar ficha, e não o arquivo inteiro: repetir a regra lá deixaria a
+    /// conferência opinando sobre um trecho que ninguém desenha.</para>
     /// </summary>
-    private static IReadOnlyList<string> Desenhos(string modelo)
+    public static IReadOnlyList<string> Desenhos(string modelo)
     {
         var doCorpo = BlocosDeCodigo(modelo, pararNaPrimeiraSecao: true);
 

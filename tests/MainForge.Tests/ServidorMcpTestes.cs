@@ -130,6 +130,7 @@ public class ServidorMcpTestes : IDisposable
 
         Assert.Equal(
             [
+                "conferir_ficha_do_sistema",
                 "consultar_progresso",
                 "descrever_pasta_de_conhecimento",
                 "escrever_arquivo_conhecimento",
