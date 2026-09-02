@@ -39,6 +39,7 @@ escrita uma vez só, no construtor de `CaminhosDoProjeto`.
 | `Input/<Sistema>/<fonte>/_texto/` | os mesmos livros em Markdown — é o que o Configurador lê de verdade | `ConversorDeLivros` | Configurador (`Read`, `procurar_no_texto_dos_livros`) |
 | `Templates/<Sistema>/` | ficha de personagem em PDF editável (AcroForm) | `ImportadorDeSistema` | Configurador e `PreenchedorDeFicha` |
 | `Sistemas/<Sistema>/<fonte>/` | base de conhecimento em Markdown + `index.md` por nível + `_estado-do-processamento.json` | só o MCP (`EscritorDeConhecimento`) | agente Dungeon Master |
+| `Output/Personagens/<Id>-Magias.pdf` | a folha extra com as magias por extenso, quando a ficha do sistema não as comporta | `FolhaDeMagias` | o usuário |
 | `Personagens/<Sistema>/<Id>/` | dossiê do personagem: `personagem.json` (situação, fontes da mesa, sessão) + `ficha.md` (estado dele em texto) | `RepositorioDePersonagens` — o C# grava o JSON, o agente grava o `.md` pelo MCP | a CLI e o Dungeon Master |
 | `Personagens/<Sistema>/<Id>/Fichas/` | histórico: uma cópia do PDF por nível concluído (`nivel-03.pdf`) | `FichasDoPersonagem` | o usuário, pela CLI |
 | `Output/Personagens/` | **uma** ficha por personagem — a atual, em `<Id>.pdf` | `PreenchedorDeFicha`, e por ele `GeradorDeFichaEmPdf` (que a refaz quando ela sumiu) e `ImportadorDePersonagem` | o usuário |
@@ -74,9 +75,16 @@ daquela fonte, só que em Markdown. O underscore marca derivado (como o
 ali é o `ConversorDeLivros`, nunca o agente; apagar um `.md` de lá manda convertê-lo de novo no
 próximo processamento.
 
-Duas exceções ficam na **raiz** de `Sistemas/<Sistema>/`, listadas em
-`SistemaRpg.ArquivosDaFicha`: `Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`. A ficha em PDF é
-do sistema inteiro e precisa valer com qualquer expansão selecionada.
+Três exceções ficam na **raiz** de `Sistemas/<Sistema>/`: `Ficha-Mapeamento.md` e
+`Ficha-ModeloEmTexto.md` (listados em `SistemaRpg.ArquivosDaFicha`) e `Ficha-Validacao.json`
+(`SistemaRpg.NomeDaValidacaoDaFicha`). A ficha em PDF é do sistema inteiro e precisa valer com
+qualquer expansão selecionada.
+
+O terceiro está **fora** de `ArquivosDaFicha` de propósito: aquela lista é a dos arquivos
+obrigatórios, e é ela que `PacoteDeSistema.Exportar` exige. A validação é desejável e não
+indispensável — somá-la à lista tornaria inexportável toda base mapeada antes de ela existir. Ela
+também é o único arquivo da raiz que não é Markdown: os outros dois são para o agente ler, e este
+é para o C# executar (`RegrasDaFicha` -> `ValidacaoDePersonagem`).
 
 `MigracaoDeFontes` leva um sistema do layout antigo (tudo solto na pasta do sistema) para este,
 movendo arquivo e reapontando o registro de progresso — nunca reprocessando.
@@ -96,8 +104,11 @@ MainForge.Core        modelos de domínio (SistemaRpg, EscopoDaSessao, ConsumoDe
   │                         (PreenchedorDeFicha escreve, LeitorDeFichaPreenchida lê uma ficha
   │                         já preenchida e ImportadorDePersonagem a vira dossiê), a ficha do
   │                         dossiê refeita sem agente (GeradorDeFichaEmPdf no PDF, FichaEmTexto
-  │                         no desenho do Ficha-ModeloEmTexto.md), escrita em
-  │                         Sistemas/, IndiceDeConhecimento, EstadoDoProcessamento,
+  │                         no desenho do Ficha-ModeloEmTexto.md), a validação do personagem
+  │                         contra as regras do sistema (RegrasDaFicha guarda o
+  │                         Ficha-Validacao.json, ValidacaoDePersonagem o executa), a regra do
+  │                         nome das magias (NomesDeMagia) e a folha extra delas (FolhaDeMagias),
+  │                         escrita em Sistemas/, IndiceDeConhecimento, EstadoDoProcessamento,
   │                         ImportadorDeSistema, RepositorioDePersonagens, FichasDoPersonagem,
   │                         PacoteDeSistema, PacoteDePersonagem, PreferenciasDoUsuario,
   │                         as buscas (BuscaEmTexto e as duas que a usam) e a conversão dos
@@ -193,10 +204,15 @@ entra em `MainForge.sln` (exceto harness manual, que fica em `tools/` fora da so
    percorra `Sistemas/` **ou grave um personagem** precisa conferir o `EscopoDaSessao` que chega
    pelo ambiente (`EscopoDaSessao.VariavelDeAmbiente`, posto no bloco `env` por
    `ConfiguracaoDoServidorMcp`) — sem isso ela é a porta lateral para o que a negação acabou de
-   fechar. São três: `BuscaNoConhecimento` (fontes), `registrar_personagem` e
-   `preencher_ficha_personagem` (sistema e personagem — a primeira grava o estado *completo* do
-   personagem, então o identificador errado apaga outro por inteiro). `BuscaNoConhecimentoTestes`
-   e `EscopoDoPersonagemTestes` travam o comportamento.
+   fechar. São quatro: `BuscaNoConhecimento` (fontes), `registrar_personagem`,
+   `preencher_ficha_personagem` e `validar_personagem` (sistema e personagem — a primeira grava o
+   estado *completo* do personagem, então o identificador errado apaga outro por inteiro).
+   `BuscaNoConhecimentoTestes` e `EscopoDoPersonagemTestes` travam o comportamento.
+
+   A mesma regra vale fora do MCP, para código que percorre `Sistemas/` a partir do dossiê:
+   `FolhaDeMagias` procura a descrição de cada magia só nas fontes de `Personagem.Fontes`. Ele
+   roda em C#, longe de qualquer negação do agente — e sem esse filtro entregaria ao jogador, na
+   folha impressa, a magia do compêndio que a mesa dele dispensou.
 10. **Caminho de dentro de um `.zip` é caminho vindo de fora.** A importação de pacote resolve
     cada entrada com `ResolverDentroDe` antes de extrair — um `.zip` pode carregar `../../` (o
     "zip slip") tanto quanto um caminho vindo do modelo. Vale para os dois pacotes

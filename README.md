@@ -159,7 +159,7 @@ da conversa de RPG.
 | | Configurador | Dungeon Master |
 | --- | --- | --- |
 | Embutidas | `Read`, `Glob` | `Read`, `Glob` |
-| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `estrutura_do_livro`, `listar_campos_da_ficha` | `preencher_ficha_personagem`, `registrar_personagem`, `procurar_no_conhecimento` |
+| MCP | `escrever_arquivo_conhecimento`, `descrever_pasta_de_conhecimento`, `registrar_plano_de_conhecimento`, `consultar_progresso`, `procurar_no_texto_dos_livros`, `estrutura_do_livro`, `listar_campos_da_ficha`, `conferir_ficha_do_sistema`, `registrar_validacao_da_ficha` | `preencher_ficha_personagem`, `registrar_personagem`, `procurar_no_conhecimento`, `validar_personagem` |
 | Negações próprias | `Read(Output/**)`, `Read(Personagens/**)` | `Read(Input/**)`, `Read(Templates/**)`, `Read(Output/**)` |
 
 Negado para os dois, sempre: `Bash`, `PowerShell`, `BashOutput`, `KillShell`, `Write`, `Edit`,
@@ -212,8 +212,11 @@ MainForge.sln
 │   │                           resolve modelo e esforço por agente (AjusteDeExecucao)
 │   ├── MainForge.Tools      -> o que só o C# faz: AcroForm (PdfSharp), nos dois sentidos —
 │   │                           preencher a ficha e ler uma já preenchida (ImportadorDePersonagem);
-│   │                           escrita em Sistemas/, os índices (IndiceDeConhecimento), o progresso
-│   │                           (EstadoDoProcessamento) e a conversão dos livros para texto, com limpeza
+│   │                           a validação do personagem contra as regras do sistema
+│   │                           (RegrasDaFicha + ValidacaoDePersonagem) e a folha extra de magias
+│   │                           (FolhaDeMagias); escrita em Sistemas/, os índices
+│   │                           (IndiceDeConhecimento), o progresso (EstadoDoProcessamento) e a
+│   │                           conversão dos livros para texto, com limpeza
 │   ├── MainForge.Mcp        -> servidor MCP stdio que expõe MainForge.Tools ao agente
 │   ├── MainForge.Agents     -> DefinicaoDeAgente (prompt + permissões) e SessaoDeAgente
 │   └── MainForge.Cli        -> interface em console — a interface do produto, por escolha
@@ -237,7 +240,8 @@ MainForge.sln
 │                            o estado dele em texto). É o que torna a criação retomável.
 │                            Dentro de cada um, Fichas/ guarda um PDF por nível concluído
 ├── Output/
-│   ├── Personagens/      -> uma ficha por personagem: a atual
+│   ├── Personagens/      -> uma ficha por personagem: a atual, mais a folha extra de magias
+│   │                        (<Personagem>-Magias.pdf) quando a ficha do sistema não as comporta
 │   └── Pacotes/          -> sistemas exportados para levar a outra máquina
 └── _preferencias.json    -> escolhas de gasto desta instalação (perfil de execução, teto em
                              dólares). Não é versionado: quem roda no Opus e quem roda no
@@ -381,9 +385,9 @@ Pedir "não use o compêndio X" não bastaria: o agente esbarraria no arquivo en
 Duas consequências para o Configurador: o conteúdo de um livro vai **sempre** para a pasta da
 fonte dele, e conteúdo de expansão que altera uma regra do jogo base vira arquivo novo dentro
 da expansão, citando o original em vez de reescrevê-lo — quem não usa aquele livro precisa
-continuar vendo a regra intacta. As únicas exceções são `Ficha-Mapeamento.md` e
-`Ficha-ModeloEmTexto.md`, que ficam na raiz do sistema porque a ficha em PDF é do sistema
-inteiro e não muda com a expansão em uso.
+continuar vendo a regra intacta. As únicas exceções são os [três arquivos da
+ficha](#os-três-arquivos-da-ficha), que ficam na raiz do sistema porque a ficha em PDF é do
+sistema inteiro e não muda com a expansão em uso.
 
 Um sistema importado por uma versão anterior do aplicativo tem tudo solto na pasta do sistema.
 O panorama do menu Sistemas oferece movê-lo para `base/` (e o processamento exige isso antes de
@@ -519,6 +523,10 @@ O que acontece na importação:
    qualquer ficha dele teria — a primeira evolução substitui esta) e um `ficha.md` com os valores
    transcritos campo a campo, marcado em toda linha possível como **não conferido**. Essa ficha
    abre o histórico de níveis dele.
+4. Os valores passam pela [validação do sistema](#a-ficha-é-validada), que não custa cota: o que
+   estiver fora das regras aparece na tela e fica gravado no dossiê como pauta da conferência.
+   Isso **não impede** a importação. E se o sistema usar magias sem espaço para elas na ficha, a
+   [folha extra](#a-folha-extra-de-magias) sai junto.
 
 A ficha que fica em `Output/` é **gerada**, não copiada: é a ficha em branco de `Templates/<Sistema>/`
 preenchida com os valores lidos — a mesma que a primeira evolução produziria. O arquivo trazido pode
@@ -586,7 +594,10 @@ Três consequências:
 
 - A exportação **recusa** um sistema cujo mapeamento da ficha esteja incompleto
   (`Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`). Sem eles o destinatário recebe uma base que
-  não preenche PDF nenhum, e descobrir isso do outro lado é tarde demais.
+  não preenche PDF nenhum, e descobrir isso do outro lado é tarde demais. O
+  `Ficha-Validacao.json` vai junto quando existe, mas não é exigido: sem ele o sistema continua
+  criando personagem, só sem conferência automática — e exigi-lo tornaria inexportável toda base
+  mapeada por uma versão anterior.
 - O sistema importado chega **completo e sem pendência** — não há livro por ler. Quem quiser
   acrescentar conteúdo depois traz os PDFs por conta própria e processa: só os livros novos são
   lidos.
@@ -820,24 +831,156 @@ Quando o Claude Code não informa a hora da liberação, a espera é às cegas e
 cada tentativa frustrada (15min, 30min, 1h...) até o teto da política, para não ficar batendo
 no CLI de 15 em 15 minutos só para ouvir de novo que não há cota.
 
-## Os dois arquivos da ficha
+## Os três arquivos da ficha
 
-Além dos arquivos de regras, o Configurador é obrigado a gerar dois arquivos de nome fixo,
+Além dos arquivos de regras, o Configurador é obrigado a gerar três arquivos de nome fixo,
 que são a ponte entre a conversa e o PDF final:
 
 - `Sistemas/<Sistema>/Ficha-Mapeamento.md` — tabela ligando cada campo preenchível do PDF ao
   dado do personagem que vai nele, com formato e fórmula de cálculo quando houver.
 - `Sistemas/<Sistema>/Ficha-ModeloEmTexto.md` — a ficha redesenhada em arte de texto (ASCII,
   até 78 colunas), com um marcador `{{NomeDoCampo}}` em cada lugar preenchível.
+- `Sistemas/<Sistema>/Ficha-Validacao.json` — as regras que dizem se um personagem é **válido**
+  neste sistema. Veja [A ficha é validada](#a-ficha-é-validada).
 
-Antes de gerar o PDF, o Dungeon Master preenche esse desenho com os dados do personagem e o
-mostra na conversa, para o usuário conferir e confirmar. Assim o usuário vê a ficha como ela
-vai ficar sem precisar abrir o PDF, e o mapeamento fica registrado em vez de ser redescoberto
-a cada criação de personagem.
+Os dois primeiros são para o agente ler; o terceiro é para o **C# executar**. Antes de gerar o
+PDF, o Dungeon Master preenche o desenho com os dados do personagem e o mostra na conversa, para
+o usuário conferir e confirmar. Assim o usuário vê a ficha como ela vai ficar sem precisar abrir
+o PDF, e o mapeamento fica registrado em vez de ser redescoberto a cada criação de personagem.
 
 Depois que o personagem está pronto, quem refaz esse desenho é o próprio aplicativo, sem agente
 nenhum: os valores estão no dossiê e o modelo está no disco. É o que a opção
 [Ver a ficha](#ver-a-ficha-de-um-personagem) mostra — o mesmo desenho, por zero token.
+
+### O de-para do desenho é conferido por duas chaves
+
+`conferir_ficha_do_sistema` resolve cada campo por **nome** (o marcador `{{Campo}}`) e por
+**posição impressa** (a linha da ficha cujo rótulo é o daquela linha do desenho). Enquanto as duas
+concordam, o de-para está de pé; quando discordam, uma está errada e a ferramenta diz qual campo
+pertence àquela linha.
+
+Ela **só fala quando tem certeza**, e o que conta como certeza já custou dois enganos:
+
+- **Rótulo colado ao campo, na mesma linha.** É o caso simples.
+- **Rótulo distante, confirmado por um vizinho.** Na ficha de D&D 5e cada linha de perícia e de
+  teste de resistência é `[caixa] [valor] Rótulo`: o valor fica a 4 pt do texto e a caixa de
+  marcação, a 23,6 pt. Só o valor era conferido — e a caixa é justamente quem diz **em que o
+  personagem é proficiente**. Eram 24 campos mudos (6 testes de resistência e 18 perícias), num
+  bloco longo e repetitivo que ninguém confere de olho, que é exatamente o que a conferência
+  existe para cobrir. Hoje, quando outro campo da mesma linha exibe **o mesmo texto** de perto, a
+  identidade da linha está estabelecida e o campo distante é julgado contra ela. Exigir o texto
+  idêntico é o que separa confirmar de adivinhar: as linhas são detectadas na largura da página
+  inteira, e "mesma linha" junta colunas que nada têm a ver uma com a outra.
+
+Quando acusa, a sugestão vem do **mesmo tipo** do campo acusado. Numa linha `[caixa] [valor]` os
+dois casam com o rótulo igualmente bem, e sugerir o valor para consertar uma caixa de marcação
+seria uma correção que estraga o desenho — quem a seguisse ao pé da letra trocaria a caixa por
+um número.
+
+## A ficha é validada
+
+O único que sabia se um personagem era válido era o Dungeon Master, dentro de uma conversa. Isso
+deixava dois buracos. Um personagem **importado** de uma ficha em PDF entrava sem que nada fosse
+conferido — a conferência com o agente é opcional e paga. E um personagem **criado** dependia de
+o modelo lembrar de checar cada faixa e cada lista fechada, coisa que ele faz na maior parte das
+vezes e não em todas.
+
+Agora o que dá para conferir por máquina é conferido por máquina, de graça, nos dois caminhos.
+O sistema ganha um `Ficha-Validacao.json` e
+[ValidacaoDePersonagem](src/MainForge.Tools/ValidacaoDePersonagem.cs) o executa em três momentos:
+**ao criar** (o agente chama `validar_personagem`, e `preencher_ficha_personagem` confere de novo
+ao gerar o PDF), **ao importar** uma ficha preenchida, e **ao ver a ficha** de um personagem
+pronto.
+
+O arquivo nasce em dois tempos, e isso é de propósito:
+
+| Quando | Quem escreve | O que ele já sabe |
+| --- | --- | --- |
+| **Importação do sistema** | o C#, lendo o AcroForm | que campos existem, quais são caixa de marcação, o idioma da ficha, se há espaço para as magias |
+| **Processamento** (Configurador) | o agente, depois de ler os livros | o que é obrigatório, que faixa vale, quais são as escolhas fechadas |
+
+Nascer cedo importa: quem importa uma ficha só para conferir um personagem pronto talvez nunca
+processe os livros, e sem o esqueleto ficaria sem conferência nenhuma.
+
+**Só entra ali o que uma máquina decide sozinha** — campo obrigatório vazio, número fora da faixa,
+valor fora da lista, campo que a ficha não tem. Regra que dependa de julgamento ("esta subclasse
+combina com esta raça?") continua sendo conversa: escrita como se fosse mecânica, ela reprovaria
+personagem legítimo, e uma validação que dá alarme falso é ignorada até deixar de servir para
+qualquer coisa.
+
+**Ela aponta e não impede.** Nenhuma violação bloqueia a importação nem a geração da ficha. A
+ficha que o usuário trouxe é a que está valendo na mesa dele: um atributo acima do máximo pode ser
+um item mágico que a transcrição não capturou, e uma classe fora da lista pode ser uma regra de
+casa. Recusar por isso deixaria de fora exatamente quem mais precisa da importação. O que o
+aplicativo deve é não deixar ninguém descobrir o problema na mesa — então aponta na tela, grava os
+apontamentos no dossiê (onde viram a pauta da conferência com o agente) e segue.
+
+Sistema sem o arquivo — mapeado por uma versão anterior — devolve "nada foi conferido", que é
+diferente de "está tudo certo": anunciar aprovação para o que nunca foi conferido seria mentira
+por omissão.
+
+## O nome das magias fica em inglês
+
+Nos arquivos de magia da base e nos campos de magia da ficha, o nome vem **em inglês com a
+tradução entre parênteses** — `Fireball (Bola de Fogo)` — e todo o resto vai traduzido: escola,
+alcance, duração, o texto do efeito.
+
+O nome da magia é o identificador dela na mesa: é por ele que se procura a magia no livro, na
+errata, no fórum e no aplicativo do outro jogador. Cada tradução escolhe uma palavra diferente
+para a mesma magia, de edição para edição e de editora para editora — uma base que só guarde a
+tradução vira um dicionário particular, em que "Bola de Fogo" tanto pode ser `Fireball` quanto
+`Flaming Sphere`. Guardando os dois, quem lê em português entende e quem precisa cruzar com outra
+fonte tem a chave certa.
+
+**A exceção é uma só: o sistema escrito em português.** Ali o nome da magia *é* o nome em
+português, não existe original a preservar, e inventar um seria fabricar informação que os livros
+não têm. Quem decide qual é o caso é o aplicativo, pelo idioma detectado na ficha em branco e
+gravado no `Ficha-Validacao.json` — o agente não escolhe.
+
+E a regra não é um pedido no prompt: `escrever_arquivo_conhecimento` **recusa** um arquivo dentro
+de uma pasta de magias cujos títulos estejam fora do padrão, e a recusa diz quais são. Um pedido
+esquecido no meio de um processamento de duas horas só apareceria meses depois, quando alguém
+procurasse `Fireball` na base e não achasse. Ela só opina onde tem certeza: dentro de uma pasta de
+magias, num sistema que não é em português, e sobre títulos que nomeiam uma magia em vez de
+organizar a seção ("Magias de 3º Círculo" passa).
+
+## A folha extra de magias
+
+A ficha de boa parte dos sistemas tem espaço para a **lista** de magias e não para o que cada uma
+faz: trinta linhas de uma linha cada, onde cabe "Fireball" e mais nada. Na mesa isso significa
+jogar com o livro aberto ao lado — e aqui significa que a ficha gerada, que era para bastar, não
+basta.
+
+Quando o sistema usa magias e a ficha dele **não** as comporta por extenso, o aplicativo gera
+sozinho a folha que falta, ao lado da ficha:
+
+```
+Output/Personagens/
+├── Thoradin.pdf          a ficha do sistema
+└── Thoradin-Magias.pdf   a descrição completa de cada magia dele
+```
+
+Nenhum agente é chamado e nenhum token é gasto
+([FolhaDeMagias](src/MainForge.Tools/FolhaDeMagias.cs)): as magias são as que estão escritas nos
+campos da ficha, e as descrições são copiadas — não resumidas — dos arquivos de magia que o
+Configurador já gravou.
+
+- **Quem responde se a ficha comporta as descrições** é o Configurador, ao estudar o PDF
+  (`magiasPorExtenso`). Quando ele não responde, quem responde é o próprio formulário: um campo
+  multilinha alto o bastante para caber uma descrição existe, ou não existe.
+- **Ela respeita a mesa.** A descrição é procurada só nas fontes que aquele personagem usa. Uma
+  magia de um compêndio que o grupo dispensou não chega ao jogador por esta porta — o mesmo
+  guardrail que vale para a busca no conhecimento, aplicado num código que roda em C# e não passa
+  pelas negações do agente.
+- **Magia que a base não descreve entra assim mesmo**, só com o nome e uma linha dizendo que a
+  descrição não foi encontrada: o jogador precisa saber que ela está na ficha dele.
+- A folha entra no **histórico por nível** junto com a ficha (`nivel-03.pdf` e
+  `nivel-03-Magias.pdf`). São o mesmo estado: a ficha diz que o personagem conhece `Fireball`, a
+  folha diz o que `Fireball` faz — voltar do histórico com uma e não com a outra seria pior que
+  não voltar.
+- Quando o personagem deixa de precisar dela (perdeu as magias, ou o sistema passou a usar uma
+  ficha que as comporta), a folha antiga é apagada de `Output/`. "Uma ficha por personagem" vale
+  para as duas.
 
 ### O PDF preenchido pede para ser redesenhado
 

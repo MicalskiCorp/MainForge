@@ -53,6 +53,8 @@ public static class EscritorDeConhecimento
         var diretorioSistema = CaminhosDoProjeto.ResolverDentroDe(caminhos.Conhecimento, sistema);
         var caminhoArquivo = CaminhosDoProjeto.ResolverDentroDe(diretorioSistema, caminhoRelativo);
 
+        ExigirNomeDeMagiaEmIngles(caminhos, sistema, caminhoRelativo, conteudo);
+
         Directory.CreateDirectory(Path.GetDirectoryName(caminhoArquivo)!);
         await File.WriteAllTextAsync(caminhoArquivo, conteudo, cancelamento);
 
@@ -72,6 +74,50 @@ public static class EscritorDeConhecimento
         estado.Salvar();
 
         return Path.GetRelativePath(caminhos.Raiz, caminhoArquivo);
+    }
+
+    /// <summary>
+    /// Recusa um arquivo de magias em que os nomes não estejam em inglês com a tradução ao lado.
+    ///
+    /// <para><b>Por que a recusa mora aqui, e não só no prompt.</b> É a mesma razão de a escrita
+    /// inteira passar por esta classe: o prompt é um pedido, e um pedido esquecido no meio de um
+    /// processamento de duas horas só aparece meses depois, quando alguém procura <c>Fireball</c>
+    /// na base e não acha. Aqui a regra é conferida no ato, e a mensagem já diz como corrigir — o
+    /// agente regrava o arquivo no turno seguinte, que é o momento mais barato possível para isso.</para>
+    ///
+    /// <para>Ela só opina onde tem certeza: dentro de uma pasta de magias
+    /// (<see cref="NomesDeMagia.EhArquivoDeMagias"/>), num sistema que não é em português, e sobre
+    /// títulos que nomeiam uma magia em vez de organizar a seção. Sistema sem
+    /// <c>Ficha-Validacao.json</c> — mapeado por uma versão anterior — passa direto: sem saber o
+    /// idioma do sistema, cobrar o nome em inglês seria chute.</para>
+    /// </summary>
+    private static void ExigirNomeDeMagiaEmIngles(
+        CaminhosDoProjeto caminhos,
+        string sistema,
+        string caminhoRelativo,
+        string conteudo)
+    {
+        if (!NomesDeMagia.EhArquivoDeMagias(caminhoRelativo)
+            || RegrasDaFicha.Carregar(caminhos, sistema) is not { EmPortugues: false })
+        {
+            return;
+        }
+
+        var semIngles = NomesDeMagia.TitulosSemNomeEmIngles(conteudo);
+
+        if (semIngles.Count == 0)
+        {
+            return;
+        }
+
+        var lista = string.Join("\n", semIngles.Take(15).Select(titulo => $"  - {titulo}"));
+        var resto = semIngles.Count > 15 ? $"\n  ... e mais {semIngles.Count - 15}." : "";
+
+        throw new ErroDeFerramenta(
+            $"'{caminhoRelativo}' tem {semIngles.Count} magia(s) sem o nome em inglês:\n{lista}{resto}\n\n" +
+            NomesDeMagia.ComoEscrever + " O arquivo NÃO foi gravado — corrija os títulos e grave de novo. " +
+            "Se algum desses títulos não for o nome de uma magia, transforme-o numa linha de texto " +
+            "em vez de um título.");
     }
 
     /// <summary>

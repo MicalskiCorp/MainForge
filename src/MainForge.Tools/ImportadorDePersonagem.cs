@@ -35,12 +35,20 @@ public sealed record SistemaCompativel(SistemaRpg Sistema, int CamposEmComum, in
 /// Valores lidos do PDF cujo campo não existe no modelo do sistema. Ficam registrados no
 /// <c>ficha.md</c>, mas fora de <see cref="Core.Personagem.Campos"/>.
 /// </param>
+/// <param name="Validacao">
+/// O que as regras do sistema acharam nos valores trazidos. A importação não é bloqueada por isso
+/// — ver <see cref="ValidacaoDePersonagem"/> —, mas o usuário precisa saber antes de levar a ficha
+/// para a mesa.
+/// </param>
+/// <param name="FolhaDeMagias">O que a folha extra de magias produziu, quando ela é necessária.</param>
 public sealed record ResultadoDaImportacaoDePersonagem(
     Personagem Personagem,
     string FichaNaSaida,
     bool GeradaNoModeloDoSistema,
     IReadOnlyDictionary<string, string> CamposAproveitados,
-    IReadOnlyDictionary<string, string> CamposForaDoModelo);
+    IReadOnlyDictionary<string, string> CamposForaDoModelo,
+    ResultadoDaValidacao Validacao,
+    ResultadoDaFolhaDeMagias FolhaDeMagias);
 
 /// <summary>
 /// Traz para dentro do aplicativo um personagem que já existe numa ficha em PDF preenchida.
@@ -175,6 +183,16 @@ public static class ImportadorDePersonagem
         personagem.Status = StatusDoPersonagem.Concluido;
         personagem.Resumo = $"Importado de {nomeDoArquivo} — ainda não conferido contra as regras.";
 
+        // A conferência mecânica é feita sobre o que o PDF trazia, e não sobre o que coube na ficha
+        // em branco: um valor fora da faixa continua fora da faixa mesmo que o campo dele não
+        // exista neste template, e é justamente esse descompasso que a validação precisa apontar.
+        var validacao = ValidacaoDePersonagem.Validar(caminhos, sistema.Id, ficha.Valores);
+
+        // Antes de arquivar: a folha extra é parte da entrega deste nível, e o histórico guarda as
+        // duas juntas ou o personagem volta de lá sem as magias dele.
+        var folha = FolhaDeMagias.Produzir(caminhos, personagem);
+        personagem.FolhaDeMagias = folha.Caminho;
+
         // A ficha trazida é o estado do personagem no nível em que ele está hoje: ela abre o
         // histórico. O nível sai dos próprios campos quando a ficha o diz sem ambiguidade — e a
         // conferência com o Dungeon Master corrige o registro se ele estiver errado.
@@ -188,14 +206,26 @@ public static class ImportadorDePersonagem
                 : "A ficha em Output/ é uma cópia do arquivo trazido") +
             (registro is null ? "." : $", e guardada no histórico como {registro.Rotulo}."));
 
+        if (!validacao.SemRegras)
+        {
+            personagem.Anotar(validacao.Resumir(sistema.Id));
+        }
+
+        if (folha.Situacao == SituacaoDaFolhaDeMagias.Gerada)
+        {
+            personagem.Anotar(
+                $"Folha extra com {folha.Magias.Count} magia(s) gerada em {folha.Caminho} — " +
+                "a ficha deste sistema não tem espaço para as descrições.");
+        }
+
         File.WriteAllText(
             RepositorioDePersonagens.CaminhoDaFichaEmTexto(caminhos, sistema.Id, personagem.Id),
-            DossieProvisorio(sistema, personagem, nomeDoArquivo, aproveitados, foraDoModelo));
+            DossieProvisorio(sistema, personagem, nomeDoArquivo, aproveitados, foraDoModelo, validacao));
 
         RepositorioDePersonagens.Salvar(caminhos, personagem);
 
         return new ResultadoDaImportacaoDePersonagem(
-            personagem, personagem.FichaGerada, gerada, aproveitados, foraDoModelo);
+            personagem, personagem.FichaGerada, gerada, aproveitados, foraDoModelo, validacao, folha);
     }
 
     /// <summary>
@@ -313,7 +343,8 @@ public static class ImportadorDePersonagem
         Personagem personagem,
         string nomeDoArquivo,
         IReadOnlyDictionary<string, string> aproveitados,
-        IReadOnlyDictionary<string, string> foraDoModelo)
+        IReadOnlyDictionary<string, string> foraDoModelo,
+        ResultadoDaValidacao validacao)
     {
         var texto = new StringBuilder();
 
@@ -330,6 +361,7 @@ public static class ImportadorDePersonagem
             .AppendLine("> `registrar_personagem`.")
             .AppendLine();
 
+        EscreverValidacao(texto, sistema, validacao);
         EscreverCampos(texto, "Campos da ficha", aproveitados);
 
         if (foraDoModelo.Count > 0)
@@ -344,6 +376,42 @@ public static class ImportadorDePersonagem
         }
 
         return texto.ToString();
+    }
+
+    /// <summary>
+    /// O que a conferência mecânica achou, escrito no dossiê logo no começo.
+    ///
+    /// <para><b>Por que vai para o dossiê, e não só para a tela.</b> O dossiê é o que o Dungeon
+    /// Master lê na conferência que vem a seguir, e é a única coisa que sobrevive à janela do
+    /// console ser fechada. Uma violação que só apareceu na tela some; escrita aqui, ela vira a
+    /// pauta da conversa — o agente começa sabendo onde olhar, em vez de reconferir a ficha
+    /// inteira.</para>
+    /// </summary>
+    private static void EscreverValidacao(
+        StringBuilder texto,
+        SistemaRpg sistema,
+        ResultadoDaValidacao validacao)
+    {
+        if (validacao.SemRegras || validacao.Aprovado)
+        {
+            return;
+        }
+
+        texto
+            .AppendLine("## Apontamentos da conferência automática")
+            .AppendLine()
+            .AppendLine($"O aplicativo comparou os valores acima com as regras de `{sistema.Id}` gravadas em")
+            .AppendLine($"`{SistemaRpg.NomeDaValidacaoDaFicha}` e achou o seguinte. **Não são correções**: a")
+            .AppendLine("ficha é a que está valendo na mesa do usuário, e o que parece erro pode ser um")
+            .AppendLine("combinado do grupo. Pergunte antes de mudar qualquer um destes pontos.")
+            .AppendLine();
+
+        foreach (var violacao in validacao.Violacoes)
+        {
+            texto.AppendLine($"- {violacao.Descrever()}");
+        }
+
+        texto.AppendLine();
     }
 
     /// <summary>

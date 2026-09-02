@@ -207,6 +207,67 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
                 """),
 
             Ferramenta(
+                "registrar_validacao_da_ficha",
+                "Grava as regras que dizem se um personagem e valido neste sistema, em Sistemas/<sistema>/Ficha-Validacao.json. O aplicativo as executa em C#, de graca, na criacao e na importacao de personagem. So entra aqui o que uma maquina decide sozinha: campo obrigatorio, faixa de numero, lista fechada de valores. Regra que dependa de julgamento fica no Ficha-Mapeamento.md. Chame depois de conferir_ficha_do_sistema, com UMA linha por campo preenchivel da ficha.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
+                    "usaMagias": { "type": "boolean", "description": "Este sistema tem magias, ou o equivalente dele (poderes, invocacoes, artes)." },
+                    "camposDeMagia": {
+                      "type": "array",
+                      "description": "Nomes dos campos da ficha em que as magias do personagem sao escritas, exatamente como listar_campos_da_ficha os devolveu.",
+                      "items": { "type": "string" }
+                    },
+                    "magiasPorExtenso": { "type": "boolean", "description": "A ficha em PDF tem espaco para a DESCRICAO COMPLETA de cada magia, e nao so para a lista de nomes. Se for false e o sistema usar magias, o aplicativo gera uma folha extra com as magias do personagem por extenso. Sem este campo, quem responde e o proprio PDF." },
+                    "campos": {
+                      "type": "array",
+                      "description": "Uma entrada por campo preenchivel da ficha. Campo sem regra nenhuma tambem entra, so com nome e rotulo: e assim que a validacao sabe que ele existe.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "campo": { "type": "string", "description": "Nome exato do campo no PDF, como listar_campos_da_ficha o devolveu." },
+                          "rotulo": { "type": "string", "description": "O texto impresso ao lado do campo na ficha. E o que aparece nas mensagens ao usuario." },
+                          "obrigatorio": { "type": "boolean", "description": "O personagem nao esta pronto enquanto este campo estiver vazio." },
+                          "tipo": { "type": "string", "enum": ["Texto", "Inteiro", "Marcacao"], "description": "Texto (padrao), Inteiro ou Marcacao (caixa de marcacao)." },
+                          "minimo": { "type": "integer", "description": "Menor valor aceito, para tipo Inteiro." },
+                          "maximo": { "type": "integer", "description": "Maior valor aceito, para tipo Inteiro." },
+                          "valores": {
+                            "type": "array",
+                            "description": "Os unicos valores aceitos, quando o campo e escolha fechada (classe, raca, tendencia). Vazio significa texto livre. A comparacao ignora acento e maiuscula.",
+                            "items": { "type": "string" }
+                          },
+                          "observacao": { "type": "string", "description": "Por que a regra e essa, em uma linha. Vai junto da mensagem de erro, entao cite a regra do sistema." }
+                        },
+                        "required": ["campo"]
+                      }
+                    }
+                  },
+                  "required": ["sistema", "campos"]
+                }
+                """),
+
+            Ferramenta(
+                "validar_personagem",
+                "Confere os valores de um personagem contra as regras do sistema (Ficha-Validacao.json) e devolve o que esta fora delas. Nao gasta cota e nao altera nada. Use antes da conferencia visual: ela pega de graca o que voce teria de conferir campo a campo — numero fora da faixa, campo obrigatorio vazio, valor fora da lista, magia sem o nome em ingles.",
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "sistema": { "type": "string", "description": "Identificador do sistema (nome da subpasta em Sistemas/)." },
+                    "personagem": { "type": "string", "description": "Identificador do personagem, como a mensagem inicial informou. Sem ele, valem os campos passados em 'campos'." },
+                    "campos": {
+                      "type": "object",
+                      "description": "Valores por nome de campo do PDF, como iriam para preencher_ficha_personagem. Sem isto, valem os campos ja gravados no dossie do personagem.",
+                      "additionalProperties": { "type": "string" }
+                    }
+                  },
+                  "required": ["sistema"]
+                }
+                """),
+
+            Ferramenta(
                 "preencher_ficha_personagem",
                 "Preenche os campos do template PDF em Templates/<sistema>/ com os dados do personagem e salva em Output/Personagens/.",
                 """
@@ -249,6 +310,8 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
                 "registrar_personagem" => RegistrarPersonagem(argumentos),
                 "listar_campos_da_ficha" => ListarCamposDaFicha(argumentos),
                 "conferir_ficha_do_sistema" => ConferirFichaDoSistema(argumentos),
+                "registrar_validacao_da_ficha" => RegistrarValidacaoDaFicha(argumentos),
+                "validar_personagem" => ValidarPersonagem(argumentos),
                 "preencher_ficha_personagem" => PreencherFicha(argumentos),
                 _ => new ResultadoDaFerramenta($"Ferramenta desconhecida: '{nome}'.", Erro: true),
             };
@@ -518,6 +581,178 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
             Erro: true);
     }
 
+    /// <summary>
+    /// Grava as regras de validação do sistema.
+    ///
+    /// <para><b>Por que é ferramenta e não arquivo escrito à mão.</b> O agente já sabe escrever em
+    /// <c>Sistemas/</c> por <c>escrever_arquivo_conhecimento</c> — mas aquela ferramenta só aceita
+    /// <c>.md</c>, e de propósito: o que ela grava é para outro agente ler. Este arquivo é para o
+    /// C# executar, então o formato dele é conferido na entrada em vez de descoberto na hora de
+    /// usar, quando o erro já seria uma validação que não roda em silêncio.</para>
+    /// </summary>
+    private ResultadoDaFerramenta RegistrarValidacaoDaFicha(JsonObject argumentos)
+    {
+        var sistema = Obrigatorio(argumentos, "sistema");
+
+        if (argumentos["campos"] is not JsonArray campos || campos.Count == 0)
+        {
+            throw new ErroDeFerramenta(
+                "Campo obrigatório 'campos' ausente ou vazio (esperado um array com uma entrada por " +
+                "campo preenchível da ficha).");
+        }
+
+        var regras = new RegrasDaFicha
+        {
+            Origem = OrigemDasRegras.Configurador,
+            UsaMagias = Booleano(argumentos, "usaMagias") ?? false,
+            CamposDeMagia = [.. Textos(argumentos, "camposDeMagia")],
+            MagiasPorExtenso = Booleano(argumentos, "magiasPorExtenso"),
+            // O idioma não vem do modelo: ele é medido da ficha em branco, e é o que decide se a
+            // regra do nome das magias em inglês vale neste sistema. Deixar o agente declará-lo
+            // faria a regra depender de quem ela existe para conferir.
+            Idioma = IdiomaDoSistema(sistema),
+        };
+
+        foreach (var item in campos)
+        {
+            if (item is not JsonObject objeto)
+            {
+                throw new ErroDeFerramenta("Cada item de 'campos' precisa ser um objeto com 'campo'.");
+            }
+
+            regras.Campos.Add(new RegraDeCampo
+            {
+                Campo = Obrigatorio(objeto, "campo"),
+                Rotulo = Opcional(objeto, "rotulo") ?? "",
+                Obrigatorio = Booleano(objeto, "obrigatorio") ?? false,
+                Tipo = Tipo(Opcional(objeto, "tipo")),
+                Minimo = Inteiro(objeto, "minimo"),
+                Maximo = Inteiro(objeto, "maximo"),
+                Valores = [.. Textos(objeto, "valores")],
+                Observacao = Opcional(objeto, "observacao"),
+            });
+        }
+
+        // Sem esta conferência a validação nasceria cega justamente onde ela importa: um campo com
+        // nome errado nunca casa com valor nenhum, então ele nunca reprova nada — e "não reprovou"
+        // é indistinguível de "está certo" para quem lê o resultado.
+        var daFicha = CamposDaFicha(sistema);
+
+        var inventados = daFicha.Count == 0
+            ? []
+            : regras.Campos
+                .Select(regra => regra.Campo)
+                .Where(campo => !daFicha.Contains(campo))
+                .ToList();
+
+        if (inventados.Count > 0)
+        {
+            throw new ErroDeFerramenta(
+                $"{inventados.Count} campo(s) não existem na ficha em branco de '{sistema}': " +
+                $"{string.Join(", ", inventados.Take(10))}. Use listar_campos_da_ficha e copie os nomes " +
+                "exatamente como ela os devolve — nome de campo com um caractere de diferença nunca " +
+                "casa, e a regra dele passa a não valer para ninguém.");
+        }
+
+        var gravado = RegrasDaFicha.Gravar(caminhos, sistema, regras);
+
+        var faltando = daFicha.Count == 0
+            ? 0
+            : daFicha.Count(campo => regras.Campos.All(regra => regra.Campo != campo));
+
+        var pendencia = faltando == 0
+            ? ""
+            : $" Faltam {faltando} campo(s) da ficha sem entrada aqui — eles não são conferidos.";
+
+        return new ResultadoDaFerramenta(
+            $"Regras gravadas em {gravado}: {regras.Campos.Count} campo(s), " +
+            $"{regras.Campos.Count(regra => regra.Obrigatorio)} obrigatório(s). " +
+            (regras.UsaMagias
+                ? regras.TrazMagiasPorExtenso
+                    ? "O sistema usa magias e a ficha as comporta por extenso."
+                    : "O sistema usa magias e a ficha NÃO as comporta por extenso — o aplicativo vai " +
+                      "gerar uma folha extra com as descrições para cada personagem conjurador."
+                : "O sistema não usa magias.") +
+            pendencia);
+    }
+
+    /// <summary>
+    /// Confere um personagem contra as regras do sistema. Os valores podem vir na chamada (o que
+    /// o agente está prestes a escrever) ou do dossiê (o que já está gravado).
+    /// </summary>
+    private ResultadoDaFerramenta ValidarPersonagem(JsonObject argumentos)
+    {
+        var sistema = Obrigatorio(argumentos, "sistema");
+        var identificador = Opcional(argumentos, "personagem") ?? escopo?.Personagem;
+
+        ConferirEscopoDoPersonagem(sistema, Opcional(argumentos, "personagem"));
+
+        var campos = argumentos["campos"] is JsonObject
+            ? MapaDeTexto(argumentos, "campos")
+            : identificador is null
+                ? throw new ErroDeFerramenta(
+                    "Informe 'campos' com os valores a conferir, ou 'personagem' para conferir o que " +
+                    "já está gravado no dossiê dele.")
+                : RepositorioDePersonagens.Carregar(caminhos, sistema, identificador)?.Campos
+                  ?? throw new ErroDeFerramenta($"Não há personagem '{identificador}' em Personagens/{sistema}/.");
+
+        var resultado = ValidacaoDePersonagem.Validar(caminhos, sistema, campos);
+
+        // Não é erro de ferramenta: a validação aponta e não impede. Devolver isError faria o
+        // agente tratar um personagem fora da regra como uma chamada malfeita e tentar de novo,
+        // quando o que se espera dele é levar os apontamentos ao usuário.
+        return new ResultadoDaFerramenta(
+            resultado.Aprovado || resultado.SemRegras
+                ? resultado.Resumir(sistema)
+                : resultado.Relatorio(sistema) +
+                  "\n\nLeve isto ao usuário antes de gerar a ficha, citando a regra de cada ponto. " +
+                  "NÃO corrija por conta própria: pergunte, porque a mesa pode ter combinado diferente.");
+    }
+
+    /// <summary>
+    /// Os nomes dos campos da ficha em branco do sistema, ou vazio quando não há ficha para
+    /// conferir — um sistema que chegou por pacote sem <c>Templates/</c>. Vazio significa "não dá
+    /// para conferir", e não "nenhum campo existe".
+    /// </summary>
+    private IReadOnlySet<string> CamposDaFicha(string sistema)
+    {
+        try
+        {
+            return PreenchedorDeFicha.ListarCampos(caminhos, sistema, null).ToHashSet(StringComparer.Ordinal);
+        }
+        catch (Exception excecao) when (excecao is ErroDeFerramenta or UnauthorizedAccessException or IOException)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// O idioma da ficha em branco do sistema, medido agora. Sem ficha legível fica
+    /// indeterminado — que é o valor que faz a regra do nome das magias se calar em vez de
+    /// chutar.
+    /// </summary>
+    private IdiomaDetectado IdiomaDoSistema(string sistema)
+    {
+        try
+        {
+            return IdiomaDaFicha.Detectar(PreenchedorDeFicha
+                .ListarLayoutDaFicha(caminhos, sistema, null)
+                .Where(campo => campo.Rotulo is { Length: > 0 })
+                .Select(campo => campo.Rotulo!));
+        }
+        catch (Exception excecao) when (excecao is not OutOfMemoryException)
+        {
+            return IdiomaDetectado.Indeterminado;
+        }
+    }
+
+    private static TipoDoCampo Tipo(string? declarado) => declarado?.ToLowerInvariant() switch
+    {
+        "inteiro" or "numero" or "int" => TipoDoCampo.Inteiro,
+        "marcacao" or "marcação" or "checkbox" or "booleano" => TipoDoCampo.Marcacao,
+        _ => TipoDoCampo.Texto,
+    };
+
     private static string Lado(DirecaoDoRotulo direcao) => direcao switch
     {
         DirecaoDoRotulo.Direita => "à direita",
@@ -559,20 +794,38 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
                 ? Obrigatorio(argumentos, "nomeArquivoSaida")
                 : FichasDoPersonagem.NomeNaSaida(caminhos, dossie));
 
+        // A validação roda mesmo quando ninguém a pediu: é o último momento em que os valores
+        // ainda são vistos por alguém, e ela não custa cota nenhuma. Não impede a geração — o
+        // apontamento vai na resposta, para o agente levá-lo ao usuário.
+        var validacao = ValidacaoDePersonagem.Validar(caminhos, sistema, campos);
+
+        var apontamentos = validacao.Aprovado || validacao.SemRegras
+            ? ""
+            : "\n\nATENÇÃO — a ficha saiu, mas " + validacao.Relatorio(sistema) +
+              "\nDiga isso ao usuário citando a regra de cada ponto, e pergunte antes de corrigir.";
+
         // O PDF existir é o sinal de conclusão que não depende de o modelo declarar que
         // terminou — por isso é aqui, e não numa ferramenta à parte, que o dossiê fecha.
         if (identificador is not { } personagem)
         {
-            return new ResultadoDaFerramenta($"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)).");
+            return new ResultadoDaFerramenta(
+                $"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)).{apontamentos}");
         }
 
         RepositorioDePersonagens.RegistrarFichaGerada(
             caminhos, sistema, personagem, gerado, campos, Inteiro(argumentos, "nivel"));
 
+        var folha = RepositorioDePersonagens.Carregar(caminhos, sistema, personagem)?.FolhaDeMagias;
+
         return new ResultadoDaFerramenta(
             $"Ficha salva em {gerado} ({campos.Count} campo(s) preenchido(s)). " +
             $"O personagem '{personagem}' está registrado como concluído e pode ser evoluído depois. " +
-            "Uma cópia desta ficha ficou guardada no histórico de níveis dele.");
+            "Uma cópia desta ficha ficou guardada no histórico de níveis dele." +
+            (folha is { Length: > 0 }
+                ? $" A ficha deste sistema não comporta as magias por extenso, então saiu também uma " +
+                  $"folha extra com as descrições em {folha} — avise o usuário dos dois arquivos."
+                : "") +
+            apontamentos);
     }
 
     /// <summary>
@@ -638,6 +891,35 @@ public sealed class CatalogoDeFerramentas(CaminhosDoProjeto caminhos, EscopoDaSe
         JsonValue valor when valor.TryGetValue<string>(out var texto) && int.TryParse(texto, out var numero) => numero,
         _ => null,
     };
+
+    /// <summary>
+    /// Booleano opcional. Como em <see cref="Inteiro"/>, o modelo tanto manda <c>true</c> quanto
+    /// <c>"true"</c>, e recusar a segunda forma só custaria uma chamada perdida.
+    /// </summary>
+    private static bool? Booleano(JsonObject argumentos, string campo) => argumentos[campo] switch
+    {
+        JsonValue valor when valor.TryGetValue<bool>(out var logico) => logico,
+        JsonValue valor when valor.TryGetValue<string>(out var texto) && bool.TryParse(texto, out var logico) => logico,
+        _ => null,
+    };
+
+    /// <summary>Lista de textos opcional. Ausente ou de outro tipo vira lista vazia.</summary>
+    private static IReadOnlyList<string> Textos(JsonObject argumentos, string campo)
+    {
+        if (argumentos[campo] is not JsonArray itens)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. itens
+                .OfType<JsonValue>()
+                .Select(item => item.TryGetValue<string>(out var texto) ? texto : null)
+                .OfType<string>()
+                .Where(texto => texto.Length > 0),
+        ];
+    }
 
     private static IReadOnlyDictionary<string, string> MapaDeTexto(JsonObject argumentos, string campo)
     {

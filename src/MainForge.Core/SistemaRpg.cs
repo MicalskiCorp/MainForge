@@ -86,6 +86,18 @@ public sealed record SistemaRpg(string Id)
     public static readonly IReadOnlyList<string> ArquivosDaFicha =
         [NomeDoMapeamentoDaFicha, NomeDoModeloEmTexto];
 
+    /// <summary>
+    /// As regras que dizem se um personagem é válido neste sistema, em JSON — o único arquivo da
+    /// raiz do sistema que é para o C# executar, e não para o agente ler.
+    ///
+    /// <para><b>Por que fora de <see cref="ArquivosDaFicha"/>.</b> Aquela lista é a de arquivos
+    /// <em>obrigatórios</em>: sem eles o Dungeon Master não mostra nem preenche ficha nenhuma, e é
+    /// por isso que a exportação de pacote os exige. Este aqui é desejável e não indispensável —
+    /// um sistema sem ele continua criando personagem, só sem a conferência automática. Somá-lo
+    /// àquela lista transformaria toda base mapeada por uma versão anterior em base inexportável.</para>
+    /// </summary>
+    public const string NomeDaValidacaoDaFicha = "Ficha-Validacao.json";
+
     public string DiretorioEntrada(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Entrada, Id);
     public string DiretorioModelo(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Modelos, Id);
     public string DiretorioConhecimento(CaminhosDoProjeto caminhos) => Path.Combine(caminhos.Conhecimento, Id);

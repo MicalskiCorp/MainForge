@@ -58,6 +58,35 @@ public sealed class ImportadorDeSistemaTestes : IDisposable
     }
 
     /// <summary>
+    /// A validação do sistema nasce aqui, e não só quando o Configurador roda: quem importa uma
+    /// ficha para conferir um personagem pronto talvez nunca processe os livros, e sem isto ele
+    /// ficaria sem conferência nenhuma. O que a importação já responde é o que não depende de
+    /// livro — quais campos existem, quais são caixa de marcação, o idioma da ficha.
+    /// </summary>
+    [Fact]
+    public void Importar_GravaOEsqueletoDeValidacaoDoSistema()
+    {
+        var livro = CriarArquivoDeOrigem("Livro Basico.pdf");
+        var ficha = CriarArquivoDeOrigem("Ficha.pdf");
+
+        var resultado = ImportadorDeSistema.Importar(_caminhos, "Aventura&Cia", [livro], ficha);
+
+        Assert.NotNull(resultado.Regras);
+        Assert.Equal(OrigemDasRegras.EstruturaDaFicha, resultado.Regras.Origem);
+
+        var gravadas = RegrasDaFicha.Carregar(_caminhos, "Aventura&Cia");
+
+        Assert.NotNull(gravadas);
+        Assert.Contains(gravadas.Campos, regra => regra.Campo == "Nome");
+
+        // Esqueleto não exige nada: as regras do jogo só existem depois de alguém ler os livros.
+        Assert.All(gravadas.Campos, regra => Assert.False(regra.Obrigatorio));
+
+        Assert.True(File.Exists(Path.Combine(
+            _caminhos.Conhecimento, "Aventura&Cia", SistemaRpg.NomeDaValidacaoDaFicha)));
+    }
+
+    /// <summary>
     /// Importar um sistema é trazer o jogo base dele: os livros caem em <c>base/</c> sem
     /// pergunta nenhuma, e é isso que dá a toda expansão futura uma pasta irmã com que ser
     /// comparada na hora de escolher o que aquela mesa usa.

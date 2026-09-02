@@ -21,6 +21,15 @@ public sealed class ManifestoDoPacote
     public int ArquivosDeConhecimento { get; set; }
 
     public List<string> Fichas { get; set; } = [];
+
+    /// <summary>
+    /// O pacote traz as regras de validação da ficha (<c>Ficha-Validacao.json</c>).
+    ///
+    /// <para>É informação, não exigência: um pacote gerado antes desta versão não as tem, e
+    /// continua entrando. O que ela permite é a interface dizer que o sistema recebido vai criar
+    /// personagem sem conferência automática até alguém reprocessá-lo.</para>
+    /// </summary>
+    public bool TemValidacao { get; set; }
 }
 
 /// <summary>Resultado de uma exportação, para a interface poder dizer o que saiu.</summary>
@@ -119,6 +128,7 @@ public static class PacoteDeSistema
         }
 
         var conhecimento = ArquivosDeConhecimento(diretorioConhecimento);
+        var validacao = Path.Combine(diretorioConhecimento, SistemaRpg.NomeDaValidacaoDaFicha);
 
         var manifesto = new ManifestoDoPacote
         {
@@ -128,6 +138,7 @@ public static class PacoteDeSistema
             Fontes = [.. sistema.DescobrirFontesComConhecimento(caminhos).Select(fonte => fonte.Id)],
             ArquivosDeConhecimento = conhecimento.Count,
             Fichas = [.. fichas.Select(Path.GetFileName).OfType<string>()],
+            TemValidacao = File.Exists(validacao),
         };
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(caminhoDoPacote))!);
@@ -141,6 +152,15 @@ public static class PacoteDeSistema
             {
                 var relativo = Relativo(diretorioConhecimento, caminho);
                 pacote.CreateEntryFromFile(caminho, PastaDoConhecimento + relativo);
+            }
+
+            // As regras de validação vão junto porque são resultado do mesmo gasto: o Configurador
+            // as escreveu lendo os mesmos livros que produziram a base. Sem elas, o sistema chegaria
+            // do outro lado criando personagem sem conferência nenhuma.
+            if (manifesto.TemValidacao)
+            {
+                pacote.CreateEntryFromFile(
+                    validacao, PastaDoConhecimento + SistemaRpg.NomeDaValidacaoDaFicha);
             }
 
             foreach (var ficha in fichas)
@@ -253,8 +273,12 @@ public static class PacoteDeSistema
                 {
                     fichas.Add(Path.GetFileName(destino));
                 }
-                else
+                else if (!Path.GetFileName(destino).Equals(
+                             SistemaRpg.NomeDaValidacaoDaFicha, StringComparison.OrdinalIgnoreCase))
                 {
+                    // As regras de validação não contam como conhecimento: um pacote que só as
+                    // trouxesse continua sendo um pacote sem base, e é isso que a checagem abaixo
+                    // precisa recusar.
                     conhecimento++;
                 }
             }
@@ -293,9 +317,13 @@ public static class PacoteDeSistema
         {
             var relativo = normalizada[PastaDoConhecimento.Length..];
 
-            return relativo.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
-                ? CaminhosDoProjeto.ResolverDentroDe(destinoConhecimento, relativo)
-                : null;
+            // Markdown é a base; o único arquivo que não é Markdown e entra é o de validação, e
+            // ele entra pelo nome exato. Aceitar ".json" em geral abriria a pasta do sistema a
+            // qualquer arquivo que o pacote quisesse depositar lá.
+            var aceito = relativo.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                || relativo.Equals(SistemaRpg.NomeDaValidacaoDaFicha, StringComparison.OrdinalIgnoreCase);
+
+            return aceito ? CaminhosDoProjeto.ResolverDentroDe(destinoConhecimento, relativo) : null;
         }
 
         if (normalizada.StartsWith(PastaDaFicha, StringComparison.OrdinalIgnoreCase))

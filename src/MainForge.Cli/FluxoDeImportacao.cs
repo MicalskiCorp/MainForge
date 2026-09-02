@@ -76,6 +76,8 @@ internal static class FluxoDeImportacao
         ConsoleUi.Info($"  {resultado.CamposDaFicha.Count} campo(s) preenchível(is) na ficha:");
         ConsoleUi.Detalhe($"    {string.Join(", ", resultado.CamposDaFicha)}");
 
+        RelatarValidacaoInicial(resultado.Regras);
+
         ConsoleUi.Info("");
         ConsoleUi.Info("O próximo passo é o Agente Configurador ler esses livros e a ficha para");
         ConsoleUi.Info("montar a base de conhecimento do sistema.");
@@ -84,6 +86,44 @@ internal static class FluxoDeImportacao
         {
             await FluxoDoConfigurador.ExecutarAsync(contexto, cancelamento, resultado.Sistema);
         }
+    }
+
+    /// <summary>
+    /// Conta o que o aplicativo já sabe conferir neste sistema, antes de qualquer livro ter sido
+    /// lido: a estrutura da ficha, tirada do próprio AcroForm.
+    ///
+    /// <para><b>Por que dizer isso agora.</b> O usuário acabou de entregar a ficha em branco, e a
+    /// resposta a "esta ficha comporta as magias por extenso?" já está decidida — é ela que faz o
+    /// aplicativo gerar, ou não, a folha extra de magias de cada personagem deste sistema. Ver
+    /// isso aqui é bem mais barato que descobri-lo na primeira ficha gerada.</para>
+    /// </summary>
+    private static void RelatarValidacaoInicial(RegrasDaFicha? regras)
+    {
+        if (regras is null)
+        {
+            ConsoleUi.Aviso("  Não consegui ler o leiaute da ficha para montar a validação do sistema.");
+            ConsoleUi.Detalhe("    O sistema entra assim mesmo; o Configurador refaz isso ao processar os livros.");
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Sucesso($"  Validação inicial gravada em Sistemas/ ({SistemaRpg.NomeDaValidacaoDaFicha}).");
+        ConsoleUi.Detalhe("    Ela já confere a estrutura da ficha; as regras do jogo (faixas de atributo,");
+        ConsoleUi.Detalhe("    classes válidas) entram quando o Configurador ler os livros.");
+
+        if (!regras.UsaMagias)
+        {
+            return;
+        }
+
+        if (regras.TrazMagiasPorExtenso)
+        {
+            ConsoleUi.Detalhe("    A ficha tem espaço para as magias por extenso.");
+            return;
+        }
+
+        ConsoleUi.Detalhe("    A ficha só tem espaço para a lista de magias — cada personagem conjurador");
+        ConsoleUi.Detalhe("    vai ganhar uma folha extra em Output/ com a descrição completa das dele.");
     }
 
     private static string? LerCaminhoDaFicha()

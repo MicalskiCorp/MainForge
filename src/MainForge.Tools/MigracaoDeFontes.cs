@@ -148,8 +148,18 @@ public static class MigracaoDeFontes
         return movidos;
     }
 
+    /// <summary>
+    /// O que não desce para <c>base/</c>: o índice e o registro de progresso, que são derivados,
+    /// e os arquivos da ficha, que valem para o sistema inteiro.
+    ///
+    /// <para>A migração enumera <c>*</c>, e não <c>*.md</c> — então <c>Ficha-Validacao.json</c>
+    /// precisa estar aqui pelo nome. Sem isso ele acabaria dentro de <c>base/</c>, onde
+    /// <see cref="RegrasDaFicha.Carregar"/> não olha, e o sistema migrado perderia a validação em
+    /// silêncio: nada quebraria, os personagens só deixariam de ser conferidos.</para>
+    /// </summary>
     private static bool FicaNaRaizDeKnowledge(string nome) =>
         nome.Equals(IndiceDeConhecimento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase) ||
         nome.Equals(EstadoDoProcessamento.NomeDoArquivo, StringComparison.OrdinalIgnoreCase) ||
+        nome.Equals(SistemaRpg.NomeDaValidacaoDaFicha, StringComparison.OrdinalIgnoreCase) ||
         SistemaRpg.ArquivosDaFicha.Contains(nome, StringComparer.OrdinalIgnoreCase);
 }

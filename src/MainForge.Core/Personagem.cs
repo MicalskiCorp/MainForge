@@ -25,7 +25,12 @@ public enum StatusDoPersonagem
 /// <param name="Nivel">O nível em que esta ficha foi concluída, ou <c>null</c> quando não foi informado.</param>
 /// <param name="Arquivo">Caminho do PDF guardado, relativo à raiz do projeto.</param>
 /// <param name="Em">Quando ela foi gerada.</param>
-public sealed record FichaDeNivel(int? Nivel, string Arquivo, DateTimeOffset Em)
+/// <param name="Magias">
+/// A folha extra de magias daquele nível, quando o sistema precisou de uma. Vai junto porque ela é
+/// parte do mesmo estado: um personagem que voltasse do histórico com a ficha do nível 3 e a folha
+/// de magias do nível 7 estaria pior do que sem folha nenhuma.
+/// </param>
+public sealed record FichaDeNivel(int? Nivel, string Arquivo, DateTimeOffset Em, string? Magias = null)
 {
     /// <summary>Como o nível aparece na interface — inclusive quando não se sabe qual é.</summary>
     public string Rotulo => Nivel is { } nivel ? $"nível {nivel}" : "nível não informado";
@@ -100,6 +105,17 @@ public sealed class Personagem
     /// entregado o que o usuário veio buscar.</para>
     /// </summary>
     public DateTimeOffset? FichaGeradaEm { get; set; }
+
+    /// <summary>
+    /// Caminho da folha extra com as magias por extenso, relativo à raiz do projeto, quando este
+    /// personagem tem uma. <c>null</c> é o caso normal: o sistema não usa magias, a ficha dele já
+    /// comporta as descrições, ou o personagem não é conjurador.
+    ///
+    /// <para>Fica no dossiê pelo mesmo motivo que <see cref="FichaGerada"/>: é uma entrega em
+    /// <c>Output/</c>, e o dossiê é quem sabe o que ele produziu. Ver
+    /// <c>MainForge.Tools.FolhaDeMagias</c>.</para>
+    /// </summary>
+    public string? FolhaDeMagias { get; set; }
 
     /// <summary>
     /// Os valores com que a ficha foi preenchida da última vez, por nome de campo do PDF. É o

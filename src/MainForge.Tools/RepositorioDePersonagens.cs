@@ -253,6 +253,19 @@ public static class RepositorioDePersonagens
         personagem.Campos = new Dictionary<string, string>(campos);
         personagem.Status = StatusDoPersonagem.Concluido;
 
+        // Depois dos campos e antes de arquivar: a folha sai do que a ficha acabou de dizer, e o
+        // histórico do nível guarda as duas juntas.
+        var folha = FolhaDeMagias.Produzir(caminhos, personagem);
+        personagem.FolhaDeMagias = folha.Caminho;
+
+        if (folha.Situacao != SituacaoDaFolhaDeMagias.Gerada)
+        {
+            // O personagem pode ter deixado de precisar dela — perdeu as magias, ou a ficha do
+            // sistema passou a comportá-las. Sem isto, a folha de ontem ficaria em Output/
+            // descrevendo magias que ele não tem mais.
+            FolhaDeMagias.ApagarSeSobrou(caminhos, personagem);
+        }
+
         var registro = FichasDoPersonagem.Arquivar(
             caminhos,
             personagem,
@@ -264,6 +277,11 @@ public static class RepositorioDePersonagens
         personagem.Anotar(
             $"{(evolucao ? "Ficha regerada" : "Ficha gerada")}: {personagem.FichaGerada}" +
             (registro is null ? "." : $" (guardada no histórico como {registro.Rotulo})."));
+
+        if (folha.Situacao == SituacaoDaFolhaDeMagias.Gerada)
+        {
+            personagem.Anotar($"Folha extra com {folha.Magias.Count} magia(s): {folha.Caminho}.");
+        }
 
         Salvar(caminhos, personagem);
     }

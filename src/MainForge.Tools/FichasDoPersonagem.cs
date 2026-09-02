@@ -88,7 +88,8 @@ public static class FichasDoPersonagem
         var registro = new FichaDeNivel(
             nivel,
             Path.GetRelativePath(caminhos.Raiz, destino).Replace('\\', '/'),
-            DateTimeOffset.Now);
+            DateTimeOffset.Now,
+            ArquivarMagias(caminhos, personagem, diretorio, nivel));
 
         personagem.Fichas.RemoveAll(ficha => ficha.Nivel == nivel);
         personagem.Fichas.Add(registro);
@@ -136,8 +137,51 @@ public static class FichasDoPersonagem
         }
     }
 
-    private static string NomeDoRegistro(int? nivel) =>
-        nivel is { } numero ? $"nivel-{numero:00}.pdf" : "sem-nivel.pdf";
+    /// <summary>
+    /// Guarda no histórico, ao lado da ficha do nível, a folha extra de magias daquele nível —
+    /// quando o personagem tem uma.
+    ///
+    /// <para>As duas andam juntas por serem o mesmo estado: a ficha diz que o personagem conhece
+    /// <c>Fireball</c> e a folha diz o que <c>Fireball</c> faz. Guardar só a primeira faria o
+    /// histórico devolver, meses depois, uma ficha com uma lista de nomes e nenhuma descrição —
+    /// e a folha em <c>Output/</c>, que é a única que existiria, já seria a de outro nível.</para>
+    /// </summary>
+    /// <returns>O caminho guardado, relativo à raiz, ou <c>null</c> quando não há folha.</returns>
+    private static string? ArquivarMagias(
+        CaminhosDoProjeto caminhos,
+        Personagem personagem,
+        string diretorio,
+        int? nivel)
+    {
+        if (personagem.FolhaDeMagias is not { Length: > 0 } atual)
+        {
+            return null;
+        }
+
+        try
+        {
+            var origem = CaminhosDoProjeto.ResolverDentroDe(caminhos.Raiz, atual);
+
+            if (!File.Exists(origem))
+            {
+                return null;
+            }
+
+            var destino = Path.Combine(diretorio, NomeDoRegistro(nivel, FolhaDeMagias.Sufixo));
+            File.Copy(origem, destino, overwrite: true);
+
+            return Path.GetRelativePath(caminhos.Raiz, destino).Replace('\\', '/');
+        }
+        catch (Exception excecao) when (excecao is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Perder a cópia da folha no histórico é ruim; derrubar o fechamento do dossiê por
+            // causa dela seria pior — é a mesma escolha que o retorno nulo de Arquivar já faz.
+            return null;
+        }
+    }
+
+    private static string NomeDoRegistro(int? nivel, string sufixo = "") =>
+        nivel is { } numero ? $"nivel-{numero:00}{sufixo}.pdf" : $"sem-nivel{sufixo}.pdf";
 
     private static bool EhOMesmo(Personagem umPersonagem, Personagem outro) =>
         umPersonagem.Id.Equals(outro.Id, StringComparison.OrdinalIgnoreCase) &&

@@ -641,6 +641,7 @@ internal static class FluxoDoConfigurador
         }
 
         AvisarSobreArquivosDaFicha(diretorioConhecimento);
+        AvisarSobreAValidacao(caminhos, sistema);
 
         if (!Directory.Exists(sistema.DiretorioModelo(caminhos)))
         {
@@ -755,11 +756,53 @@ internal static class FluxoDoConfigurador
         if (faltando.Count == 0)
         {
             ConsoleUi.Sucesso("Mapeamento e modelo em texto da ficha gerados.");
+        }
+        else
+        {
+            ConsoleUi.Aviso($"Faltou o agente gerar: {string.Join(", ", faltando)}.");
+            ConsoleUi.Info("O Dungeon Master precisa desses arquivos para mostrar e preencher a ficha —");
+            ConsoleUi.Info("vale reprocessar o sistema.");
+        }
+    }
+
+    /// <summary>
+    /// Diz em que pé ficaram as regras de validação do sistema.
+    ///
+    /// <para>Elas nascem na importação, com a estrutura da ficha, e é o Configurador quem as
+    /// preenche com as regras do jogo. Um processamento que termina sem tocar nelas deixa um
+    /// sistema que confere a forma da ficha e nenhuma regra — o que funciona, mas não é o que o
+    /// usuário acabou de pagar para ter, e ele precisa saber disso agora.</para>
+    /// </summary>
+    private static void AvisarSobreAValidacao(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        var regras = RegrasDaFicha.Carregar(caminhos, sistema.Id);
+
+        if (regras is null)
+        {
+            ConsoleUi.Aviso($"Faltou o agente gerar {SistemaRpg.NomeDaValidacaoDaFicha}.");
+            ConsoleUi.Info("Sem ele, os personagens deste sistema são criados sem conferência automática.");
             return;
         }
 
-        ConsoleUi.Aviso($"Faltou o agente gerar: {string.Join(", ", faltando)}.");
-        ConsoleUi.Info("O Dungeon Master precisa desses arquivos para mostrar e preencher a ficha —");
-        ConsoleUi.Info("vale reprocessar o sistema.");
+        if (regras.Origem == OrigemDasRegras.EstruturaDaFicha)
+        {
+            ConsoleUi.Aviso(
+                $"O {SistemaRpg.NomeDaValidacaoDaFicha} ainda é o da importação: ele confere a estrutura " +
+                "da ficha, mas nenhuma regra do jogo.");
+            ConsoleUi.Info("Reprocessar o sistema é o que faz o agente preenchê-lo com as regras dos livros.");
+            return;
+        }
+
+        var obrigatorios = regras.Campos.Count(regra => regra.Obrigatorio);
+
+        ConsoleUi.Sucesso(
+            $"Regras de validação gravadas: {regras.Campos.Count} campo(s), {obrigatorios} obrigatório(s).");
+
+        if (regras.UsaMagias && !regras.TrazMagiasPorExtenso)
+        {
+            ConsoleUi.Detalhe(
+                "A ficha deste sistema não comporta as magias por extenso — cada personagem conjurador " +
+                "vai ganhar uma folha extra com as descrições.");
+        }
     }
 }

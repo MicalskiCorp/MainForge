@@ -258,7 +258,8 @@ internal static class PromptDoConfigurador
         return texto
             .AppendLine()
             .AppendLine($"Exceção: os arquivos da ficha ficam na raiz de Sistemas/{sistema.Id}/ —")
-            .AppendLine($"{string.Join(" e ", SistemaRpg.ArquivosDaFicha)}.")
+            .AppendLine($"{string.Join(", ", SistemaRpg.ArquivosDaFicha)} e {SistemaRpg.NomeDaValidacaoDaFicha}")
+            .AppendLine($"(este último não é gravado por você: use registrar_validacao_da_ficha).")
             .AppendLine()
             .ToString();
     }

@@ -13,12 +13,18 @@ namespace MainForge.Tools;
 /// <param name="Livros">Nomes dos arquivos de livro copiados para Input/&lt;sistema&gt;/base/.</param>
 /// <param name="Ficha">Nome do arquivo de ficha copiado para Templates/&lt;sistema&gt;/.</param>
 /// <param name="CamposDaFicha">Campos de formulário encontrados na ficha.</param>
+/// <param name="Regras">
+/// O esqueleto de validação gerado a partir do AcroForm da ficha, ou <c>null</c> quando não deu
+/// para lê-lo. É o que já permite conferir um personagem neste sistema antes de qualquer livro
+/// ter sido processado — ver <see cref="RegrasDaFicha"/>.
+/// </param>
 public sealed record ResultadoDaImportacao(
     SistemaRpg Sistema,
     FonteDoSistema Fonte,
     IReadOnlyList<string> Livros,
     string Ficha,
-    IReadOnlyList<string> CamposDaFicha);
+    IReadOnlyList<string> CamposDaFicha,
+    RegrasDaFicha? Regras = null);
 
 /// <summary>
 /// Traz para dentro do projeto os arquivos que o usuário informa: os livros do sistema (PDF)
@@ -73,9 +79,49 @@ public static class ImportadorDeSistema
         var livrosCopiados = Copiar(caminhosDosLivros, diretorioDaFonte);
 
         var nomeDaFicha = Path.GetFileName(caminhoDaFicha);
-        File.Copy(caminhoDaFicha, Path.Combine(diretorioDoModelo, nomeDaFicha), overwrite: true);
+        var fichaCopiada = Path.Combine(diretorioDoModelo, nomeDaFicha);
+        File.Copy(caminhoDaFicha, fichaCopiada, overwrite: true);
 
-        return new ResultadoDaImportacao(sistema, FonteDoSistema.Base, livrosCopiados, nomeDaFicha, camposDaFicha);
+        return new ResultadoDaImportacao(
+            sistema,
+            FonteDoSistema.Base,
+            livrosCopiados,
+            nomeDaFicha,
+            camposDaFicha,
+            GerarEsqueletoDeValidacao(caminhos, sistema, fichaCopiada));
+    }
+
+    /// <summary>
+    /// Grava o <c>Ficha-Validacao.json</c> inicial do sistema, montado do AcroForm da ficha que
+    /// acabou de entrar.
+    ///
+    /// <para><b>Por que na importação, e não só no mapeamento.</b> O Configurador é quem sabe as
+    /// regras do jogo, mas ele roda depois — às vezes muito depois, às vezes nunca, num sistema
+    /// que o usuário importou para conferir uma ficha pronta. O que dá para responder já é o que
+    /// não depende de livro nenhum: quais campos a ficha tem, quais são caixa de marcação, em que
+    /// idioma ela está e se há espaço para as magias por extenso. Com isso, um personagem
+    /// importado neste sistema já é conferido no minuto seguinte, e a folha extra de magias já
+    /// sabe se precisa existir.</para>
+    ///
+    /// <para>Falha em ler o leiaute não derruba a importação: o sistema entra do mesmo jeito, só
+    /// sem validação — que é exatamente a situação de todo sistema anterior a esta versão.</para>
+    /// </summary>
+    private static RegrasDaFicha? GerarEsqueletoDeValidacao(
+        CaminhosDoProjeto caminhos,
+        SistemaRpg sistema,
+        string caminhoDaFicha)
+    {
+        try
+        {
+            var regras = RegrasDaFicha.Esqueleto(LayoutDaFicha.Ler(caminhoDaFicha));
+            RegrasDaFicha.Gravar(caminhos, sistema.Id, regras);
+
+            return regras;
+        }
+        catch (Exception excecao) when (excecao is not OutOfMemoryException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

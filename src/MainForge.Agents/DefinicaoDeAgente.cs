@@ -202,6 +202,7 @@ public sealed record DefinicaoDeAgente(
             "estrutura_do_livro",
             "listar_campos_da_ficha",
             "conferir_ficha_do_sistema",
+            "registrar_validacao_da_ficha",
         ],
         // Output/ são as fichas em PDF já entregues e Personagens/ são os dossiês delas: os dois
         // são resultado do Dungeon Master, e nada do que o Configurador faz depende de olhar
@@ -254,6 +255,7 @@ public sealed record DefinicaoDeAgente(
             "preencher_ficha_personagem",
             "registrar_personagem",
             "procurar_no_conhecimento",
+            "validar_personagem",
         ],
         NegacoesEspecificas: ["Read(Input/**)", "Read(Templates/**)", "Read(Output/**)"]);
 

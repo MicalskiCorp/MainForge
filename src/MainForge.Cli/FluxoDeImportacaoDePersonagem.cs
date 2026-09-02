@@ -290,6 +290,9 @@ internal static class FluxoDeImportacaoDePersonagem
 
         ConsoleUi.Detalhe($"{resultado.CamposAproveitados.Count} campo(s) guardados para a próxima geração da ficha.");
 
+        RelatarFolhaDeMagias(resultado.FolhaDeMagias);
+        RelatarValidacao(sistema, resultado.Validacao);
+
         if (resultado.CamposForaDoModelo.Count > 0)
         {
             ConsoleUi.Info("");
@@ -304,6 +307,83 @@ internal static class FluxoDeImportacaoDePersonagem
             ConsoleUi.Info("");
             ConsoleUi.Aviso($"{sistema.Id} não tem ficha em branco em Templates/ — o personagem existe, mas não há");
             ConsoleUi.Aviso("como gerar o PDF dele de novo até você importar a ficha do sistema.");
+        }
+    }
+
+    /// <summary>
+    /// Mostra o que a conferência mecânica achou nos valores trazidos.
+    ///
+    /// <para><b>Por que ela não impede a importação.</b> A ficha é a que está valendo na mesa do
+    /// usuário: um atributo acima do máximo pode ser um item mágico que a transcrição não capturou,
+    /// e uma classe fora da lista pode ser uma regra de casa. Recusar a importação por causa disso
+    /// deixaria de fora exatamente quem mais precisa dela. O que o aplicativo deve é não deixar o
+    /// usuário descobrir o problema na mesa — então aponta, grava no dossiê e segue.</para>
+    /// </summary>
+    private static void RelatarValidacao(SistemaRpg sistema, ResultadoDaValidacao validacao)
+    {
+        if (validacao.SemRegras)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Detalhe($"{sistema.Id} não tem regras de validação — nada foi conferido automaticamente.");
+            ConsoleUi.Detalhe("Processar os livros do sistema no menu 'Sistemas' produz essas regras.");
+            return;
+        }
+
+        ConsoleUi.Info("");
+
+        if (validacao.Aprovado)
+        {
+            ConsoleUi.Sucesso($"Conferência automática: nada fora das regras de {sistema.Id}.");
+            ConsoleUi.Detalhe("Isso é o que dá para conferir por máquina — faixas, campos obrigatórios, listas.");
+            ConsoleUi.Detalhe("O que depende de julgamento continua sendo conversa com o Dungeon Master.");
+            return;
+        }
+
+        ConsoleUi.Aviso($"{validacao.Violacoes.Count} ponto(s) fora das regras de {sistema.Id}:");
+
+        foreach (var violacao in validacao.Violacoes.Take(12))
+        {
+            ConsoleUi.Detalhe($"  · {violacao.Descrever()}");
+        }
+
+        if (validacao.Violacoes.Count > 12)
+        {
+            ConsoleUi.Detalhe($"  · ... e mais {validacao.Violacoes.Count - 12} (a lista inteira está no dossiê).");
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Info("O personagem foi importado assim mesmo: a ficha é a que vale na sua mesa, e o que");
+        ConsoleUi.Info("parece erro pode ser um combinado do grupo. Os apontamentos ficaram no dossiê.");
+    }
+
+    /// <summary>
+    /// Anuncia a folha extra de magias, quando ela saiu. Só quando saiu: nos três casos em que ela
+    /// não faz sentido — sistema sem magia, ficha que já comporta as descrições, personagem que não
+    /// conjura — não há novidade nenhuma a contar.
+    /// </summary>
+    private static void RelatarFolhaDeMagias(ResultadoDaFolhaDeMagias folha)
+    {
+        if (folha.Situacao == SituacaoDaFolhaDeMagias.NaoDeuParaGerar)
+        {
+            ConsoleUi.Info("");
+            ConsoleUi.Aviso($"Não consegui gerar a folha extra de magias: {folha.Motivo}");
+            return;
+        }
+
+        if (folha.Situacao != SituacaoDaFolhaDeMagias.Gerada)
+        {
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Sucesso($"Folha extra com {folha.Magias.Count} magia(s): {folha.Caminho}");
+        ConsoleUi.Detalhe("A ficha deste sistema não tem espaço para as descrições — elas saíram à parte.");
+
+        if (folha.SemDescricao.Count > 0)
+        {
+            ConsoleUi.Detalhe(
+                $"  {folha.SemDescricao.Count} sem descrição na base: {string.Join(", ", folha.SemDescricao.Take(6))}");
+            ConsoleUi.Detalhe("  Elas aparecem na folha só com o nome; reprocessar o sistema costuma resolver.");
         }
     }
 

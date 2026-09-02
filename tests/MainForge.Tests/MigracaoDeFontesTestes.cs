@@ -79,6 +79,29 @@ public sealed class MigracaoDeFontesTestes : IDisposable
     }
 
     /// <summary>
+    /// A validação vale para o sistema inteiro como os outros dois arquivos da ficha — mas ela não
+    /// está em <see cref="SistemaRpg.ArquivosDaFicha"/> e a migração enumera <c>*</c>, não
+    /// <c>*.md</c>. Descendo para <c>base/</c>, ela sairia do lugar em que
+    /// <c>RegrasDaFicha.Carregar</c> olha, e o sistema migrado perderia a conferência em silêncio.
+    /// </summary>
+    [Fact]
+    public void Migrar_DeixaAValidacaoDaFichaNaRaizDoSistema()
+    {
+        MontarLayoutAntigo();
+
+        RegrasDaFicha.Gravar(_caminhos, "Aventura&Cia", new RegrasDaFicha
+        {
+            Campos = [new RegraDeCampo { Campo = "Nome" }],
+        });
+
+        MigracaoDeFontes.Migrar(_caminhos, "Aventura&Cia");
+
+        Assert.True(File.Exists(NoConhecimento(SistemaRpg.NomeDaValidacaoDaFicha)));
+        Assert.False(File.Exists(NoConhecimento("base", SistemaRpg.NomeDaValidacaoDaFicha)));
+        Assert.NotNull(RegrasDaFicha.Carregar(_caminhos, "Aventura&Cia"));
+    }
+
+    /// <summary>
     /// Sem reapontar o plano, o próximo processamento veria todo arquivo já pronto como
     /// pendente e mandaria o agente gerar de novo o que já foi pago.
     /// </summary>

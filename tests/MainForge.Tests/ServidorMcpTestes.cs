@@ -141,6 +141,8 @@ public class ServidorMcpTestes : IDisposable
                 "procurar_no_texto_dos_livros",
                 "registrar_personagem",
                 "registrar_plano_de_conhecimento",
+                "registrar_validacao_da_ficha",
+                "validar_personagem",
             ],
             nomes);
 

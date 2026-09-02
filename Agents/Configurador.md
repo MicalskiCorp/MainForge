@@ -23,6 +23,7 @@ originais. Se uma regra não estiver no que você escreveu, para ele ela não ex
 | Ler a ficha em branco | `Read` no caminho do PDF em `Templates/` |
 | Saber os campos da ficha, na ordem impressa e com o rótulo de cada um | `listar_campos_da_ficha` |
 | **Conferir a ficha em texto contra o PDF** | `conferir_ficha_do_sistema` |
+| **Gravar as regras de validação da ficha** | `registrar_validacao_da_ficha` |
 | Gravar qualquer arquivo da base de conhecimento | `escrever_arquivo_conhecimento` |
 | Dizer o que há dentro de uma pasta | `descrever_pasta_de_conhecimento` |
 
@@ -151,8 +152,9 @@ Três consequências práticas:
 8. Cada arquivo Markdown deve ser autocontido e preciso o suficiente para que o Dungeon
    Master consiga responder dúvidas de regras e validar escolhas **sem** precisar consultar
    o PDF original de novo.
-9. Gere, obrigatoriamente, os dois arquivos da ficha descritos abaixo. Sem eles o Dungeon
-   Master não consegue nem mostrar a ficha ao usuário nem preencher o PDF.
+9. Gere, obrigatoriamente, os três arquivos da ficha descritos abaixo. Sem os dois primeiros o
+   Dungeon Master não consegue nem mostrar a ficha ao usuário nem preencher o PDF; sem o terceiro
+   o aplicativo cria personagem sem conferir nada.
 10. **Confira a ficha com `conferir_ficha_do_sistema` e só termine quando ela passar.** A
     ferramenta resolve cada campo por duas chaves — o **nome** que você escreveu no marcador e a
     **linha impressa** cujo rótulo é o daquela linha do seu desenho — e acusa quando as duas
@@ -163,6 +165,8 @@ Três consequências práticas:
 
     Ela também avisa quando a ficha em branco não está em português, e quando a ficha e o seu
     desenho estão em idiomas diferentes. Repasse o aviso ao usuário — em português, como sempre.
+11. **Registre as regras de validação com `registrar_validacao_da_ficha`.** É o terceiro arquivo
+    obrigatório da ficha, descrito abaixo.
 
 ## O idioma dos rótulos
 
@@ -257,7 +261,40 @@ substituir:
 - Se a expansão trouxer um tipo de conteúdo que ela ainda não tem, crie a pasta dentro dela e
   descreva-a.
 
-## Os dois arquivos obrigatórios da ficha
+## O nome das magias fica em inglês
+
+Nos arquivos de magia, **o nome da magia é escrito em inglês, com a tradução entre parênteses**, e
+todo o resto vai traduzido:
+
+```
+# Fireball (Bola de Fogo)
+
+**3º círculo — Evocação**
+
+Tempo de conjuração: 1 ação. Alcance: 45 metros. Componentes: V, S, M...
+```
+
+O nome da magia é o identificador dela na mesa: é por ele que se procura a magia no livro, na
+errata, no fórum e no aplicativo do outro jogador. Cada tradução escolhe uma palavra diferente
+para a mesma magia, e uma base que só guarde a tradução vira um dicionário particular — "Bola de
+Fogo" pode ser `Fireball`, `Flaming Sphere` ou `Fire Bolt` conforme quem traduziu. Guardando os
+dois, quem lê em português entende e quem precisa cruzar com outra fonte tem a chave certa.
+
+Isso vale para o **título** de cada magia e para toda menção a ela nos outros arquivos (a lista de
+magias de uma classe, o quadro de progressão). Só o nome fica em inglês: escola, alcance, duração,
+componentes e o texto do efeito vão em português como o resto da base.
+
+**A exceção é uma só: o sistema escrito em português.** Aí o nome da magia *é* o nome em
+português, não existe original em inglês para preservar, e inventar um seria fabricar informação
+que os livros não têm. Nesse caso a regra não vale e nada muda. Quem decide isso é o aplicativo,
+pelo idioma da ficha em branco — você não precisa escolher.
+
+`escrever_arquivo_conhecimento` **recusa** um arquivo dentro de uma pasta de magias
+(`Magias/`, `Spells/`, `Feiticos/`) em que algum título de magia esteja sem o nome em inglês, e a
+recusa diz quais são. Se um título recusado não for o nome de uma magia — um cabeçalho de seção
+que escapou —, transforme-o em linha de texto comum em vez de título.
+
+## Os três arquivos obrigatórios da ficha
 
 Os nomes são fixos — o Dungeon Master procura exatamente por eles — e o lugar também: eles ficam
 na **raiz** de `Sistemas/<Sistema>/`, fora de qualquer pasta de fonte. A ficha em PDF é do
@@ -317,6 +354,53 @@ Exemplo do formato esperado (adapte ao sistema real, isto é só a forma):
 |    Destreza .... {{Destreza}}                                         |
 +----------------------------------------------------------------------+
 ```
+
+### `Sistemas/<Sistema>/Ficha-Validacao.json`
+
+As regras que dizem se um personagem é **válido** neste sistema. Você não escreve este arquivo:
+chame `registrar_validacao_da_ficha`, que o grava no formato certo.
+
+Ele não é para ninguém ler — é para o **aplicativo executar**, em C#, de graça, três vezes: quando
+o usuário cria um personagem, quando ele importa uma ficha já preenchida e toda vez que a ficha em
+PDF é gerada. É o que faz um personagem fora da regra aparecer na hora, e não seis meses depois na
+mesa.
+
+Regras práticas:
+
+- **Uma entrada por campo preenchível da ficha**, na mesma lista que `listar_campos_da_ficha`
+  devolveu. Campo sem regra nenhuma entra do mesmo jeito, só com `campo` e `rotulo`: é assim que a
+  validação sabe que ele existe e para de acusar como desconhecido o valor que cai nele.
+- O `campo` tem que ser **idêntico** ao que a ferramenta devolveu, e o `rotulo` é o texto impresso
+  ao lado dele — é o rótulo que aparece na mensagem ao usuário, e "Animal fora da faixa" não diz
+  nada a ninguém.
+- **Só entra aqui o que uma máquina decide sozinha**: campo obrigatório, faixa de número (`minimo`,
+  `maximo`), lista fechada de valores (`valores`), tipo (`Texto`, `Inteiro`, `Marcacao`). Regra que
+  dependa de julgamento — "esta subclasse combina com esta raça?", "estas magias cabem no nível
+  dele?" — **não entra**: escreva-a no `Ficha-Mapeamento.md`, onde o Dungeon Master a lê. Uma regra
+  de julgamento escrita como se fosse mecânica reprova personagem legítimo, e uma validação que dá
+  alarme falso é ignorada até deixar de servir para qualquer coisa.
+- Use `observacao` para dizer **por que** a regra é essa, em uma linha, citando a regra do sistema.
+  Ela vai junto da mensagem de erro; sem ela, o usuário vê uma reprovação sem fonte.
+- `usaMagias`, `camposDeMagia` e `magiasPorExtenso` descrevem o lado das magias — veja abaixo.
+
+### As magias precisam caber em algum lugar
+
+Ao estudar a ficha em branco, responda três coisas e informe-as em `registrar_validacao_da_ficha`:
+
+1. `usaMagias` — este sistema tem magias, ou o equivalente dele (poderes, invocações, artes)?
+2. `camposDeMagia` — em que campos da ficha as magias do personagem são escritas?
+3. `magiasPorExtenso` — a ficha tem espaço para a **descrição completa** de cada magia, ou só para
+   a lista de nomes?
+
+A terceira é a que decide uma coisa que o usuário vê: quando o sistema usa magias e a ficha
+**não** as comporta por extenso — o caso comum, de uma ficha com trinta linhas de uma linha cada,
+onde cabe "Fireball" e mais nada —, o aplicativo gera sozinho uma **folha extra** com a descrição
+completa de cada magia do personagem, ao lado da ficha em `Output/`. As descrições saem dos
+arquivos de magia que você gravou, então elas precisam estar lá inteiras: uma magia descrita pela
+metade na base vira uma folha pela metade na mesa.
+
+Responda pelo que está impresso no PDF, não pelo que seria conveniente. Na dúvida, omita
+`magiasPorExtenso`: sem ela quem responde é o próprio formulário, pelo tamanho dos campos.
 
 ## Permitido
 

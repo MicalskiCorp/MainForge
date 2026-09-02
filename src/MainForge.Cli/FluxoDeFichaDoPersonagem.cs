@@ -43,6 +43,43 @@ internal static class FluxoDeFichaDoPersonagem
 
         MostrarDesenho(contexto.Caminhos, escolhido);
         GarantirPdf(contexto.Caminhos, escolhido);
+        Conferir(contexto.Caminhos, escolhido);
+    }
+
+    /// <summary>
+    /// Confere o personagem contra as regras do sistema e mostra o que estiver fora delas.
+    ///
+    /// <para><b>Por que também aqui.</b> A validação já rodou quando o personagem foi criado ou
+    /// importado — mas as regras do sistema mudam: o Configurador reprocessa os livros, uma
+    /// expansão entra, alguém corrige uma faixa errada. Esta tela é a única que o usuário abre por
+    /// vontade própria com o personagem pronto, e conferir aqui não custa nada. O silêncio quando
+    /// está tudo certo é de propósito: anunciar aprovação a cada visualização ensinaria a ignorar
+    /// as mensagens desta tela.</para>
+    /// </summary>
+    private static void Conferir(CaminhosDoProjeto caminhos, Personagem personagem)
+    {
+        var validacao = ValidacaoDePersonagem.Validar(caminhos, personagem);
+
+        if (validacao.SemRegras || validacao.Aprovado)
+        {
+            return;
+        }
+
+        ConsoleUi.Info("");
+        ConsoleUi.Aviso($"{validacao.Violacoes.Count} ponto(s) fora das regras de {personagem.Sistema}:");
+
+        foreach (var violacao in validacao.Violacoes.Take(12))
+        {
+            ConsoleUi.Detalhe($"  · {violacao.Descrever()}");
+        }
+
+        if (validacao.Violacoes.Count > 12)
+        {
+            ConsoleUi.Detalhe($"  · ... e mais {validacao.Violacoes.Count - 12}.");
+        }
+
+        ConsoleUi.Detalhe("Para resolver, use 'Evoluir ou alterar um pronto' — o Dungeon Master confere o");
+        ConsoleUi.Detalhe("que depende das regras e pergunta antes de mudar qualquer coisa.");
     }
 
     /// <summary>
@@ -132,6 +169,45 @@ internal static class FluxoDeFichaDoPersonagem
             ConsoleUi.Detalhe(
                 $"{resultado.CamposIgnorados.Count} campo(s) do dossiê não existem na ficha em branco de " +
                 $"{personagem.Sistema} e ficaram fora do PDF: {string.Join(", ", resultado.CamposIgnorados.Take(10))}");
+        }
+
+        GarantirFolhaDeMagias(caminhos, personagem);
+    }
+
+    /// <summary>
+    /// Confere se a folha extra de magias está em <c>Output/</c>, e a refaz se não estiver — pelo
+    /// mesmo motivo que a ficha: o dossiê sobrevive à pasta ser esvaziada, e refazer a folha custa
+    /// zero token.
+    ///
+    /// <para>Ela é regerada sempre que este método roda, e não só quando o arquivo sumiu: a folha
+    /// depende da base de conhecimento, que muda quando o sistema é reprocessado, e recompô-la é
+    /// barato o bastante para não valer a pena guardar quando ela ficou pronta.</para>
+    /// </summary>
+    private static void GarantirFolhaDeMagias(CaminhosDoProjeto caminhos, Personagem personagem)
+    {
+        var atual = RepositorioDePersonagens.Carregar(caminhos, personagem.Sistema, personagem.Id) ?? personagem;
+        var folha = FolhaDeMagias.Produzir(caminhos, atual);
+
+        switch (folha.Situacao)
+        {
+            case SituacaoDaFolhaDeMagias.Gerada:
+                atual.FolhaDeMagias = folha.Caminho;
+                RepositorioDePersonagens.Salvar(caminhos, atual);
+
+                ConsoleUi.Detalhe($"Folha de magias ({folha.Magias.Count} magia(s)): {folha.Caminho}");
+
+                if (folha.SemDescricao.Count > 0)
+                {
+                    ConsoleUi.Detalhe(
+                        $"  {folha.SemDescricao.Count} sem descrição na base: " +
+                        $"{string.Join(", ", folha.SemDescricao.Take(6))}");
+                }
+
+                break;
+
+            case SituacaoDaFolhaDeMagias.NaoDeuParaGerar:
+                ConsoleUi.Aviso($"Não consegui gerar a folha de magias: {folha.Motivo}");
+                break;
         }
     }
 }
