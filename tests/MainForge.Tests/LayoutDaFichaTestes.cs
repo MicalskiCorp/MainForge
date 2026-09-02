@@ -199,4 +199,152 @@ public class LayoutDaFichaTestes : IDisposable
 
     private static string? Rotulo(IReadOnlyList<CampoDaFicha> campos, string nome) =>
         campos.Single(campo => campo.Nome == nome).Rotulo;
+
+    /// <summary>Um campo posto onde o teste quiser, em coordenada de PDF (o y cresce para cima).</summary>
+    private sealed record Caixa(string Nome, double Esquerda, double Base, double Largura, double AlturaDoCampo);
+
+    /// <summary>Um texto impresso onde o teste quiser, pela linha de base dele.</summary>
+    private sealed record Impresso(string Texto, double Esquerda, double Base, double Corpo = 7);
+
+    private const double AlturaLivre = 800;
+
+    /// <summary>
+    /// Uma ficha em que cada campo e cada texto vai exatamente onde o teste mandar.
+    ///
+    /// <para>O fixture das linhas acima não serve para os casos deste bloco: eles são justamente
+    /// sobre <b>geometria</b> — campo alto com o rótulo ao lado, campo largo com a legenda do
+    /// vizinho ao alcance — e precisam de retângulos e linhas de base escolhidos a dedo.</para>
+    /// </summary>
+    private string CriarFichaLivre(IReadOnlyList<Caixa> caixas, IReadOnlyList<Impresso> textos)
+    {
+        var caminho = Path.Combine(_diretorio, "FichaLivre.pdf");
+
+        using (var documento = new PdfDocument())
+        {
+            var pagina = documento.AddPage();
+            pagina.Width = XUnit.FromPoint(400);
+            pagina.Height = XUnit.FromPoint(AlturaLivre);
+
+            using (var grafico = XGraphics.FromPdfPage(pagina))
+            {
+                foreach (var texto in textos)
+                {
+                    grafico.DrawString(
+                        texto.Texto,
+                        new XFont("Arial", texto.Corpo),
+                        XBrushes.Black,
+                        new XPoint(texto.Esquerda, AlturaLivre - texto.Base));
+                }
+            }
+
+            var anotacoes = new PdfArray(documento);
+            var campos = new PdfArray(documento);
+
+            foreach (var caixa in caixas)
+            {
+                var widget = new PdfDictionary(documento);
+                documento.Internals.AddObject(widget);
+
+                widget.Elements.SetName("/Type", "/Annot");
+                widget.Elements.SetName("/Subtype", "/Widget");
+                widget.Elements.SetName("/FT", "/Tx");
+                widget.Elements.SetString("/T", caixa.Nome);
+                widget.Elements.SetString("/DA", "/Helv 9 Tf 0 g");
+                widget.Elements.SetInteger("/F", 4);
+                widget.Elements.SetRectangle(
+                    "/Rect",
+                    new PdfRectangle(
+                        new XPoint(caixa.Esquerda, caixa.Base),
+                        new XPoint(caixa.Esquerda + caixa.Largura, caixa.Base + caixa.AlturaDoCampo)));
+
+                anotacoes.Elements.Add(widget.Reference!);
+                campos.Elements.Add(widget.Reference!);
+            }
+
+            pagina.Elements.SetObject("/Annots", anotacoes);
+
+            var formulario = new PdfDictionary(documento);
+            documento.Internals.AddObject(formulario);
+            formulario.Elements.SetObject("/Fields", campos);
+            formulario.Elements.SetString("/DA", "/Helv 9 Tf 0 g");
+
+            documento.Internals.Catalog.Elements.SetReference("/AcroForm", formulario);
+
+            documento.Save(caminho);
+        }
+
+        return caminho;
+    }
+
+    /// <summary>
+    /// O caso que apareceu na ficha de D&amp;D 5e: um campo <b>alto</b> (17 pt) com o rótulo
+    /// impresso ao lado. A linha de base do texto fica ~6 pt acima da borda de baixo do quadro —
+    /// pouco mais que a tolerância —, e enquanto a régua comparava <b>bases</b> o campo saía
+    /// <b>sem rótulo nenhum</b>.
+    ///
+    /// <para>Não era um pareamento errado: era a perda da possibilidade de conferir. Foram sete
+    /// campos, e os sete são os que ninguém confere de olho — a sabedoria passiva, o bônus de
+    /// proficiência e as cinco caixas de moeda.</para>
+    /// </summary>
+    [Fact]
+    public void Ler_CampoAltoComRotuloAoLado_AchaORotulo()
+    {
+        var caminho = CriarFichaLivre(
+            [new Caixa("Passive", 30, 100, 25, 17)],
+            [new Impresso("SABEDORIA PASSIVA", 90, 106.1)]);
+
+        var campo = LayoutDaFicha.Ler(caminho).Single();
+
+        Assert.Equal("SABEDORIA PASSIVA", campo.Rotulo);
+        Assert.Equal(DirecaoDoRotulo.Direita, campo.Direcao);
+    }
+
+    /// <summary>
+    /// O outro lado da mesma moeda: alcançar mais longe na horizontal deixou um campo <b>largo</b>
+    /// tomar a legenda do campo vizinho. Na ficha de D&amp;D 5e, a caixa do nome do personagem tem
+    /// 208 pt e o "IDADE" da caixa ao lado passou a ficar dentro do alcance dela — o campo do nome
+    /// passou a se chamar "idade".
+    ///
+    /// <para>O que impede isso é a legenda estar reservada: texto colado numa caixa e contido na
+    /// largura dela não está disponível para a caixa do lado.</para>
+    /// </summary>
+    [Fact]
+    public void Ler_CampoLargo_NaoTomaALegendaDoVizinho()
+    {
+        var caminho = CriarFichaLivre(
+            [
+                new Caixa("CharacterName 2", 40, 700, 210, 24),
+                new Caixa("Age", 260, 728, 40, 16),
+            ],
+            [
+                new Impresso("NOME DO PERSONAGEM", 60, 688),
+                new Impresso("IDADE", 262, 714),
+            ]);
+
+        var campos = LayoutDaFicha.Ler(caminho);
+
+        Assert.Equal("NOME DO PERSONAGEM", Rotulo(campos, "CharacterName 2"));
+        Assert.Equal("IDADE", Rotulo(campos, "Age"));
+    }
+
+    /// <summary>
+    /// A reserva vale só quando a legenda é o palpite melhor. Um texto que legenda uma caixa de
+    /// longe continua disponível para o campo que o tem colado do lado — senão a regra que
+    /// conserta o campo largo estragaria o campo estreito.
+    /// </summary>
+    [Fact]
+    public void Ler_LegendaDistante_NaoReservaContraUmRotuloColado()
+    {
+        var caminho = CriarFichaLivre(
+            [
+                new Caixa("Valor", 30, 400, 25, 17),
+                new Caixa("Quadro", 88, 380, 120, 18),
+            ],
+            // Colado à direita de 'Valor' (3 pt) e a 9 pt acima de 'Quadro'.
+            [new Impresso("PERCEPCAO", 58, 406.1)]);
+
+        var campos = LayoutDaFicha.Ler(caminho);
+
+        Assert.Equal("PERCEPCAO", Rotulo(campos, "Valor"));
+    }
 }

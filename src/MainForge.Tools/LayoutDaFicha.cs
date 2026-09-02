@@ -48,6 +48,15 @@ public enum DirecaoDoRotulo
 /// um palpite com cara de fato.
 /// </param>
 /// <param name="DeMarcacao">É caixa de marcação, e não campo de texto.</param>
+/// <param name="DeVariasLinhas">
+/// É um campo de texto que aceita várias linhas (<c>/Ff</c> com o bit de multilinha). Vai junto
+/// porque é o que separa "cabe um nome" de "cabe uma descrição": uma ficha que traz as magias por
+/// extenso tem um quadro desses, e uma que só tem espaço para a lista de nomes não tem nenhum.
+/// </param>
+/// <param name="Altura">
+/// A altura do campo em pontos. Com <paramref name="DeVariasLinhas"/>, é o que diz quantas linhas
+/// de texto cabem ali de verdade — um campo multilinha de 12 pt é uma linha só com a marca errada.
+/// </param>
 public sealed record CampoDaFicha(
     string Nome,
     int Pagina,
@@ -56,7 +65,9 @@ public sealed record CampoDaFicha(
     string? Rotulo,
     DirecaoDoRotulo Direcao,
     double DistanciaDoRotulo,
-    bool DeMarcacao);
+    bool DeMarcacao,
+    bool DeVariasLinhas = false,
+    double Altura = 0);
 
 /// <summary>
 /// Lê a ficha em branco de um sistema e devolve os campos preenchíveis <b>na ordem em que estão
@@ -88,6 +99,31 @@ public static class LayoutDaFicha
     /// mesma base — na ficha de D&amp;D a diferença chega a 4 pt na mesma linha.
     /// </summary>
     private const double ToleranciaDaLinha = 6.0;
+
+    /// <summary>
+    /// Quanto o <b>meio</b> de um texto impresso pode ficar acima ou abaixo do meio de um campo e
+    /// os dois ainda serem a mesma linha da ficha.
+    ///
+    /// <para><b>Por que o meio, e não a base.</b> Comparar as bases parece a mesma coisa e não é:
+    /// a base de um texto é a linha em que as letras se apoiam, e a de um campo é a borda de baixo
+    /// do quadro, que desce mais quanto mais alto for o campo. Num campo de 8 pt (uma perícia) as
+    /// duas quase coincidem; num de 17 pt (o bônus de proficiência, a sabedoria passiva, as
+    /// moedas) o rótulo fica 6 a 7 pt acima da base do quadro — pouco mais que a tolerância —, e o
+    /// campo era dado como <b>sem rótulo nenhum</b>.
+    ///
+    /// Isso não errava um pareamento: apagava a possibilidade de conferir. Na ficha de D&amp;D 5e
+    /// em português eram sete campos, e os sete são exatamente os que ninguém confere de olho —
+    /// a sabedoria passiva, o bônus de proficiência e as cinco caixas de moeda, em que o nome
+    /// interno é a abreviação em inglês e o rótulo impresso é a em português (<c>SP</c>, de
+    /// <i>silver</i>, impresso ao lado de "PP"; <c>PP</c>, de <i>platinum</i>, ao lado de "PL").
+    /// Sem rótulo, <see cref="ConferenciaDaFicha"/> se cala e o mapeamento fica valendo por
+    /// palpite — que é a única coisa que este arquivo existe para não deixar acontecer.</para>
+    ///
+    /// <para>O meio resolve os dois lados sem afrouxar nada: num campo alto de verdade (o quadro
+    /// de "Características e Habilidades", 370 pt) o meio fica longe de qualquer legenda, e o
+    /// rótulo continua vindo da busca vertical, acima ou abaixo — como sempre veio.</para>
+    /// </summary>
+    private const double ToleranciaDoMeio = 6.0;
 
     /// <summary>
     /// Lacuna horizontal a partir da qual duas palavras deixam de ser o mesmo rótulo. Menor que
@@ -122,6 +158,7 @@ public static class LayoutDaFicha
         foreach (var pagina in widgets.Keys.Order())
         {
             var daPagina = rotulos.GetValueOrDefault(pagina, []);
+            var legendados = JaLegendam(daPagina, widgets[pagina]);
             var ordem = 0;
             var numeroDaLinha = 0;
 
@@ -131,7 +168,7 @@ public static class LayoutDaFicha
 
                 foreach (var widget in linha)
                 {
-                    var (rotulo, direcao, distancia) = RotuloDe(widget, daPagina);
+                    var (rotulo, direcao, distancia) = RotuloDe(widget, daPagina, legendados);
 
                     campos.Add(new CampoDaFicha(
                         widget.Nome,
@@ -141,7 +178,9 @@ public static class LayoutDaFicha
                         rotulo,
                         direcao,
                         distancia,
-                        widget.DeMarcacao));
+                        widget.DeMarcacao,
+                        widget.DeVariasLinhas,
+                        widget.Altura));
                 }
             }
         }
@@ -149,14 +188,24 @@ public static class LayoutDaFicha
         return campos;
     }
 
-    private sealed record Widget(string Nome, double Base, double Esquerda, double Largura, double Altura, bool DeMarcacao)
+    private sealed record Widget(
+        string Nome,
+        double Base,
+        double Esquerda,
+        double Largura,
+        double Altura,
+        bool DeMarcacao,
+        bool DeVariasLinhas = false)
     {
         public double Meio => Base + (Altura / 2);
 
         public double Direita => Esquerda + Largura;
     }
 
-    private sealed record Rotulo(string Texto, double Base, double Esquerda, double Direita);
+    private sealed record Rotulo(string Texto, double Base, double Topo, double Esquerda, double Direita)
+    {
+        public double Meio => (Base + Topo) / 2;
+    }
 
     /// <summary>
     /// Agrupa os campos como alguém lê a página: de cima para baixo e, dentro da mesma linha, da
@@ -194,19 +243,26 @@ public static class LayoutDaFicha
     /// </summary>
     private static (string? Texto, DirecaoDoRotulo Direcao, double Distancia) RotuloDe(
         Widget widget,
-        List<Rotulo> daPagina)
+        List<Rotulo> daPagina,
+        IReadOnlyDictionary<Rotulo, double> legendados)
     {
         var candidatos = new List<(Rotulo Rotulo, DirecaoDoRotulo Direcao, double Distancia)>();
 
         foreach (var rotulo in daPagina)
         {
-            if (Math.Abs(rotulo.Base - widget.Base) <= ToleranciaDaLinha)
+            if (Math.Abs(rotulo.Meio - widget.Meio) <= ToleranciaDoMeio)
             {
                 var lacuna = rotulo.Esquerda >= widget.Direita ? rotulo.Esquerda - widget.Direita
                     : rotulo.Direita <= widget.Esquerda ? widget.Esquerda - rotulo.Direita
                     : 0;
 
-                if (lacuna <= AlcanceNaLinha)
+                // Texto que já é a legenda de outro campo, e mais perto dele do que daqui, não
+                // está disponível: "IDADE" fica logo abaixo da caixa de idade e logo à direita da
+                // caixa larga do nome do personagem, e sem esta regra a segunda o tomava da
+                // primeira — passando a chamar de "idade" o campo do nome.
+                var deOutro = legendados.TryGetValue(rotulo, out var doDono) && doDono < lacuna;
+
+                if (lacuna <= AlcanceNaLinha && !deOutro)
                 {
                     candidatos.Add((
                         rotulo,
@@ -243,6 +299,70 @@ public static class LayoutDaFicha
         var melhor = candidatos.MinBy(candidato => candidato.Distancia);
 
         return (melhor.Rotulo.Texto, melhor.Direcao, Math.Round(melhor.Distancia, 1));
+    }
+
+    /// <summary>
+    /// Quão perto, na vertical, um texto precisa estar de uma caixa para ser <b>a legenda dela</b>
+    /// — e não apenas um texto que passa por perto. Legenda vem colada; o alcance generoso de
+    /// <see cref="AlcanceVertical"/> serve para <em>achar</em> um rótulo quando não há nenhum
+    /// outro, que é uma afirmação bem mais fraca do que <em>reservar</em> um.
+    /// </summary>
+    private const double VaoDeLegenda = 10.0;
+
+    /// <summary>
+    /// Quanto um texto pode transbordar a largura da caixa e ainda ser legenda dela. Legenda é
+    /// alinhada com o que ela nomeia; texto que atravessa a caixa e segue adiante está falando de
+    /// outra coisa — na ficha de D&amp;D, "SABEDORIA PASSIVA (PERCEPÇÃO)" passa por cima do quadro
+    /// de proficiências e sai 50 pt fora dele, e não legenda coisa nenhuma ali.
+    /// </summary>
+    private const double TransbordoDeLegenda = 4.0;
+
+    /// <summary>
+    /// Para cada texto impresso que é <b>legenda</b> de algum campo — colado acima ou abaixo dele
+    /// e alinhado com ele —, a menor distância a que ele legenda alguém.
+    ///
+    /// <para><b>Para que serve.</b> Legenda é a forma menos ambígua de rotular: fica grudada na
+    /// caixa e contida na largura dela. Um texto assim não é candidato a rotular a caixa <em>ao
+    /// lado</em>, por mais perto que ela esteja — e sem essa reserva um campo largo alcança
+    /// lateralmente a legenda do vizinho, que foi o que passou a acontecer quando a régua da mesma
+    /// linha deixou de comparar bases e passou a comparar meios: a caixa do nome do personagem, com
+    /// 208 pt de largura, tomou o "IDADE" da caixa de idade que fica 9,8 pt à direita dela.</para>
+    ///
+    /// <para>Só a distância menor reserva: um texto que legenda uma caixa a 8 pt continua
+    /// disponível para o campo que o tem a 5 pt do lado, porque aí a legenda é que era o palpite
+    /// pior.</para>
+    /// </summary>
+    private static Dictionary<Rotulo, double> JaLegendam(List<Rotulo> daPagina, List<Widget> widgets)
+    {
+        var legendas = new Dictionary<Rotulo, double>();
+
+        foreach (var rotulo in daPagina)
+        {
+            foreach (var widget in widgets)
+            {
+                // Contido na largura da caixa, e não só encostando nela.
+                if (rotulo.Esquerda < widget.Esquerda - TransbordoDeLegenda
+                    || rotulo.Direita > widget.Direita + TransbordoDeLegenda)
+                {
+                    continue;
+                }
+
+                var acima = rotulo.Base > widget.Base;
+                var vao = acima ? rotulo.Base - (widget.Base + widget.Altura) : widget.Base - rotulo.Topo;
+
+                if (vao < 0 || vao > VaoDeLegenda)
+                {
+                    continue;
+                }
+
+                if (!legendas.TryGetValue(rotulo, out var menor) || vao < menor)
+                {
+                    legendas[rotulo] = vao;
+                }
+            }
+        }
+
+        return legendas;
     }
 
     private static Dictionary<int, List<Widget>> LerWidgets(string caminhoDaFicha)
@@ -302,7 +422,8 @@ public static class LayoutDaFicha
                 retangulo.X1,
                 retangulo.Width,
                 retangulo.Height,
-                campo is PdfCheckBoxField));
+                campo is PdfCheckBoxField,
+                campo is PdfTextField { MultiLine: true }));
         }
 
         for (var i = 0; i < formulario.Fields.Count; i++)
@@ -337,13 +458,13 @@ public static class LayoutDaFicha
     private static IEnumerable<Rotulo> Agrupar(List<Word> palavras)
     {
         var texto = new List<string>();
-        double inicio = 0, baseDaLinha = 0, fim = 0;
+        double inicio = 0, baseDaLinha = 0, topoDaLinha = 0, fim = 0;
 
         foreach (var palavra in palavras)
         {
             if (texto.Count > 0 && palavra.BoundingBox.Left - fim > LacunaEntreRotulos)
             {
-                yield return new Rotulo(string.Join(' ', texto), baseDaLinha, inicio, fim);
+                yield return new Rotulo(string.Join(' ', texto), baseDaLinha, topoDaLinha, inicio, fim);
                 texto.Clear();
             }
 
@@ -351,7 +472,14 @@ public static class LayoutDaFicha
             {
                 inicio = palavra.BoundingBox.Left;
                 baseDaLinha = palavra.BoundingBox.Bottom;
+                topoDaLinha = palavra.BoundingBox.Top;
             }
+
+            // O topo é o da palavra mais alta do grupo: num rótulo com maiúscula e parêntese
+            // ("Sabedoria Passiva (Percepção)") as palavras não têm todas a mesma altura, e é a
+            // caixa inteira que diz onde o texto está.
+            topoDaLinha = Math.Max(topoDaLinha, palavra.BoundingBox.Top);
+            baseDaLinha = Math.Min(baseDaLinha, palavra.BoundingBox.Bottom);
 
             texto.Add(palavra.Text);
             fim = palavra.BoundingBox.Right;
@@ -359,7 +487,7 @@ public static class LayoutDaFicha
 
         if (texto.Count > 0)
         {
-            yield return new Rotulo(string.Join(' ', texto), baseDaLinha, inicio, fim);
+            yield return new Rotulo(string.Join(' ', texto), baseDaLinha, topoDaLinha, inicio, fim);
         }
     }
 }

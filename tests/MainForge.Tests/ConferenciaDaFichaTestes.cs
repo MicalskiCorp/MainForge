@@ -262,6 +262,145 @@ public class ConferenciaDaFichaTestes : IDisposable
         Assert.Empty(Divergencias());
     }
 
+    /// <summary>
+    /// As caixas de moeda da ficha de D&amp;D são rotuladas com duas letras — "PC", "PP", "PE",
+    /// "PO", "PL" —, e palavra de duas letras não distingue nada: ela é descartada antes da
+    /// comparação. Com o conjunto vazio de um lado, "não casa" era o resultado inevitável, e as
+    /// cinco caixas eram acusadas de estar na linha errada por não haver como conferir que estavam
+    /// na certa.
+    ///
+    /// <para>Isto só apareceu quando a régua do leiaute passou a enxergar esses campos: enquanto
+    /// eles não tinham rótulo, a conferência se calava por outro motivo. Uma conferência que dá
+    /// alarme falso é desligada, e aí não confere mais nada.</para>
+    /// </summary>
+    [Fact]
+    public void Conferir_RotuloCurtoDemaisParaDistinguir_NaoAcusaNada()
+    {
+        CriarFicha(("PC", "CP"), ("PO", "GP"));
+
+        CriarModelo(
+            """
+            {{CP}}  PC (cobre)
+            {{GP}}  PO (ouro)
+            """);
+
+        Assert.Empty(Divergencias());
+    }
+
+    /// <summary>
+    /// Monta a linha como a ficha de D&amp;D 5e a desenha: <c>[caixa] [valor] Rótulo</c>. O valor
+    /// fica colado no texto e a caixa de marcação fica bem mais longe, do outro lado dele.
+    /// </summary>
+    private void CriarFichaComMarcacaoDistante(params (string Rotulo, string Marcacao, string Valor)[] linhas)
+    {
+        var diretorio = Path.Combine(_caminhos.Modelos, Sistema);
+        Directory.CreateDirectory(diretorio);
+
+        using var documento = new PdfDocument();
+        var pagina = documento.AddPage();
+        pagina.Width = XUnit.FromPoint(300);
+        pagina.Height = XUnit.FromPoint(Altura);
+
+        using (var grafico = XGraphics.FromPdfPage(pagina))
+        {
+            var fonte = new XFont("Arial", 9);
+
+            for (var i = 0; i < linhas.Length; i++)
+            {
+                grafico.DrawString(
+                    linhas[i].Rotulo, fonte, XBrushes.Black, new XPoint(64, Altura - Base(i) - 2));
+            }
+        }
+
+        var anotacoes = new PdfArray(documento);
+        var campos = new PdfArray(documento);
+
+        void Widget(string nome, string tipo, double esquerda, double largura, int indice)
+        {
+            var widget = new PdfDictionary(documento);
+            documento.Internals.AddObject(widget);
+
+            widget.Elements.SetName("/Type", "/Annot");
+            widget.Elements.SetName("/Subtype", "/Widget");
+            widget.Elements.SetName("/FT", tipo);
+            widget.Elements.SetString("/T", nome);
+            widget.Elements.SetString("/DA", "/Helv 9 Tf 0 g");
+            widget.Elements.SetInteger("/F", 4);
+            widget.Elements.SetRectangle(
+                "/Rect",
+                new PdfRectangle(
+                    new XPoint(esquerda, Base(indice)),
+                    new XPoint(esquerda + largura, Base(indice) + 9)));
+
+            anotacoes.Elements.Add(widget.Reference!);
+            campos.Elements.Add(widget.Reference!);
+        }
+
+        for (var i = 0; i < linhas.Length; i++)
+        {
+            // A caixa fica a ~24 pt do rótulo (longe demais para valer sozinha) e o valor, a ~4 pt.
+            Widget(linhas[i].Marcacao, "/Btn", 20, 9, i);
+            Widget(linhas[i].Valor, "/Tx", 40, 20, i);
+        }
+
+        pagina.Elements.SetObject("/Annots", anotacoes);
+
+        var formulario = new PdfDictionary(documento);
+        documento.Internals.AddObject(formulario);
+        formulario.Elements.SetObject("/Fields", campos);
+        formulario.Elements.SetString("/DA", "/Helv 9 Tf 0 g");
+        documento.Internals.Catalog.Elements.SetReference("/AcroForm", formulario);
+
+        documento.Save(Path.Combine(diretorio, "Ficha.pdf"));
+    }
+
+    /// <summary>
+    /// A caixa de proficiência fica a 23,6 pt do rótulo na ficha de D&amp;D 5e — longe demais para
+    /// o corte de confiança —, enquanto o valor da mesma linha fica a 4 pt. O valor era conferido e
+    /// a caixa não, e a caixa é quem diz <b>em que o personagem é proficiente</b>: eram 24 campos
+    /// mudos, 6 testes de resistência e 18 perícias.
+    ///
+    /// <para>Com o rótulo da linha confirmado pelo campo que o tem colado, a caixa passa a ser
+    /// julgada — e um pareamento trocado nela é acusado.</para>
+    /// </summary>
+    [Fact]
+    public void Conferir_MarcacaoDistanteTrocada_EAcusadaPeloRotuloConfirmadoDaLinha()
+    {
+        CriarFichaComMarcacaoDistante(
+            ("Forca", "Check Box 11", "ST Strength"),
+            ("Carisma", "Check Box 22", "ST Charisma"));
+
+        CriarModelo(
+            """
+            [{{Check Box 22}}] {{ST Strength}}  Forca
+            [{{Check Box 11}}] {{ST Charisma}}  Carisma
+            """);
+
+        var divergencias = Divergencias();
+
+        Assert.Equal(2, divergencias.Count);
+        Assert.All(divergencias, d => Assert.Equal(TipoDeDivergencia.CampoDeOutraLinha, d.Tipo));
+        Assert.Contains(divergencias, d => d.Campo == "Check Box 11");
+        Assert.Contains(divergencias, d => d.Campo == "Check Box 22");
+    }
+
+    /// <summary>O mesmo leiaute, pareado certo, continua passando sem ruído.</summary>
+    [Fact]
+    public void Conferir_MarcacaoDistanteNoLugarCerto_NaoAcusaNada()
+    {
+        CriarFichaComMarcacaoDistante(
+            ("Forca", "Check Box 11", "ST Strength"),
+            ("Carisma", "Check Box 22", "ST Charisma"));
+
+        CriarModelo(
+            """
+            [{{Check Box 11}}] {{ST Strength}}  Forca
+            [{{Check Box 22}}] {{ST Charisma}}  Carisma
+            """);
+
+        Assert.Empty(Divergencias());
+    }
+
     [Fact]
     public void Conferir_SistemaSemModeloEmTexto_LancaErroDeFerramenta()
     {

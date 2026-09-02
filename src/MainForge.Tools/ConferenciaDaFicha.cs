@@ -101,9 +101,11 @@ public sealed record ResultadoDaConferencia(
 /// sendo escritas na linha de outra perícia, no PDF, sem nenhum sinal. A segunda chave é o que
 /// dá para conferir: o texto impresso ao lado do campo.</para>
 ///
-/// <para><b>Só fala quando tem certeza.</b> Um campo só é julgado quando o texto impresso está
-/// <b>na mesma linha</b> dele e colado (ver <see cref="RotuloConfiavel"/>). Rótulo distante,
-/// ausente ou acima/abaixo do campo é deixado passar. E antes de julgar campo por campo, a
+/// <para><b>Só fala quando tem certeza.</b> Um campo é julgado quando o texto impresso está
+/// <b>na mesma linha</b> dele e colado (ver <see cref="RotuloConfiavel"/>) — ou quando está longe
+/// mas <b>outro campo da mesma linha exibe o mesmo texto de perto</b>, que é confirmação e não
+/// palpite (ver <see cref="PodeJulgar"/>). Rótulo ausente, acima/abaixo do campo, ou distante sem
+/// nada que o confirme, é deixado passar. E antes de julgar campo por campo, a
 /// conferência mede se os dois artefatos se falam: se quase nada casa, o problema é sistêmico —
 /// ficha e modelo em idiomas diferentes, ou ficha trocada — e sai um aviso explicando isso, no
 /// lugar de uma divergência por linha que não ajudaria ninguém.</para>
@@ -170,9 +172,15 @@ public static class ConferenciaDaFicha
             .ToList();
 
         var avisos = Avisar(daFicha, linhasDoModelo, out var idioma);
+        var confirmados = RotulosConfirmadosPorLinha(daFicha);
 
         return new ResultadoDaConferencia(
-            Conferir(linhasDoModelo, porNome, daFicha, JulgarPorRotulo(linhasDoModelo, porNome)),
+            Conferir(
+                linhasDoModelo,
+                porNome,
+                daFicha,
+                JulgarPorRotulo(linhasDoModelo, porNome, confirmados),
+                confirmados),
             avisos,
             idioma);
     }
@@ -205,7 +213,8 @@ public static class ConferenciaDaFicha
     /// </summary>
     private static bool JulgarPorRotulo(
         List<LinhaDoModelo> linhas,
-        Dictionary<string, CampoDaFicha> porNome)
+        Dictionary<string, CampoDaFicha> porNome,
+        IReadOnlySet<(int Pagina, int Linha, string Rotulo)> confirmados)
     {
         int conferiveis = 0, deAcordo = 0;
 
@@ -215,7 +224,7 @@ public static class ConferenciaDaFicha
             {
                 if (linha.Palavras.Count == 0
                     || !porNome.TryGetValue(nome, out var campo)
-                    || !RotuloConfiavel(campo))
+                    || !PodeJulgar(campo, confirmados))
                 {
                     continue;
                 }
@@ -274,7 +283,8 @@ public static class ConferenciaDaFicha
         List<LinhaDoModelo> linhas,
         Dictionary<string, CampoDaFicha> porNome,
         IReadOnlyList<CampoDaFicha> daFicha,
-        bool julgarPorRotulo)
+        bool julgarPorRotulo,
+        IReadOnlySet<(int Pagina, int Linha, string Rotulo)> confirmados)
     {
         var divergencias = new List<DivergenciaDaFicha>();
         var jaVistos = new HashSet<string>(StringComparer.Ordinal);
@@ -302,7 +312,7 @@ public static class ConferenciaDaFicha
                     continue;
                 }
 
-                if (!julgarPorRotulo || linha.Palavras.Count == 0 || !RotuloConfiavel(campo))
+                if (!julgarPorRotulo || linha.Palavras.Count == 0 || !PodeJulgar(campo, confirmados))
                 {
                     continue;
                 }
@@ -313,7 +323,7 @@ public static class ConferenciaDaFicha
                     continue;
                 }
 
-                divergencias.Add(Discordancia(nome, campo, linha, daFicha));
+                divergencias.Add(Discordancia(nome, campo, linha, daFicha, confirmados));
             }
         }
 
@@ -329,13 +339,25 @@ public static class ConferenciaDaFicha
         string nome,
         CampoDaFicha campo,
         LinhaDoModelo linha,
-        IReadOnlyList<CampoDaFicha> daFicha)
+        IReadOnlyList<CampoDaFicha> daFicha,
+        IReadOnlySet<(int Pagina, int Linha, string Rotulo)> confirmados)
     {
         // Quantas palavras cada campo divide com a linha do desenho. Contar, e não só perguntar
         // se divide alguma, é o que separa o campo certo dos vizinhos: metade das perícias tem
         // "(Int)" no rótulo, e por uma palavra dessas todas empatariam.
+        //
+        // Só entram candidatos do mesmo tipo do campo acusado. Numa linha "[caixa] [valor] Rótulo"
+        // os dois casam com o rótulo igualmente bem, e sugerir o valor para consertar uma caixa de
+        // marcação seria uma correção que estraga o desenho — quem a seguisse ao pé da letra
+        // trocaria a caixa por um número.
+        //
+        // E a régua aqui é a mesma de lá (PodeJulgar), não a estrita: numa linha
+        // "[caixa] [valor] Rótulo" a caixa certa também tem o rótulo distante. Procurá-la só entre
+        // os rótulos colados a deixaria de fora — e a conferência diria "nenhum campo da ficha tem
+        // esse rótulo" a respeito de um campo que está bem ali.
         var candidatos = daFicha
-            .Where(RotuloConfiavel)
+            .Where(outro => outro.DeMarcacao == campo.DeMarcacao)
+            .Where(outro => PodeJulgar(outro, confirmados))
             .Select(outro => (outro.Nome, Peso: Palavras(outro.Rotulo!).Count(linha.Palavras.Contains)))
             .Where(candidato => candidato.Peso > 0)
             .GroupBy(candidato => candidato.Nome, StringComparer.Ordinal)
@@ -374,10 +396,60 @@ public static class ConferenciaDaFicha
     /// garante é o que ninguém consegue conferir no olho — os blocos longos e repetitivos de
     /// perícias, testes e magias, que é onde o pareamento errado se esconde.</para>
     /// </summary>
+    /// <para><b>E o rótulo precisa dizer alguma coisa.</b> Um rótulo cujas palavras são todas
+    /// curtas demais para distinguir — as caixas de moeda da ficha de D&amp;D são rotuladas "PC",
+    /// "PP", "PE", "PO", "PL" — não sobrevive a <see cref="Palavras"/>, e comparar um conjunto
+    /// vazio com qualquer coisa dá "não casa". Sem esta condição, todo campo assim seria acusado
+    /// de estar na linha errada por não haver como conferir que está na certa, que é o oposto do
+    /// que esta conferência promete fazer.</para>
+    /// <summary>
+    /// Os rótulos que uma linha impressa da ficha tem <b>confirmados</b>: aqueles que algum campo
+    /// daquela linha exibe de forma confiável (na mesma linha, colado). Cada entrada é
+    /// "nesta página, nesta linha, este texto é o rótulo".
+    /// </summary>
+    private static IReadOnlySet<(int Pagina, int Linha, string Rotulo)> RotulosConfirmadosPorLinha(
+        IReadOnlyList<CampoDaFicha> daFicha) =>
+        daFicha
+            .Where(RotuloConfiavel)
+            .Select(campo => (campo.Pagina, campo.Linha, campo.Rotulo!))
+            .ToHashSet();
+
+    /// <summary>
+    /// Dá para julgar este campo pelo rótulo dele?
+    ///
+    /// <para>Sim quando o rótulo é confiável por si (ver <see cref="RotuloConfiavel"/>) — e
+    /// também quando ele está longe mas <b>outro campo da mesma linha exibe exatamente o mesmo
+    /// texto de perto</b>. Aí não há palpite: a identidade daquela linha já foi estabelecida por
+    /// quem tinha o rótulo colado, e o campo distante só está confirmando o que ela diz.</para>
+    ///
+    /// <para><b>Por que isso faltava.</b> O corte de distância existe porque um rótulo longe pode
+    /// ser de outra coluna. Só que na ficha de D&amp;D 5e a linha de cada perícia e de cada teste
+    /// de resistência é <c>[caixa de marcação] [valor] Rótulo</c>: o valor fica a 4 pt do texto e a
+    /// caixa, a 23,6 pt. O valor era conferido e a caixa não — e a caixa é justamente quem diz
+    /// <b>em que o personagem é proficiente</b>. Eram 24 campos mudos (6 testes de resistência e
+    /// 18 perícias), num bloco longo e repetitivo que ninguém confere de olho, que é exatamente o
+    /// que esta conferência existe para cobrir. Um pareamento trocado ali dá um personagem
+    /// proficiente nas coisas erradas, sem nada acusando.</para>
+    ///
+    /// <para>A confirmação exige o <b>mesmo texto</b>, e não só uma linha em comum: as linhas são
+    /// detectadas na largura da página inteira, então "mesma linha" junta colunas que nada têm a
+    /// ver uma com a outra — a caixa de teste contra a morte cai na mesma linha da perícia
+    /// Acrobacia. Exigir o texto idêntico é o que separa confirmar de adivinhar.</para>
+    /// </summary>
+    private static bool PodeJulgar(
+        CampoDaFicha campo,
+        IReadOnlySet<(int Pagina, int Linha, string Rotulo)> confirmados) =>
+        RotuloConfiavel(campo)
+        || (campo.Rotulo is { Length: > 0 } rotulo
+            && campo.Direcao is DirecaoDoRotulo.Direita or DirecaoDoRotulo.Esquerda
+            && Palavras(rotulo).Count > 0
+            && confirmados.Contains((campo.Pagina, campo.Linha, rotulo)));
+
     private static bool RotuloConfiavel(CampoDaFicha campo) =>
         campo.Rotulo is { Length: > 0 }
         && campo.Direcao is DirecaoDoRotulo.Direita or DirecaoDoRotulo.Esquerda
-        && campo.DistanciaDoRotulo <= DistanciaConfiavel;
+        && campo.DistanciaDoRotulo <= DistanciaConfiavel
+        && Palavras(campo.Rotulo).Count > 0;
 
     /// <summary>
     /// As palavras que identificam um rótulo, sem acento, sem pontuação e sem as curtas demais.
