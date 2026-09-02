@@ -5,11 +5,11 @@
 # ao lado do executável, e as demais pastas de dados nascem no primeiro uso.
 #
 #   .\publicar.ps1                 # gera em .\publicado\
-#   .\publicar.ps1 -Versao 1.4.0   # carimba a versão no executável e no nome do .zip
+#   .\publicar.ps1 -Versao 1.5.0   # carimba a versão no executável e no nome do .zip
 
 [CmdletBinding()]
 param(
-    [string]$Versao = "1.4.0",
+    [string]$Versao = "1.5.0",
     [string]$Destino = "publicado"
 )
 
