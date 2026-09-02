@@ -274,7 +274,14 @@ public sealed class RegrasDaFicha
             regras.Campos.Add(new RegraDeCampo
             {
                 Campo = campo.Nome,
-                Rotulo = campo.Rotulo ?? "",
+
+                // Só o rótulo em que dá para confiar. O rótulo daqui vai para a mensagem que o
+                // usuário lê ("FORÇA (Forca): está vazio"), e um rótulo errado ali é pior que
+                // nenhum: numa ficha de três colunas com o texto a 80 pt do seu campo, o rótulo da
+                // coluna seguinte fica a 20 pt e vence — o campo de Força passaria a se chamar
+                // "Destreza:" na cara do usuário. Sem ele, a mensagem usa o nome do campo, que é
+                // feio e nunca mente. Quem preenche os que faltam é o Configurador, que leu a ficha.
+                Rotulo = campo.RotuloDeConfianca ? campo.Rotulo! : "",
                 Tipo = campo.DeMarcacao ? TipoDoCampo.Marcacao : TipoDoCampo.Texto,
             });
         }

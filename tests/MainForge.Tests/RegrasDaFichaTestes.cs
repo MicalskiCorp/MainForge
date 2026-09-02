@@ -56,6 +56,35 @@ public class RegrasDaFichaTestes : IDisposable
         Assert.Equal(TipoDoCampo.Texto, regras.Regra("Nome")!.Tipo);
     }
 
+    /// <summary>
+    /// O rótulo gravado aqui vai para a mensagem que o usuário lê, e um rótulo errado ali é pior
+    /// que nenhum. Numa ficha de três colunas com o texto a 80 pt do seu campo, o rótulo da coluna
+    /// seguinte fica a 20 pt e vence a disputa — sem este corte, o campo de Força se apresentaria
+    /// ao usuário como "Destreza:".
+    /// </summary>
+    [Fact]
+    public void Esqueleto_RotuloDistante_NaoEGravadoComoNomeDoCampo()
+    {
+        var regras = RegrasDaFicha.Esqueleto(
+        [
+            new CampoDaFicha("Forca", 1, 1, 1, "Destreza:", DirecaoDoRotulo.Direita, 20, false),
+            new CampoDaFicha("Nome", 1, 2, 1, "Nome:", DirecaoDoRotulo.Esquerda, 3, false),
+        ]);
+
+        Assert.Equal("", regras.Regra("Forca")!.Rotulo);
+        Assert.Equal("Nome:", regras.Regra("Nome")!.Rotulo);
+    }
+
+    /// <summary>Rótulo acima ou abaixo é ambíguo por construção, mesmo colado.</summary>
+    [Fact]
+    public void Esqueleto_RotuloAcimaOuAbaixo_NaoEGravado()
+    {
+        var regras = RegrasDaFicha.Esqueleto(
+            [new CampoDaFicha("Forca", 1, 1, 1, "FORÇA", DirecaoDoRotulo.Acima, 2, false)]);
+
+        Assert.Equal("", regras.Regra("Forca")!.Rotulo);
+    }
+
     [Fact]
     public void Esqueleto_FichaSemNadaDeMagia_NaoUsaMagias()
     {

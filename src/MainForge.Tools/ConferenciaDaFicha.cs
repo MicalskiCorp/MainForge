@@ -112,11 +112,9 @@ public sealed record ResultadoDaConferencia(
 /// </summary>
 public static class ConferenciaDaFicha
 {
-    /// <summary>
-    /// Até que distância, em pontos, o texto impresso ao lado de um campo é seguramente o rótulo
-    /// dele. Acima disso pode ser de outra coluna, e a conferência se cala.
-    /// </summary>
-    private const double DistanciaConfiavel = 10.0;
+    // A régua geométrica de "este texto rotula este campo" mora em CampoDaFicha
+    // (RotuloDeConfianca), junto dos dados que ela mede. Aqui sobra a parte que é desta
+    // conferência: o rótulo também precisa ter palavra que distinga alguma coisa.
 
     /// <summary>
     /// Palavra curta demais não distingue nada ("de", "do", "PV") e casaria por acaso entre
@@ -446,10 +444,7 @@ public static class ConferenciaDaFicha
             && confirmados.Contains((campo.Pagina, campo.Linha, rotulo)));
 
     private static bool RotuloConfiavel(CampoDaFicha campo) =>
-        campo.Rotulo is { Length: > 0 }
-        && campo.Direcao is DirecaoDoRotulo.Direita or DirecaoDoRotulo.Esquerda
-        && campo.DistanciaDoRotulo <= DistanciaConfiavel
-        && Palavras(campo.Rotulo).Count > 0;
+        campo.RotuloDeConfianca && Palavras(campo.Rotulo!).Count > 0;
 
     /// <summary>
     /// As palavras que identificam um rótulo, sem acento, sem pontuação e sem as curtas demais.

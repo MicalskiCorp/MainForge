@@ -74,3 +74,12 @@ src/MainForge.Cli/amostra-*.png
 # Atalho do Windows criado na máquina de quem desenvolve: guarda o caminho absoluto do
 # executável, então só vale naquele computador e quebra a cada pasta renomeada.
 *.lnk
+
+# A validação de cada sistema é derivada da ficha em branco dele, e o SistemaTeste — o único
+# sistema versionado — ganharia a sua na primeira execução, sujando o git status de todo mundo.
+#
+# Ela fica de fora, e não junto do index.md e do registro de progresso, por uma diferença que
+# importa: aqueles são reescritos a cada gravação, então uma cópia versionada não tem como
+# envelhecer. Este é escrito uma vez e deixado em paz — versioná-lo guardaria, para sempre, o
+# resultado da versão do código que o gerou, enquanto o código muda ao lado sem nada acusar.
+/Sistemas/*/Ficha-Validacao.json

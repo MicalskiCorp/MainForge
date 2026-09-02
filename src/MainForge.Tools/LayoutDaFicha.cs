@@ -67,7 +67,32 @@ public sealed record CampoDaFicha(
     double DistanciaDoRotulo,
     bool DeMarcacao,
     bool DeVariasLinhas = false,
-    double Altura = 0);
+    double Altura = 0)
+{
+    /// <summary>
+    /// Até que distância, em pontos, o texto ao lado de um campo é seguramente o rótulo dele.
+    /// Acima disso pode ser de outra coluna.
+    /// </summary>
+    public const double DistanciaConfiavel = 10.0;
+
+    /// <summary>
+    /// Dá para afirmar que <see cref="Rotulo"/> é mesmo o nome deste campo?
+    ///
+    /// <para>Só quando o texto está na mesma linha e colado. Rótulo acima ou abaixo é ambíguo por
+    /// construção — uma legenda no vão entre dois quadros fica a poucos pontos dos dois —, e
+    /// rótulo distante pode ser de outra coluna: numa ficha de três colunas com o rótulo a 80 pt
+    /// do seu campo, o rótulo da coluna <em>seguinte</em> fica a 20 pt, e vence.</para>
+    ///
+    /// <para>Quem só quer mostrar o campo (a listagem que vai ao Configurador) mostra o rótulo de
+    /// qualquer jeito, com a distância ao lado, para quem lê poder desconfiar. Quem vai
+    /// <b>afirmar</b> alguma coisa a partir dele — a conferência, e o nome que aparece numa
+    /// mensagem ao usuário — passa por aqui primeiro.</para>
+    /// </summary>
+    public bool RotuloDeConfianca =>
+        Rotulo is { Length: > 0 }
+        && Direcao is DirecaoDoRotulo.Direita or DirecaoDoRotulo.Esquerda
+        && DistanciaDoRotulo <= DistanciaConfiavel;
+}
 
 /// <summary>
 /// Lê a ficha em branco de um sistema e devolve os campos preenchíveis <b>na ordem em que estão
