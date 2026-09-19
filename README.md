@@ -9,7 +9,7 @@ usuário.
 
 ## Baixar e usar
 
-**[Baixar o MainForge 1.5.0](https://github.com/MicalskiCorp/MainForge/releases/download/v1.5.0/MainForge-1.5.0-win-x64.zip)**
+**[Baixar o MainForge 1.5.1](https://github.com/MicalskiCorp/MainForge/releases/download/v1.5.1/MainForge-1.5.1-win-x64.zip)**
 (Windows x64, 33 MB) — descompacte o `.zip` onde quiser e rode `MainForge.Cli.exe`.
 As demais versões ficam em [releases](https://github.com/MicalskiCorp/MainForge/releases/latest).
 
@@ -65,7 +65,7 @@ No lugar da assinatura, você tem como **verificar por conta própria** que o ar
 o que a compilação pública gerou. Todo release traz o `.sha256` ao lado do `.zip`:
 
 ```powershell
-Get-FileHash .\MainForge-1.5.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\MainForge-1.5.1-win-x64.zip -Algorithm SHA256
 ```
 
 O valor precisa bater com o do arquivo `.sha256` e com o que está nas notas do release. Se bater,
@@ -265,7 +265,7 @@ padrão de instalação; se estiver em outro lugar, aponte a variável de ambien
 dotnet build MainForge.sln
 dotnet test MainForge.sln
 dotnet run --project src/MainForge.Cli    # o aplicativo
-./publicar.ps1 -Versao 1.5.0              # gera o .zip do release (win-x64, executável único)
+./publicar.ps1 -Versao 1.5.1              # gera o .zip do release (win-x64, executável único)
 ```
 
 Os mesmos comandos rodam no CI a cada push e pull request
