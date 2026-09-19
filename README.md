@@ -877,6 +877,27 @@ dois casam com o rótulo igualmente bem, e sugerir o valor para consertar uma ca
 seria uma correção que estraga o desenho — quem a seguisse ao pé da letra trocaria a caixa por
 um número.
 
+Mais três regras vieram de uma base que passou por tudo isso **aprovada** com o de-para errado:
+
+- **Casar é ser o melhor, não dividir uma palavra.** "Medicina (Sab)" e "Percepção (Sab)" dividem
+  "Sab"; bastar isso aceitava o campo de uma perícia na linha de outra do mesmo atributo. O campo
+  da linha tem de ser o que mais casa com ela — e, no empate, o que tem o rótulo colado.
+- **Linha sem rótulo se confere pela coluna.** A lista de truques e as magias de cada nível não
+  têm texto impresso ao lado; ali a chave é a geometria: os campos de um bloco ficam um embaixo do
+  outro, e o bloco do desenho tem de seguir essa ordem. Na ficha de D&D 5e, `Spells 1015` é a
+  primeira magia de 1º nível, e não o segundo truque. As caixas de uma fileira ("SUCESSOS [ ] [ ]
+  [ ]") seguem a mesma ideia, na horizontal.
+- **Desacordo alto não é desculpa para calar.** Abaixo de metade de acerto a conferência supunha
+  "idioma diferente" e aprovava sem aviso — justamente o modelo montado pelo nome dos campos, que
+  erra 13 de 18 perícias. Hoje só idioma diferente de fato suspende o julgamento.
+
+E ela não depende mais de o Configurador chamá-la: **toda conversa com o Dungeon Master e toda
+visualização da ficha** conferem o desenho antes, de graça, e **corrigem sozinhas** o campo cuja
+linha certa é inequívoca (`ConferenciaDaFicha.Corrigir`). Uma base mapeada antes da conferência
+existir, ou trazida por pacote de outra instalação, era o caminho pelo qual o erro voltava — o
+agente segue o desenho ao pé da letra, e o PDF saía com as perícias trocadas geração após
+geração. O que não dá para corrigir com certeza vira aviso na tela.
+
 ## A ficha é validada
 
 O único que sabia se um personagem era válido era o Dungeon Master, dentro de uma conversa. Isso

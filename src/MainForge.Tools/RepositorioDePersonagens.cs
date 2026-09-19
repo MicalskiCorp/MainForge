@@ -303,6 +303,13 @@ public static class RepositorioDePersonagens
     /// <summary>
     /// Guarda em qual conversa do Claude Code este personagem está sendo feito e soma o que o
     /// turno custou.
+    ///
+    /// <para><b>Relê o dossiê do disco antes de gravar.</b> Quem chama é a interface, com o
+    /// personagem que ela carregou <em>antes</em> do turno — e durante o turno o agente grava o
+    /// mesmo dossiê pelo MCP: os campos da ficha, a ficha gerada, o histórico de níveis, o status.
+    /// Gravar o objeto antigo por cima apagava tudo isso sem aviso: a evolução ao 2º nível gerava
+    /// o PDF e o arquivava, e o dossiê continuava dizendo que a última ficha era de agosto. Daqui
+    /// só saem as duas coisas que são desta chamada.</para>
     /// </summary>
     /// <param name="consumoDoTurno">
     /// Só o gasto deste turno, não o da conversa inteira: quem chama é um laço que passa por aqui
@@ -314,7 +321,9 @@ public static class RepositorioDePersonagens
         string? idDaSessao,
         ConsumoDeTokens? consumoDoTurno = null)
     {
-        var mudouSessao = idDaSessao is not null && personagem.IdDaSessao != idDaSessao;
+        var atual = Carregar(caminhos, personagem.Sistema, personagem.Id) ?? personagem;
+
+        var mudouSessao = idDaSessao is not null && atual.IdDaSessao != idDaSessao;
         var houveGasto = consumoDoTurno is { Vazio: false };
 
         if (!mudouSessao && !houveGasto)
@@ -324,15 +333,17 @@ public static class RepositorioDePersonagens
 
         if (mudouSessao)
         {
+            atual.IdDaSessao = idDaSessao;
             personagem.IdDaSessao = idDaSessao;
         }
 
         if (consumoDoTurno is { Vazio: false } gasto)
         {
-            personagem.Consumo += gasto;
+            atual.Consumo += gasto;
+            personagem.Consumo = atual.Consumo;
         }
 
-        Salvar(caminhos, personagem);
+        Salvar(caminhos, atual);
     }
 
     /// <summary>

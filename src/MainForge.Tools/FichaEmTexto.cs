@@ -108,7 +108,16 @@ public static class FichaEmTexto
     /// blocos que vão virar ficha, e não o arquivo inteiro: repetir a regra lá deixaria a
     /// conferência opinando sobre um trecho que ninguém desenha.</para>
     /// </summary>
-    public static IReadOnlyList<string> Desenhos(string modelo)
+    public static IReadOnlyList<string> Desenhos(string modelo) =>
+        [.. BlocosDoDesenho(modelo).Select(bloco => string.Join('\n', bloco.Select(linha => linha.Texto)).TrimEnd('\n'))];
+
+    /// <summary>
+    /// Os mesmos blocos de <see cref="Desenhos"/>, linha a linha e cada uma com a posição dela no
+    /// arquivo (a partir de zero). Existe para quem precisa <b>corrigir</b> o modelo, e não só
+    /// lê-lo: <see cref="ConferenciaDaFicha"/> troca o campo de uma linha errada no próprio
+    /// arquivo, e para isso precisa saber qual linha do arquivo ela é.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<(int Indice, string Texto)>> BlocosDoDesenho(string modelo)
     {
         var doCorpo = BlocosDeCodigo(modelo, pararNaPrimeiraSecao: true);
 
@@ -117,25 +126,29 @@ public static class FichaEmTexto
             return doCorpo;
         }
 
-        return [.. BlocosDeCodigo(modelo, pararNaPrimeiraSecao: false).Where(bloco => Marcador.IsMatch(bloco))];
+        return [.. BlocosDeCodigo(modelo, pararNaPrimeiraSecao: false)
+            .Where(bloco => bloco.Any(linha => Marcador.IsMatch(linha.Texto)))];
     }
 
-    private static List<string> BlocosDeCodigo(string modelo, bool pararNaPrimeiraSecao)
+    private static List<IReadOnlyList<(int Indice, string Texto)>> BlocosDeCodigo(string modelo, bool pararNaPrimeiraSecao)
     {
-        var blocos = new List<string>();
-        StringBuilder? dentroDoBloco = null;
+        var blocos = new List<IReadOnlyList<(int, string)>>();
+        List<(int, string)>? dentroDoBloco = null;
+        var linhas = modelo.ReplaceLineEndings("\n").Split('\n');
 
-        foreach (var linha in modelo.ReplaceLineEndings("\n").Split('\n'))
+        for (var indice = 0; indice < linhas.Length; indice++)
         {
+            var linha = linhas[indice];
+
             if (linha.TrimStart().StartsWith("```", StringComparison.Ordinal))
             {
                 if (dentroDoBloco is null)
                 {
-                    dentroDoBloco = new StringBuilder();
+                    dentroDoBloco = [];
                 }
                 else
                 {
-                    blocos.Add(dentroDoBloco.ToString().TrimEnd('\n'));
+                    blocos.Add(dentroDoBloco);
                     dentroDoBloco = null;
                 }
 
@@ -144,7 +157,7 @@ public static class FichaEmTexto
 
             if (dentroDoBloco is not null)
             {
-                dentroDoBloco.Append(linha).Append('\n');
+                dentroDoBloco.Add((indice, linha));
                 continue;
             }
 
@@ -158,7 +171,7 @@ public static class FichaEmTexto
         // descartá-lo trocaria uma ficha torta por nenhuma ficha.
         if (dentroDoBloco is not null)
         {
-            blocos.Add(dentroDoBloco.ToString().TrimEnd('\n'));
+            blocos.Add(dentroDoBloco);
         }
 
         return blocos;

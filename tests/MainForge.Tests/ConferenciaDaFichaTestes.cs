@@ -401,6 +401,274 @@ public class ConferenciaDaFichaTestes : IDisposable
         Assert.Empty(Divergencias());
     }
 
+    /// <summary>A ficha de perícias de D&amp;D 5e em português: o nome do campo é sempre o de outra linha.</summary>
+    private static readonly (string Rotulo, string Campo)[] PericiasTrocadas =
+    [
+        ("Acrobacia (Des)", "Acrobatics"),
+        ("Arcanismo (Int)", "Animal"),
+        ("Atletismo (For)", "Arcana"),
+        ("Atuação (Car)", "Athletics"),
+        ("Furtividade (Des)", "History"),
+        ("História (Int)", "Insight"),
+        ("Intuição (Sab)", "Investigation"),
+        ("Investigação (Int)", "Medicine"),
+        ("Lidar com Animais (Sab)", "Nature"),
+        ("Medicina (Sab)", "Perception"),
+    ];
+
+    /// <summary>O desenho montado pelo nome dos campos: cada perícia com o campo "dela" em inglês.</summary>
+    private const string DesenhoPeloNome =
+        """
+        {{Acrobatics}}  Acrobacia (Des)
+        {{Arcana}}  Arcanismo (Int)
+        {{Athletics}}  Atletismo (For)
+        {{Animal}}  Atuação (Car)
+        {{Nature}}  Furtividade (Des)
+        {{History}}  História (Int)
+        {{Insight}}  Intuição (Sab)
+        {{Investigation}}  Investigação (Int)
+        {{Perception}}  Lidar com Animais (Sab)
+        {{Medicine}}  Medicina (Sab)
+        """;
+
+    /// <summary>
+    /// O erro que a conferência existe para pegar erra quase todas as linhas — e por isso mesmo
+    /// ela o aprovava: abaixo da metade de acerto, supunha "idioma diferente" e se calava. Como
+    /// ficha e modelo estão no mesmo idioma, as linhas têm de ser julgadas, e a causa, avisada.
+    /// </summary>
+    [Fact]
+    public void Conferir_ModeloQuaseTodoPareadoPeloNome_ReprovaEAvisaACausa()
+    {
+        CriarFicha(PericiasTrocadas);
+        CriarModelo(DesenhoPeloNome);
+
+        var resultado = ConferenciaDaFicha.Conferir(_caminhos, Sistema);
+
+        Assert.False(resultado.Aprovada);
+        Assert.Contains(resultado.Divergencias, d => d.Campo == "Arcana" && d.CampoEsperado == "Animal");
+        Assert.Contains(resultado.Avisos, aviso => aviso.Contains("NOME dos campos"));
+    }
+
+    /// <summary>
+    /// "Medicina (Sab)" e "Percepção (Sab)" dividem a palavra "Sab". Bastar uma palavra em comum
+    /// aceitava o campo de uma perícia na linha de outra do mesmo atributo — o erro sobrevivia
+    /// exatamente onde a troca era entre perícias de Sabedoria.
+    /// </summary>
+    [Fact]
+    public void Conferir_CampoDeOutraPericiaDoMesmoAtributo_EAcusado()
+    {
+        CriarFicha(("Medicina (Sab)", "Perception"), ("Percepção (Sab)", "Persuasion"));
+        CriarModelo(
+            """
+            {{Perception}}  Medicina (Sab)
+            {{Perception}}  Percepção (Sab)
+            """);
+
+        Assert.Contains(Divergencias(), d => d.Tipo == TipoDeDivergencia.CampoRepetido);
+
+        CriarModelo(
+            """
+            {{Persuasion}}  Medicina (Sab)
+            {{Perception}}  Percepção (Sab)
+            """);
+
+        var divergencias = Divergencias();
+
+        Assert.Equal(2, divergencias.Count);
+        Assert.Contains(divergencias, d => d.Campo == "Perception" && d.CampoEsperado == "Persuasion");
+    }
+
+    /// <summary>
+    /// Monta uma página só com campos de texto <b>sem rótulo</b>, em blocos de uma coluna: cada
+    /// bloco é uma lista de linhas coladas, e entre um bloco e outro fica um vão — como a lista de
+    /// truques e a de magias de 1º nível na ficha de D&amp;D 5e.
+    /// </summary>
+    private void CriarFichaDeListas(params string[][] blocos)
+    {
+        var diretorio = Path.Combine(_caminhos.Modelos, Sistema);
+        Directory.CreateDirectory(diretorio);
+
+        using var documento = new PdfDocument();
+        var pagina = documento.AddPage();
+        pagina.Width = XUnit.FromPoint(300);
+        pagina.Height = XUnit.FromPoint(Altura);
+
+        var anotacoes = new PdfArray(documento);
+        var campos = new PdfArray(documento);
+        var baseAtual = Altura - 40;
+
+        foreach (var bloco in blocos)
+        {
+            foreach (var nome in bloco)
+            {
+                var widget = new PdfDictionary(documento);
+                documento.Internals.AddObject(widget);
+
+                widget.Elements.SetName("/Type", "/Annot");
+                widget.Elements.SetName("/Subtype", "/Widget");
+                widget.Elements.SetName("/FT", "/Tx");
+                widget.Elements.SetString("/T", nome);
+                widget.Elements.SetString("/DA", "/Helv 9 Tf 0 g");
+                widget.Elements.SetInteger("/F", 4);
+                widget.Elements.SetRectangle(
+                    "/Rect",
+                    new PdfRectangle(new XPoint(40, baseAtual), new XPoint(200, baseAtual + 10)));
+
+                anotacoes.Elements.Add(widget.Reference!);
+                campos.Elements.Add(widget.Reference!);
+                baseAtual -= 14;
+            }
+
+            // O vão do cabeçalho do bloco seguinte ("NIVEL 1 ...").
+            baseAtual -= 60;
+        }
+
+        pagina.Elements.SetObject("/Annots", anotacoes);
+
+        var formulario = new PdfDictionary(documento);
+        documento.Internals.AddObject(formulario);
+        formulario.Elements.SetObject("/Fields", campos);
+        formulario.Elements.SetString("/DA", "/Helv 9 Tf 0 g");
+        documento.Internals.Catalog.Elements.SetReference("/AcroForm", formulario);
+
+        documento.Save(Path.Combine(diretorio, "Ficha.pdf"));
+    }
+
+    /// <summary>
+    /// O erro dos truques: a ficha numera os campos fora da ordem impressa (<c>Spells 1015</c> é a
+    /// primeira linha do 1º nível), e um desenho numerado em sequência punha o segundo truque no
+    /// bloco de 1º nível e deixava um buraco na lista de truques. Sem rótulo nenhum, só a coluna
+    /// impressa diz qual linha é qual.
+    /// </summary>
+    [Fact]
+    public void Conferir_ListaSemRotuloNumeradaEmSequencia_AcusaPelaColunaImpressa()
+    {
+        CriarFichaDeListas(
+            ["Spells 1014", "Spells 1016", "Spells 1017", "Spells 1018"],
+            ["Spells 1015", "Spells 1023", "Spells 1024", "Spells 1025"]);
+
+        CriarModelo(
+            """
+            NIVEL 0 - TRUQUES
+              {{Spells 1014}}
+              {{Spells 1015}}
+              {{Spells 1016}}
+              {{Spells 1017}}
+            NIVEL 1
+              {{Spells 1018}}
+              {{Spells 1023}}
+              {{Spells 1024}}
+              {{Spells 1025}}
+            """);
+
+        var divergencias = Divergencias();
+
+        Assert.Contains(divergencias, d => d.Campo == "Spells 1015" && d.CampoEsperado == "Spells 1016");
+        Assert.Contains(divergencias, d => d.Campo == "Spells 1018" && d.CampoEsperado == "Spells 1015");
+    }
+
+    [Fact]
+    public void Conferir_ListaSemRotuloNaOrdemImpressa_NaoAcusaNada()
+    {
+        CriarFichaDeListas(
+            ["Spells 1014", "Spells 1016", "Spells 1017", "Spells 1018"],
+            ["Spells 1015", "Spells 1023", "Spells 1024", "Spells 1025"]);
+
+        CriarModelo(
+            """
+            NIVEL 0 - TRUQUES
+              {{Spells 1014}}
+              {{Spells 1016}}
+              {{Spells 1017}}
+              {{Spells 1018}}
+            NIVEL 1
+              {{Spells 1015}}
+              {{Spells 1023}}
+              {{Spells 1024}}
+              {{Spells 1025}}
+            """);
+
+        Assert.Empty(Divergencias());
+    }
+
+    /// <summary>
+    /// Base mapeada antes da conferência existir, ou trazida de outra instalação: ninguém a
+    /// reconferia, e o agente seguia o de-para errado a cada geração. A correção troca o campo
+    /// de cada linha pelo que está impresso nela, no próprio arquivo, e o resultado passa.
+    /// </summary>
+    [Fact]
+    public void Corrigir_ModeloPareadoPeloNome_FicaIgualAFichaImpressa()
+    {
+        CriarFicha(PericiasTrocadas);
+        CriarModelo(DesenhoPeloNome);
+
+        var correcao = ConferenciaDaFicha.Corrigir(_caminhos, Sistema);
+
+        Assert.True(correcao.Trocados > 0);
+        Assert.True(correcao.Depois.Aprovada, string.Join("\n", correcao.Depois.Divergencias.Select(d => d.Descrever())));
+
+        var modelo = File.ReadAllText(Path.Combine(
+            CaminhosDoProjeto.ResolverDentroDe(_caminhos.Conhecimento, Sistema), SistemaRpg.NomeDoModeloEmTexto));
+
+        Assert.Contains("{{Animal}}  Arcanismo (Int)", modelo);
+
+        // {{Perception}} virou {{Nature}}, quatro letras a menos: os espaços compensam, e o
+        // rótulo continua na mesma coluna do desenho.
+        var lidar = modelo.Split('\n').Single(linha => linha.Contains("Lidar com Animais"));
+        Assert.StartsWith("{{Nature}}      Lidar com Animais", lidar.TrimStart());
+        Assert.Equal(
+            DesenhoPeloNome.Split('\n').Single(linha => linha.Contains("Lidar")).TrimStart().IndexOf("Lidar"),
+            lidar.TrimStart().IndexOf("Lidar"));
+    }
+
+    [Fact]
+    public void Corrigir_TruquesNumeradosEmSequencia_VoltamParaAColunaCerta()
+    {
+        CriarFichaDeListas(
+            ["Spells 1014", "Spells 1016", "Spells 1017", "Spells 1018"],
+            ["Spells 1015", "Spells 1023", "Spells 1024", "Spells 1025"]);
+
+        CriarModelo(
+            """
+            NIVEL 0 - TRUQUES
+              {{Spells 1014}}
+              {{Spells 1015}}
+              {{Spells 1016}}
+              {{Spells 1017}}
+            NIVEL 1
+              {{Spells 1018}}
+              {{Spells 1023}}
+              {{Spells 1024}}
+              {{Spells 1025}}
+            """);
+
+        var correcao = ConferenciaDaFicha.Corrigir(_caminhos, Sistema);
+
+        Assert.True(correcao.Depois.Aprovada);
+        Assert.Empty(Divergencias());
+    }
+
+    /// <summary>Modelo certo não é tocado: nem uma troca, nem o arquivo reescrito.</summary>
+    [Fact]
+    public void Corrigir_ModeloCerto_NaoMudaNada()
+    {
+        CriarFichaTrocada();
+        CriarModelo(
+            """
+            {{Animal}}  Arcanismo (Int)
+            {{Arcana}}  Atletismo (For)
+            """);
+
+        var caminhoDoModelo = Path.Combine(
+            CaminhosDoProjeto.ResolverDentroDe(_caminhos.Conhecimento, Sistema), SistemaRpg.NomeDoModeloEmTexto);
+        var antes = File.ReadAllText(caminhoDoModelo);
+
+        var correcao = ConferenciaDaFicha.Corrigir(_caminhos, Sistema);
+
+        Assert.Equal(0, correcao.Trocados);
+        Assert.Equal(antes, File.ReadAllText(caminhoDoModelo));
+    }
+
     [Fact]
     public void Conferir_SistemaSemModeloEmTexto_LancaErroDeFerramenta()
     {

@@ -57,6 +57,13 @@ public enum DirecaoDoRotulo
 /// A altura do campo em pontos. Com <paramref name="DeVariasLinhas"/>, é o que diz quantas linhas
 /// de texto cabem ali de verdade — um campo multilinha de 12 pt é uma linha só com a marca errada.
 /// </param>
+/// <param name="Esquerda">Onde o campo começa na horizontal, em pontos.</param>
+/// <param name="Base">A borda de baixo do campo, em pontos a partir do pé da página.</param>
+/// <param name="Largura">
+/// A largura do campo em pontos. Com <paramref name="Esquerda"/> e <paramref name="Base"/>, é o
+/// que deixa conferir as linhas <b>sem rótulo</b> — a lista de truques, as magias de cada nível —
+/// pela coluna em que o campo está, já que não há texto impresso para dizer qual linha é qual.
+/// </param>
 public sealed record CampoDaFicha(
     string Nome,
     int Pagina,
@@ -67,7 +74,10 @@ public sealed record CampoDaFicha(
     double DistanciaDoRotulo,
     bool DeMarcacao,
     bool DeVariasLinhas = false,
-    double Altura = 0)
+    double Altura = 0,
+    double Esquerda = 0,
+    double Base = 0,
+    double Largura = 0)
 {
     /// <summary>
     /// Até que distância, em pontos, o texto ao lado de um campo é seguramente o rótulo dele.
@@ -205,7 +215,10 @@ public static class LayoutDaFicha
                         distancia,
                         widget.DeMarcacao,
                         widget.DeVariasLinhas,
-                        widget.Altura));
+                        widget.Altura,
+                        widget.Esquerda,
+                        widget.Base,
+                        widget.Largura));
                 }
             }
         }

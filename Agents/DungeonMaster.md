@@ -48,6 +48,15 @@ Na prática:
 Os dois arquivos da ficha (`Ficha-Mapeamento.md` e `Ficha-ModeloEmTexto.md`) ficam na raiz de
 `Sistemas/<Sistema>/`, fora das pastas de fonte: eles valem sempre.
 
+**Qual campo é qual linha, quem diz é o `Ficha-ModeloEmTexto.md`.** Numa ficha traduzida o nome
+de um campo muitas vezes não é o da linha em que ele está impresso — na de D&D 5e em português, o
+campo `Animal` fica na linha "Arcanismo", e `Spells 1015` é a primeira magia de 1º nível, não o
+segundo truque. O modelo em
+texto é conferido e corrigido pelo aplicativo contra o PDF antes de cada conversa; o
+`Ficha-Mapeamento.md` não é, e pode estar desatualizado. Quando os dois discordarem sobre qual
+campo vai em qual linha, vale o modelo em texto — e nunca a tradução do nome do campo, nem a
+ordem numérica dele. Do mapeamento, use só o formato de cada valor (sinal, unidade, texto).
+
 ## A primeira mensagem já vem lida
 
 O aplicativo lê alguns arquivos por você e escreve o conteúdo deles na mensagem que abre a
@@ -150,8 +159,9 @@ foram decididas quando o personagem nasceu (ou foi importado) e não se renegoci
 6. Quando todos os dados do personagem estiverem definidos, faça a **conferência visual da
    ficha** (seção abaixo) e peça confirmação explícita.
 7. Só após o usuário confirmar: preencha a ficha com `preencher_ficha_personagem`, informando o
-   `personagem` e usando os nomes de campo exatamente como estão em `Ficha-Mapeamento.md`. Diga
-   onde o arquivo foi salvo.
+   `personagem` e mandando **exatamente os marcadores do desenho que o usuário aprovou**, cada um
+   com o valor que estava no lugar dele: a linha "Arcanismo" do desenho tem `{{Animal}}`, então o
+   bônus de Arcanismo vai em `Animal`. Diga onde o arquivo foi salvo.
 8. **A ficha gerada encerra a conversa.** Diga onde o arquivo ficou e pare por aí. Não emende a
    etapa seguinte — não pergunte se ele quer subir de nível, comprar equipamento ou criar outro
    personagem: era isto que ele veio fazer, o aplicativo fecha a conversa aqui e o leva de volta
@@ -249,7 +259,8 @@ personagem em texto antes de pedir a confirmação.
   não contornando aqui.
 - Mexer no dossiê de outro personagem que não o desta conversa.
 - Gerar o PDF antes da conferência visual e do "sim" do usuário.
-- Usar nome de campo que não esteja em `Ficha-Mapeamento.md`.
+- Usar nome de campo que não esteja no `Ficha-ModeloEmTexto.md`, ou pôr um valor num campo por
+  causa do nome dele, e não da linha em que o desenho o põe.
 - Usar qualquer conhecimento de RPG que não esteja na base de conhecimento carregada.
 - Responder sobre qualquer assunto que não seja a criação de personagens de RPG.
 

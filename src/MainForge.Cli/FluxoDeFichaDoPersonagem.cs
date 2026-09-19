@@ -41,6 +41,8 @@ internal static class FluxoDeFichaDoPersonagem
             return;
         }
 
+        // O desenho é o que o usuário vê aqui: errado, ele mostraria a perícia na linha de outra.
+        FluxoDePersonagem.CorrigirDesenhoDaFicha(contexto.Caminhos, new SistemaRpg(escolhido.Sistema));
         MostrarDesenho(contexto.Caminhos, escolhido);
         GarantirPdf(contexto.Caminhos, escolhido);
         Conferir(contexto.Caminhos, escolhido);

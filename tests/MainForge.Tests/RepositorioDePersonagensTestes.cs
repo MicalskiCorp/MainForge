@@ -158,6 +158,31 @@ public sealed class RepositorioDePersonagensTestes : IDisposable
     }
 
     /// <summary>
+    /// A interface registra a sessão com o personagem que carregou antes do turno, e durante o
+    /// turno o agente gravou o dossiê pelo MCP. Gravar o objeto velho por cima apagava o que o
+    /// agente acabou de escrever — os campos da ficha, o resumo, a ficha gerada.
+    /// </summary>
+    [Fact]
+    public void RegistrarSessao_NaoApagaOQueOAgenteGravouDuranteOTurno()
+    {
+        var antesDoTurno = Criar();
+
+        RepositorioDePersonagens.Registrar(
+            _caminhos, Sistema, antesDoTurno.Id, "Thoradin", "Anão clérigo de nível 2", "# Thoradin",
+            new Dictionary<string, string> { ["Animal"] = "+1" });
+
+        RepositorioDePersonagens.RegistrarSessao(
+            _caminhos, antesDoTurno, "sessao-456", new ConsumoDeTokens(100, 50, 0, 0, 0.10m, Turnos: 1));
+
+        var lido = RepositorioDePersonagens.Carregar(_caminhos, Sistema, antesDoTurno.Id)!;
+
+        Assert.Equal("sessao-456", lido.IdDaSessao);
+        Assert.Equal("Anão clérigo de nível 2", lido.Resumo);
+        Assert.Equal("+1", lido.Campos["Animal"]);
+        Assert.Equal(1, lido.Consumo.Turnos);
+    }
+
+    /// <summary>
     /// O identificador do personagem chega pelo modelo, então é caminho não confiável como
     /// qualquer outro.
     /// </summary>

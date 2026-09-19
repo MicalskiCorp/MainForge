@@ -60,6 +60,8 @@ internal static class FluxoDePersonagem
             return;
         }
 
+        CorrigirDesenhoDaFicha(caminhos, sistema);
+
         var agente = DefinicaoDeAgente.DungeonMasterLimitadoA(
             sistema,
             fontes.Escolhidas,
@@ -170,6 +172,58 @@ internal static class FluxoDePersonagem
 
             proximaMensagem = digitado.Length == 0 ? "Pode continuar." : digitado;
         }
+    }
+
+    /// <summary>
+    /// Confere o desenho da ficha do sistema contra o PDF e corrige, sozinho, o campo que estiver
+    /// na linha de outro.
+    ///
+    /// <para><b>Por que antes de toda conversa.</b> O agente monta os valores da ficha seguindo o
+    /// desenho ao pé da letra — é isso que o usuário aprova na conferência visual. Um desenho com
+    /// o de-para errado dava uma ficha na tela e outra no PDF: o bônus de Lidar com Animais na
+    /// linha de Arcanismo, o segundo truque no bloco de 1º nível. A conferência existia, mas só
+    /// rodava quando o Configurador a chamava, e uma base mapeada antes dela — ou trazida por
+    /// pacote de outra instalação — nunca mais era olhada. Aqui ela não custa cota nenhuma, e é o
+    /// último momento antes de o erro virar PDF.</para>
+    ///
+    /// <para>Nunca impede a conversa: sistema sem ficha ou sem desenho segue como sempre seguiu,
+    /// e o que não dá para corrigir sozinho vira aviso.</para>
+    /// </summary>
+    internal static void CorrigirDesenhoDaFicha(CaminhosDoProjeto caminhos, SistemaRpg sistema)
+    {
+        CorrecaoDaFicha correcao;
+
+        try
+        {
+            correcao = ConferenciaDaFicha.Corrigir(caminhos, sistema.Id);
+        }
+        catch (Exception excecao) when (excecao is not OutOfMemoryException)
+        {
+            return;
+        }
+
+        if (correcao.Trocados > 0)
+        {
+            ConsoleUi.Aviso(
+                $"O desenho da ficha de {sistema.Id} tinha {correcao.Trocados} campo(s) na linha errada — " +
+                "corrigido agora, antes de usá-lo.");
+        }
+
+        if (correcao.Depois.Aprovada)
+        {
+            return;
+        }
+
+        ConsoleUi.Aviso(
+            $"O desenho da ficha de {sistema.Id} ainda tem {correcao.Depois.Divergencias.Count} ponto(s) " +
+            "que o aplicativo não sabe corrigir sozinho:");
+
+        foreach (var divergencia in correcao.Depois.Divergencias.Take(5))
+        {
+            ConsoleUi.Detalhe($"  · {divergencia.Descrever()}");
+        }
+
+        ConsoleUi.Detalhe("Confira o PDF gerado nessas linhas; reprocessar a ficha no menu 'Sistemas' refaz o desenho.");
     }
 
     /// <summary>As fontes que valem nesta mesa e as que ficaram de fora.</summary>
