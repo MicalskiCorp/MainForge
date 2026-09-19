@@ -244,8 +244,13 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
                     // Numa falha, o 'subtype' dá a categoria ("error_during_execution") e o
                     // corpo do 'result' dá o que realmente aconteceu — inclusive a mensagem de
                     // cota esgotada. Juntar os dois é o que permite reconhecê-la depois.
+                    //
+                    // Quando a falha é anterior à conversa (o "--resume" de uma sessão que o
+                    // Claude Code não tem mais), o 'result' vem vazio e a explicação só existe no
+                    // array 'errors'. Sem lê-lo, o motivo era só "error_during_execution" e a
+                    // sessão perdida não era reconhecida — o personagem não recomeçava do dossiê.
                     motivo = falhou
-                        ? string.Join(": ", new[] { Texto(raiz, "subtype"), respostaFinal }
+                        ? string.Join(": ", new[] { Texto(raiz, "subtype"), respostaFinal, Erros(raiz) }
                             .Where(parte => !string.IsNullOrWhiteSpace(parte)))
                         : null;
 
@@ -432,6 +437,22 @@ public sealed class ProcessoDoClaudeCode(OpcoesDoClaudeCode opcoes) : IExecutorD
         valor.ValueKind == JsonValueKind.String
             ? valor.GetString()
             : null;
+
+    /// <summary>As mensagens do array <c>errors</c> do <c>result</c>, numa linha só.</summary>
+    private static string? Erros(JsonElement raiz)
+    {
+        if (!raiz.TryGetProperty("errors", out var lista) || lista.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var mensagens = lista.EnumerateArray()
+            .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : item.GetRawText())
+            .Where(texto => !string.IsNullOrWhiteSpace(texto))
+            .ToList();
+
+        return mensagens.Count > 0 ? string.Join("; ", mensagens) : null;
+    }
 
     /// <summary>
     /// Mata a árvore de processos no cancelamento: o Claude Code lança subprocessos (o
